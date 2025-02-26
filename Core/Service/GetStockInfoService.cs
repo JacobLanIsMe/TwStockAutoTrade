@@ -1,17 +1,12 @@
 ﻿using Core.Enum;
 using Core.HttpClientFactory;
-using Core.Interface;
 using Core.Model;
+using Core.Service.Interface;
 using Newtonsoft.Json;
 using System;
-using System.Collections;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
-using System.Runtime.CompilerServices;
-using System.Security.Cryptography.X509Certificates;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace Core.Service

@@ -63,8 +63,10 @@
   <ItemGroup>
     <Compile Include="Enum\EMarket.cs" />
     <Compile Include="HttpClientFactory\SimpleHttpClientFactory.cs" />
-    <Compile Include="Interface\IDateTimeService.cs" />
-    <Compile Include="Interface\IGetStockInfoService.cs" />
+    <Compile Include="Repository\CandidateRepository.cs" />
+    <Compile Include="Repository\Interface\ICandidateRepository.cs" />
+    <Compile Include="Service\Interface\IDateTimeService.cs" />
+    <Compile Include="Service\Interface\IGetStockInfoService.cs" />
     <Compile Include="Model\Stock.cs" />
     <Compile Include="Model\StockTechData.cs" />
     <Compile Include="Model\TpexStockInfo.cs" />

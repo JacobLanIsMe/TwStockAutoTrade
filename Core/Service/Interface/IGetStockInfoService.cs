@@ -1,6 +1,6 @@
 ﻿using System.Threading.Tasks;
 
-namespace Core.Interface
+namespace Core.Service.Interface
 {
     public interface IGetStockInfoService
     {
