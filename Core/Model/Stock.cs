@@ -12,7 +12,7 @@ namespace Core.Model
         public EMarket Market { get; set; }
         public int StockCode { get; set; }
         public string CompanyName { get; set; }
-        public List<StockTechData> TechDataList { get; set; }
+        public List<StockTechData> TechDataList { get; set; } = new List<StockTechData>();
 
     }
 }

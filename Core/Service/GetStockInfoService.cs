@@ -4,10 +4,14 @@ using Core.Interface;
 using Core.Model;
 using Newtonsoft.Json;
 using System;
+using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography.X509Certificates;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Core.Service
@@ -28,7 +32,10 @@ namespace Core.Service
             var tpexStockListTask = GetTpexStockCode();
             var twseStockList = await twseStockListTask;
             var tpexStockList = await tpexStockListTask;
-            await GetTwseDailyExchangeRecort(twseStockList);
+            //await GetTwseDailyExchangeRecort(twseStockList);
+            List<Stock> mergedStockList = twseStockList.Concat(tpexStockList).ToList();
+            List<Stock> candidateList = await GetSelectedStock(mergedStockList);
+
         }
         private async Task<List<Stock>> GetTwseStockCode()
         {
@@ -88,7 +95,7 @@ namespace Core.Service
                         {
                             StockTechData techData = new StockTechData()
                             {
-                                Date = DateTime.ParseExact((int.Parse(i[0].Replace("/", "")) + 19110000).ToString(), "yyyMMdd", null),
+                                Date = DateTime.ParseExact((int.Parse(i[0].Replace("/", "")) + 19110000).ToString(), "yyyyMMdd", null),
                                 Volume = int.Parse(i[1].Replace(",", "")),
                                 Open = decimal.Parse(i[3]),
                                 High = decimal.Parse(i[4]),
@@ -98,13 +105,53 @@ namespace Core.Service
                             stock.TechDataList.Add(techData);
                         }
                     }
+                    Console.WriteLine($"Retrieve exchange report of Stock {stock.StockCode} {stock.CompanyName} finished.");
                 }
                 catch (Exception ex)
                 {
                     Console.WriteLine($"Error occurs while retrieving exchange report of Stock {stock.StockCode} {stock.CompanyName}. Error message: {ex}");
                 }
-                
             }
+        }
+        private async Task<List<Stock>> GetSelectedStock(List<Stock> stockList)
+        {
+            ConcurrentBag<Stock> candidateList = new ConcurrentBag<Stock>();
+            int maxConcurrency = Environment.ProcessorCount * 40;
+            SemaphoreSlim _semaphore = new SemaphoreSlim(maxConcurrency);
+            var tasks = stockList.Select(async i =>
+            {
+                await _semaphore.WaitAsync();
+                try
+                {
+                    if (i.TechDataList.Count < 25) return;
+                    List<StockTechData> orderedTechDataList = i.TechDataList.OrderByDescending(x => x.Date).ToList();
+                    StockTechData gapUpStockTechData = orderedTechDataList[4];
+                    if (gapUpStockTechData.Low <= orderedTechDataList[5].High) return; // Gap up
+                    double mv5 = orderedTechDataList.Take(5).Average(x => x.Volume);
+                    if (mv5 < 100) return;
+                    decimal volatility = orderedTechDataList.Take(5).Max(x => x.Close) / orderedTechDataList.Take(5).Min(x => x.Close);
+                    if (volatility > (decimal)1.02) return;
+                    decimal gapUpMa5 = orderedTechDataList.Skip(4).Take(5).Average(x => x.Close);
+                    decimal gapUpMa10 = orderedTechDataList.Skip(4).Take(10).Average(x => x.Close);
+                    decimal gapUpMa20 = orderedTechDataList.Skip(4).Take(20).Average(x => x.Close);
+                    if (gapUpStockTechData.Close < gapUpMa5 || gapUpStockTechData.Close < gapUpMa10 || gapUpStockTechData.Close < gapUpMa20) return;
+                    List<decimal> last4Close = orderedTechDataList.Take(4).Select(x => x.Close).ToList();
+                    bool isPeriodCloseHigherThanGapUpHigh = last4Close.Max() > gapUpStockTechData.High;
+                    bool isPeriodCloseLowerThanGapUpLow = last4Close.Min() < gapUpStockTechData.Low;
+                    if (isPeriodCloseHigherThanGapUpHigh || isPeriodCloseLowerThanGapUpLow) return;
+                    candidateList.Add(i);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error occurs while filtering stock {i.StockCode} {i.CompanyName}. Error message: {ex}");
+                }
+                finally
+                {
+                    _semaphore.Release();
+                }
+            });
+            await Task.WhenAll(tasks);
+            return candidateList.ToList();
         }
     }
 }
