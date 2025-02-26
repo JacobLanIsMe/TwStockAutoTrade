@@ -10,6 +10,7 @@ namespace Selector
         {
             var serviceProvider = new ServiceCollection()
              .AddSingleton<IGetStockInfoService, GetStockInfoService>()
+             .AddSingleton<IDateTimeService, DateTimeService>()
              .BuildServiceProvider();
             var getStockInfoService = serviceProvider.GetRequiredService<IGetStockInfoService>();
             Task.Run(async () => await getStockInfoService.SelectStock()).Wait();
