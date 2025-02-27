@@ -77,9 +77,11 @@ namespace Core.Service
         private async Task GetTwseDailyExchangeRecort(List<Candidate> twseStockList)
         {
             DateTime now = _dateTimeService.GetTaiwanTime();
-            string thisMonth = now.ToString("yyyyMM") + "01";
-            string prevMonth = now.AddMonths(-1).ToString("yyyyMM") + "01";
-            List<string> monthList = new List<string>() { thisMonth, prevMonth };
+            List<string> monthList = new List<string>();
+            for (int i = 0; i < 3; i++)
+            {
+                monthList.Add(now.AddMonths(i * -1).ToString("yyyyMM") + "01");
+            }
             foreach (var stock in twseStockList)
             {
                 try
@@ -105,6 +107,7 @@ namespace Core.Service
                         }
                     }
                     Console.WriteLine($"Retrieve exchange report of Stock {stock.StockCode} {stock.CompanyName} finished.");
+                    await Task.Delay(5000);
                 }
                 catch (Exception ex)
                 {
