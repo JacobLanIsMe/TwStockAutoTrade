@@ -28,5 +28,14 @@ namespace Core.Repository
                 await sqlConnection.ExecuteAsync(sqlCommand, candidateList);
             }
         }
+        public async Task<List<Candidate>> GetActiveCandidate()
+        {
+            using(SqlConnection sqlConnection = new SqlConnection(_dbConnectionString))
+            {
+                string sqlCommand = $@"SELECT * FROM [dbo].[Candidate] WHERE IsDeleted = 0";
+                var result = await sqlConnection.QueryAsync<Candidate>(sqlCommand);
+                return result.ToList();
+            }
+        }
     }
 }

@@ -10,70 +10,89 @@ namespace Core.Model
 {
     public class Candidate
     {
+        public Guid Id { get; set; }
         public EMarket Market { get; set; }
         public int StockCode { get; set; }
         public string CompanyName { get; set; }
         public List<StockTechData> TechDataList { get; set; } = new List<StockTechData>();
-        private List<StockTechData> OrderedTechDataList { get { return TechDataList.OrderByDescending(x => x.Date).ToList(); } }
-        public decimal? EntryPoint 
+        public List<StockTechData> OrderedTechDataList { get { return TechDataList.OrderByDescending(x => x.Date).ToList(); } }
+        public decimal? GapUpHigh 
         {
             get 
             {
                 StockTechData gapUpStockTechData = GetGapUpStockTechData();
-                return gapUpStockTechData?.High;
+                if (gapUpStockTechData == null) return GapUpHigh;
+                return gapUpStockTechData.High;
+            }
+            set
+            {
+                GapUpHigh = value;
+            }
+        }
+        public decimal? GapUpLow
+        {
+            get
+            {
+                StockTechData gapUpStockTechData = GetGapUpStockTechData();
+                if (gapUpStockTechData == null) return GapUpLow;
+                return gapUpStockTechData.Low;
+            }
+            set
+            {
+                GapUpLow = value;
             }
         }
         public decimal? StopLossPoint 
         {
             get
             {
-                if (EntryPoint == null)
+                if (GapUpHigh == null)
                 {
                     return null;
                 }
-                else if (EntryPoint <= 10)
+                else if (GapUpHigh <= 10)
                 {
-                    return EntryPoint - (decimal)(0.01 * 2);
+                    return GapUpHigh - (decimal)(0.01 * 2);
                 }
-                else if (EntryPoint == (decimal)10.05)
+                else if (GapUpHigh == (decimal)10.05)
                 {
                     return (decimal)9.99;
                 }
-                else if (EntryPoint > (decimal)10.05 & EntryPoint <= 50)
+                else if (GapUpHigh > (decimal)10.05 & GapUpHigh <= 50)
                 {
-                    return EntryPoint - (decimal)(0.05 * 2);
+                    return GapUpHigh - (decimal)(0.05 * 2);
                 }
-                else if (EntryPoint == (decimal)50.1)
+                else if (GapUpHigh == (decimal)50.1)
                 {
                     return (decimal)49.95;
                 }
-                else if (EntryPoint > (decimal)50.1 & EntryPoint <= 100)
+                else if (GapUpHigh > (decimal)50.1 & GapUpHigh <= 100)
                 {
-                    return EntryPoint - (decimal)(0.1 * 2);
+                    return GapUpHigh - (decimal)(0.1 * 2);
                 }
-                else if (EntryPoint == (decimal)100.5)
+                else if (GapUpHigh == (decimal)100.5)
                 {
                     return (decimal)99.9;
                 }
-                else if (EntryPoint > (decimal)100.5 & EntryPoint <= 500)
+                else if (GapUpHigh > (decimal)100.5 & GapUpHigh <= 500)
                 {
-                    return EntryPoint - (decimal)(0.5 * 2);
+                    return GapUpHigh - (decimal)(0.5 * 2);
                 }
-                else if (EntryPoint == (decimal)501)
+                else if (GapUpHigh == (decimal)501)
                 {
                     return (decimal)499.5;
                 }
-                else if (EntryPoint > 501 & EntryPoint <= 1000)
+                else if (GapUpHigh > 501 & GapUpHigh <= 1000)
                 {
-                    return EntryPoint - (1 * 2);
+                    return GapUpHigh - (1 * 2);
                 }
-                else if (EntryPoint == 1005)
+                else if (GapUpHigh == 1005)
                 {
                     return 999;
                 }
                 else
                 {
-                    return EntryPoint - (5 * 2);
+                    return GapUpHigh - (5 * 2);
                 }
             } 
         }
@@ -82,8 +101,6 @@ namespace Core.Model
             get
             {
                 if (OrderedTechDataList.Count < 25) return false;
-                decimal ma10 = OrderedTechDataList.Take(10).Average(x => x.Close);
-                if (OrderedTechDataList.First().Close < ma10) return false;
                 StockTechData gapUpStockTechData = GetGapUpStockTechData();
                 if (gapUpStockTechData.Low <= OrderedTechDataList[5].High) return false;
                 double mv5 = OrderedTechDataList.Take(5).Average(x => x.Volume);
@@ -111,7 +128,11 @@ namespace Core.Model
             get
             {
                 if (OrderedTechDataList.Any()) return OrderedTechDataList.First().Date;
-                return null;
+                return SelectedDate;
+            }
+            set
+            {
+                SelectedDate = value;
             }
         }
     }

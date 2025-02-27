@@ -7,5 +7,6 @@ namespace Core.Repository.Interface
     public interface ICandidateRepository
     {
         Task Insert(List<Candidate> candidateList);
+        Task<List<Candidate>> GetActiveCandidate();
     }
 }

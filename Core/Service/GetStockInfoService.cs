@@ -34,7 +34,7 @@ namespace Core.Service
             List<Candidate> mergedStockList = twseStockList.Concat(tpexStockList).ToList();
             List<Candidate> candidateList = mergedStockList.Where(x => x.IsCandidate).ToList();
             await _candidateRepository.Insert(candidateList);
-
+            await DeleteActiveCandidate(mergedStockList);
         }
         private async Task<List<Candidate>> GetTwseStockCode()
         {
@@ -109,6 +109,38 @@ namespace Core.Service
                 catch (Exception ex)
                 {
                     Console.WriteLine($"Error occurs while retrieving exchange report of Stock {stock.StockCode} {stock.CompanyName}. Error message: {ex}");
+                }
+            }
+        }
+        private async Task DeleteActiveCandidate(List<Candidate> candidateList)
+        {
+            Dictionary<int, Candidate> candidateDict = candidateList.ToDictionary(x => x.StockCode);
+            List<Candidate> activeCandidateList = await _candidateRepository.GetActiveCandidate();
+            List<Guid> candidateToDeleteList = new List<Guid>();
+            List<Guid> duplicateActiveCandidate = activeCandidateList.GroupBy(x => x.StockCode).SelectMany(g => g.OrderByDescending(x => x.SelectedDate).Skip(1)).Select(x=>x.Id).ToList();
+            candidateToDeleteList.AddRange(duplicateActiveCandidate);
+            activeCandidateList = activeCandidateList.Where(x => !candidateToDeleteList.Contains(x.Id)).ToList();
+            foreach (var i in activeCandidateList)
+            {
+                if (candidateDict.TryGetValue(i.StockCode, out Candidate stock))
+                {
+                    if (stock.TechDataList.Count < 10)
+                    {
+                        candidateToDeleteList.Add(i.Id);
+                    }
+                    else
+                    {
+                        List<StockTechData> orderedTechDataList = stock.OrderedTechDataList;
+                        if (orderedTechDataList.First().Close < orderedTechDataList.Take(10).Average(x=>x.Close) &
+                            orderedTechDataList.First().Close < i.GapUpLow)
+                        {
+                            candidateToDeleteList.Add(i.Id);
+                        }
+                    }
+                }
+                else
+                {
+                    candidateToDeleteList.Add(i.Id);
                 }
             }
         }
