@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace Core.Model
 {
-    public class Stock
+    public class Candidate
     {
         public EMarket Market { get; set; }
         public int StockCode { get; set; }
@@ -82,6 +82,8 @@ namespace Core.Model
             get
             {
                 if (OrderedTechDataList.Count < 25) return false;
+                decimal ma10 = OrderedTechDataList.Take(10).Average(x => x.Close);
+                if (OrderedTechDataList.First().Close < ma10) return false;
                 StockTechData gapUpStockTechData = GetGapUpStockTechData();
                 if (gapUpStockTechData.Low <= OrderedTechDataList[5].High) return false;
                 double mv5 = OrderedTechDataList.Take(5).Average(x => x.Volume);
@@ -103,6 +105,14 @@ namespace Core.Model
         {
             if (OrderedTechDataList.Count < 5) return null;
             return OrderedTechDataList[4];
+        }
+        public DateTime? SelectedDate
+        {
+            get
+            {
+                if (OrderedTechDataList.Any()) return OrderedTechDataList.First().Date;
+                return null;
+            }
         }
     }
 }

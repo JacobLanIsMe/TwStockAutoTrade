@@ -1,6 +1,7 @@
 ﻿using Core.Enum;
 using Core.HttpClientFactory;
 using Core.Model;
+using Core.Repository.Interface;
 using Core.Service.Interface;
 using Newtonsoft.Json;
 using System;
@@ -15,11 +16,13 @@ namespace Core.Service
     {
         private HttpClient _httpClient;
         private readonly IDateTimeService _dateTimeService;
-        public GetStockInfoService(IDateTimeService dateTimeService)
+        private readonly ICandidateRepository _candidateRepository;
+        public GetStockInfoService(IDateTimeService dateTimeService, ICandidateRepository candidateRepository)
         {
             SimpleHttpClientFactory httpClientFactory = new SimpleHttpClientFactory();
             _httpClient = httpClientFactory.CreateClient();
             _dateTimeService = dateTimeService;
+            _candidateRepository = candidateRepository;
         }
         public async Task SelectStock()
         {
@@ -28,20 +31,21 @@ namespace Core.Service
             var twseStockList = await twseStockListTask;
             var tpexStockList = await tpexStockListTask;
             //await GetTwseDailyExchangeRecort(twseStockList);
-            List<Stock> mergedStockList = twseStockList.Concat(tpexStockList).ToList();
-            List<Stock> candidateList = mergedStockList.Where(x => x.IsCandidate).ToList();
+            List<Candidate> mergedStockList = twseStockList.Concat(tpexStockList).ToList();
+            List<Candidate> candidateList = mergedStockList.Where(x => x.IsCandidate).ToList();
+            await _candidateRepository.Insert(candidateList);
 
         }
-        private async Task<List<Stock>> GetTwseStockCode()
+        private async Task<List<Candidate>> GetTwseStockCode()
         {
             HttpResponseMessage response = await _httpClient.GetAsync("https://openapi.twse.com.tw/v1/opendata/t187ap03_L");
             string responseBody = await response.Content.ReadAsStringAsync();
             List<TwseStockInfo> stockInfoList = JsonConvert.DeserializeObject<List<TwseStockInfo>>(responseBody);
-            List<Stock> stockList = new List<Stock>();
+            List<Candidate> stockList = new List<Candidate>();
             foreach (var i in stockInfoList)
             {
                 if (!int.TryParse(i.公司代號, out int stockCode)) continue;
-                Stock stock = new Stock()
+                Candidate stock = new Candidate()
                 {
                     Market = EMarket.TWSE,
                     StockCode = stockCode,
@@ -51,16 +55,16 @@ namespace Core.Service
             }
             return stockList;
         }
-        private async Task<List<Stock>> GetTpexStockCode()
+        private async Task<List<Candidate>> GetTpexStockCode()
         {
             HttpResponseMessage response = await _httpClient.GetAsync("https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O");
             string responseBody = await response.Content.ReadAsStringAsync();
             List<TpexStockInfo> stockInfoList = JsonConvert.DeserializeObject<List<TpexStockInfo>>(responseBody);
-            List<Stock> stockList = new List<Stock>();
+            List<Candidate> stockList = new List<Candidate>();
             foreach (var i in stockInfoList)
             {
                 if (!int.TryParse(i.SecuritiesCompanyCode, out int stockCode)) continue;
-                Stock stock = new Stock()
+                Candidate stock = new Candidate()
                 {
                     Market = EMarket.TPEX,
                     StockCode = stockCode,
@@ -70,7 +74,7 @@ namespace Core.Service
             }
             return stockList;
         }
-        private async Task GetTwseDailyExchangeRecort(List<Stock> twseStockList)
+        private async Task GetTwseDailyExchangeRecort(List<Candidate> twseStockList)
         {
             DateTime now = _dateTimeService.GetTaiwanTime();
             string thisMonth = now.ToString("yyyyMM") + "01";
