@@ -2,6 +2,7 @@
 using Core.Repository.Interface;
 using Dapper;
 using Microsoft.Extensions.Configuration;
+using System;
 using System.Collections.Generic;
 using System.Data.SqlClient;
 using System.Linq;
@@ -19,22 +20,31 @@ namespace Core.Repository
         public async Task Insert(List<Candidate> candidateList)
         {
             if (!candidateList.Any()) return;
-            string sqlCommand = $@"INSERT INTO [dbo].[Candidate] 
+            string sqlCommand = @"INSERT INTO [dbo].[Candidate] 
                                 ([Market], [StockCode], [CompanyName], [EntryPoint], [StopLossPoint], [SelectedDate])
                                 VALUES
-                                (@Market, @StockCode, @CompanyName, @EntryPoint, @StopLossPoint @SelectedDate)";
-            using(SqlConnection sqlConnection = new SqlConnection(_dbConnectionString))
+                                (@Market, @StockCode, @CompanyName, @EntryPoint, @StopLossPoint, @SelectedDate)";
+            using (SqlConnection sqlConnection = new SqlConnection(_dbConnectionString))
             {
                 await sqlConnection.ExecuteAsync(sqlCommand, candidateList);
             }
         }
         public async Task<List<Candidate>> GetActiveCandidate()
         {
-            using(SqlConnection sqlConnection = new SqlConnection(_dbConnectionString))
+            string sqlCommand = $@"SELECT * FROM [dbo].[Candidate] WHERE IsDeleted = 0";
+            using (SqlConnection sqlConnection = new SqlConnection(_dbConnectionString))
             {
-                string sqlCommand = $@"SELECT * FROM [dbo].[Candidate] WHERE IsDeleted = 0";
                 var result = await sqlConnection.QueryAsync<Candidate>(sqlCommand);
                 return result.ToList();
+            }
+        }
+        public async Task UpdateIsDeleteById(List<Guid> IdList)
+        {
+            if (!IdList.Any()) return;
+            string sqlCommand = $@"UPDATE [dbo].[Candidate] SET IsDeleted = 1 WHERE Id IN @IdList";
+            using (SqlConnection sqlConnection = new SqlConnection(_dbConnectionString))
+            {
+                await sqlConnection.ExecuteAsync(sqlCommand, new { IdList = IdList });
             }
         }
     }

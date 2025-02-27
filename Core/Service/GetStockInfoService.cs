@@ -116,6 +116,7 @@ namespace Core.Service
         {
             Dictionary<int, Candidate> candidateDict = candidateList.ToDictionary(x => x.StockCode);
             List<Candidate> activeCandidateList = await _candidateRepository.GetActiveCandidate();
+            if (!activeCandidateList.Any()) return;
             List<Guid> candidateToDeleteList = new List<Guid>();
             List<Guid> duplicateActiveCandidate = activeCandidateList.GroupBy(x => x.StockCode).SelectMany(g => g.OrderByDescending(x => x.SelectedDate).Skip(1)).Select(x=>x.Id).ToList();
             candidateToDeleteList.AddRange(duplicateActiveCandidate);
@@ -143,6 +144,7 @@ namespace Core.Service
                     candidateToDeleteList.Add(i.Id);
                 }
             }
+            await _candidateRepository.UpdateIsDeleteById(candidateToDeleteList);
         }
     }
 }
