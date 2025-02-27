@@ -45,8 +45,6 @@ namespace Core.Service
             string intradayResponseBody = await intradayResponse.Content.ReadAsStringAsync();
             List<TwseIntradayStockInfo> intradayStockInfoList = JsonConvert.DeserializeObject<List<TwseIntradayStockInfo>>(intradayResponseBody);
             HashSet<string> intradayStockCodeHashSet = new HashSet<string>(intradayStockInfoList.Select(x => x.Code.ToUpper()));
-
-
             List<Candidate> stockList = stockInfoList.Where(x => intradayStockCodeHashSet.Contains(x.公司代號.ToUpper())).Select(x => new Candidate()
             {
                 Market = EMarket.TWSE,
