@@ -12,7 +12,7 @@ namespace Core.Model
     {
         public Guid Id { get; set; }
         public EMarket Market { get; set; }
-        public int StockCode { get; set; }
+        public string StockCode { get; set; }
         public string CompanyName { get; set; }
         public List<StockTechData> TechDataList { get; set; } = new List<StockTechData>();
         public List<StockTechData> OrderedTechDataList { get { return TechDataList.OrderByDescending(x => x.Date).ToList(); } }

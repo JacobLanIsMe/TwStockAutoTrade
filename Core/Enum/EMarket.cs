@@ -9,7 +9,7 @@ namespace Core.Enum
 {
     public enum EMarket
     {
-        TWSE,
-        TPEX
+        TWSE = 1,
+        TWOTC = 2
     }
 }

@@ -6,9 +6,9 @@ using System.Threading.Tasks;
 
 namespace Core.Model
 {
-    public class TpexStockInfo
+    public class TwseIntradayStockInfo
     {
-        public string SecuritiesCompanyCode { get; set; }
-        public string CompanyAbbreviation { get; set; }
+        public string Code { get; set; }
+        public string Name { get; set; }
     }
 }
