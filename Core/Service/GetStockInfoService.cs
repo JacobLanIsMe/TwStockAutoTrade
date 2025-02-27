@@ -32,6 +32,7 @@ namespace Core.Service
             var tpexStockList = await tpexStockListTask;
             //await GetTwseDailyExchangeRecort(twseStockList);
             List<Candidate> mergedStockList = twseStockList.Concat(tpexStockList).ToList();
+            await GetDailyExchangeReport(mergedStockList);
             List<Candidate> candidateList = mergedStockList.Where(x => x.IsCandidate).ToList();
             await _candidateRepository.Insert(candidateList);
             await DeleteActiveCandidate(mergedStockList);
@@ -73,6 +74,10 @@ namespace Core.Service
                 CompanyName = x.CompanyAbbreviation
             }).ToList();
             return stockList;
+        }
+        private async Task GetDailyExchangeReport(List<Candidate> stockList)
+        {
+
         }
         private async Task GetTwseDailyExchangeRecort(List<Candidate> twseStockList)
         {
