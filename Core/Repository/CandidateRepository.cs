@@ -1,5 +1,6 @@
 ﻿using Core.Model;
 using Core.Repository.Interface;
+using Core.Service.Interface;
 using Dapper;
 using Microsoft.Extensions.Configuration;
 using System;
@@ -13,9 +14,11 @@ namespace Core.Repository
     public class CandidateRepository : ICandidateRepository
     {
         private readonly string _dbConnectionString;
-        public CandidateRepository(IConfiguration config)
+        private readonly IDateTimeService _dateTimeService;
+        public CandidateRepository(IConfiguration config, IDateTimeService dateTimeService)
         {
             _dbConnectionString = config.GetConnectionString("DefaultConnection");
+            _dateTimeService = dateTimeService;
         }
         public async Task Insert(List<Candidate> candidateList)
         {
@@ -41,10 +44,11 @@ namespace Core.Repository
         public async Task UpdateIsDeleteById(List<Guid> IdList)
         {
             if (!IdList.Any()) return;
-            string sqlCommand = $@"UPDATE [dbo].[Candidate] SET IsDeleted = 1 WHERE Id IN @IdList";
+            DateTime deleteDate = _dateTimeService.GetTaiwanTime();
+            string sqlCommand = $@"UPDATE [dbo].[Candidate] SET IsDeleted = 1 AND DeleteDate = @DeleteDate WHERE Id IN @IdList";
             using (SqlConnection sqlConnection = new SqlConnection(_dbConnectionString))
             {
-                await sqlConnection.ExecuteAsync(sqlCommand, new { IdList = IdList });
+                await sqlConnection.ExecuteAsync(sqlCommand, new { DeleteDate = deleteDate, IdList = IdList });
             }
         }
     }

@@ -123,16 +123,16 @@ namespace Core.Model
             if (OrderedTechDataList.Count < 5) return null;
             return OrderedTechDataList[4];
         }
-        public DateTime? SelectedDate
+        public DateTime? SelectDate
         {
             get
             {
                 if (OrderedTechDataList.Any()) return OrderedTechDataList.First().Date;
-                return SelectedDate;
+                return SelectDate;
             }
             set
             {
-                SelectedDate = value;
+                SelectDate = value;
             }
         }
     }
