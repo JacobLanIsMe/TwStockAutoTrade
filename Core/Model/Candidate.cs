@@ -105,7 +105,7 @@ namespace Core.Model
                 double mv5 = TechDataList.Take(5).Average(x => x.Volume);
                 if (mv5 < 100) return false;
                 decimal volatility = TechDataList.Take(5).Max(x => x.Close) / TechDataList.Take(5).Min(x => x.Close);
-                if (volatility > (decimal)1.02) return true;
+                if (volatility > (decimal)1.02) return false;
                 decimal gapUpMa5 = TechDataList.Skip(4).Take(5).Average(x => x.Close);
                 decimal gapUpMa10 = TechDataList.Skip(4).Take(10).Average(x => x.Close);
                 decimal gapUpMa20 = TechDataList.Skip(4).Take(20).Average(x => x.Close);

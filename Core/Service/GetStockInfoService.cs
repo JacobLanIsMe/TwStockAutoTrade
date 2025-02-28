@@ -33,7 +33,6 @@ namespace Core.Service
             var tpexStockListTask = GetTwotcStockCode();
             var twseStockList = await twseStockListTask;
             var tpexStockList = await tpexStockListTask;
-            //await GetTwseDailyExchangeRecort(twseStockList);
             List<Candidate> mergedStockList = twseStockList.Concat(tpexStockList).ToList();
             await GetDailyExchangeReport(mergedStockList);
             List<Candidate> candidateList = mergedStockList.Where(x => x.IsCandidate).ToList();
@@ -80,11 +79,6 @@ namespace Core.Service
         }
         private async Task GetDailyExchangeReport(List<Candidate> stockList)
         {
-            //string url = $"https://tw.quote.finance.yahoo.net/quote/q?type=ta&perd=d&mkt=10&sym=9937&v=1&callback=jQuery111306311117094962886_1574862886629&_=1574862886630";
-            //HttpResponseMessage response = await _httpClient.GetAsync(url);
-            //string responseBody = await response.Content.ReadAsStringAsync();
-            //responseBody = responseBody.Substring(responseBody.IndexOf('(') + 1);
-            //responseBody = responseBody.TrimEnd(new char[] { ')', ';' });
             var tasks = stockList.Select(async stock =>
             {
                 await _semaphore.WaitAsync();
