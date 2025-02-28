@@ -114,6 +114,7 @@
     <Compile Include="Model\StringListModel.cs" />
     <Compile Include="Model\TwotcIntradayStockInfo.cs" />
     <Compile Include="Model\TwseIntradayStockInfo.cs" />
+    <Compile Include="Model\YahooTechData.cs" />
     <Compile Include="Repository\CandidateRepository.cs" />
     <Compile Include="Repository\Interface\ICandidateRepository.cs" />
     <Compile Include="Service\Interface\IDateTimeService.cs" />

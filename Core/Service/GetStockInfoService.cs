@@ -5,9 +5,11 @@ using Core.Repository.Interface;
 using Core.Service.Interface;
 using Newtonsoft.Json;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Core.Service
@@ -15,14 +17,15 @@ namespace Core.Service
     public class GetStockInfoService : IGetStockInfoService
     {
         private HttpClient _httpClient;
-        private readonly IDateTimeService _dateTimeService;
         private readonly ICandidateRepository _candidateRepository;
-        public GetStockInfoService(IDateTimeService dateTimeService, ICandidateRepository candidateRepository)
+        private readonly SemaphoreSlim _semaphore;
+        public GetStockInfoService(ICandidateRepository candidateRepository)
         {
             SimpleHttpClientFactory httpClientFactory = new SimpleHttpClientFactory();
             _httpClient = httpClientFactory.CreateClient();
-            _dateTimeService = dateTimeService;
             _candidateRepository = candidateRepository;
+            int maxConcurrency = Environment.ProcessorCount * 40;
+            _semaphore = new SemaphoreSlim(maxConcurrency);
         }
         public async Task SelectStock()
         {
@@ -77,48 +80,44 @@ namespace Core.Service
         }
         private async Task GetDailyExchangeReport(List<Candidate> stockList)
         {
-
-        }
-        private async Task GetTwseDailyExchangeRecort(List<Candidate> twseStockList)
-        {
-            DateTime now = _dateTimeService.GetTaiwanTime();
-            List<string> monthList = new List<string>();
-            for (int i = 0; i < 3; i++)
+            //string url = $"https://tw.quote.finance.yahoo.net/quote/q?type=ta&perd=d&mkt=10&sym=9937&v=1&callback=jQuery111306311117094962886_1574862886629&_=1574862886630";
+            //HttpResponseMessage response = await _httpClient.GetAsync(url);
+            //string responseBody = await response.Content.ReadAsStringAsync();
+            //responseBody = responseBody.Substring(responseBody.IndexOf('(') + 1);
+            //responseBody = responseBody.TrimEnd(new char[] { ')', ';' });
+            var tasks = stockList.Select(async stock =>
             {
-                monthList.Add(now.AddMonths(i * -1).ToString("yyyyMM") + "01");
-            }
-            foreach (var stock in twseStockList)
-            {
+                await _semaphore.WaitAsync();
                 try
                 {
-                    foreach (var month in monthList)
+                    string url = $"https://tw.quote.finance.yahoo.net/quote/q?type=ta&perd=d&mkt=10&sym={stock.StockCode}&v=1&callback=jQuery111306311117094962886_1574862886629&_=1574862886630";
+                    HttpResponseMessage response = await _httpClient.GetAsync(url);
+                    string responseBody = await response.Content.ReadAsStringAsync();
+                    string modifiedResponseBody = responseBody.Split(new string[] { "\"ta\":" }, StringSplitOptions.None)[1];
+                    modifiedResponseBody = modifiedResponseBody.Split(new string[] { ",\"ex\":" }, StringSplitOptions.None)[0];
+                    modifiedResponseBody = modifiedResponseBody.TrimEnd(new char[] { '}', ')', ';' });
+                    List<YahooTechData> yahooTechData = JsonConvert.DeserializeObject<List<YahooTechData>>(modifiedResponseBody);
+                    stock.TechDataList = yahooTechData.Select(x => new StockTechData
                     {
-                        string url = $"https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date={month}&stockNo={stock.StockCode}&response=json";
-                        HttpResponseMessage response = await _httpClient.GetAsync(url);
-                        string responseBody = await response.Content.ReadAsStringAsync();
-                        TwseStockExchangeReport data = JsonConvert.DeserializeObject<TwseStockExchangeReport>(responseBody);
-                        foreach (var i in data.Data)
-                        {
-                            StockTechData techData = new StockTechData()
-                            {
-                                Date = DateTime.ParseExact((int.Parse(i[0].Replace("/", "")) + 19110000).ToString(), "yyyyMMdd", null),
-                                Volume = int.Parse(i[1].Replace(",", "")),
-                                Open = decimal.Parse(i[3]),
-                                High = decimal.Parse(i[4]),
-                                Low = decimal.Parse(i[5]),
-                                Close = decimal.Parse(i[6]),
-                            };
-                            stock.TechDataList.Add(techData);
-                        }
-                    }
+                        Date = DateTime.ParseExact(x.T.ToString(), "yyyyMMdd", null),
+                        Close = x.C,
+                        Open = x.O,
+                        High = x.H,
+                        Low = x.L,
+                        Volume = x.V
+                    }).OrderByDescending(x => x.Date).ToList();
                     Console.WriteLine($"Retrieve exchange report of Stock {stock.StockCode} {stock.CompanyName} finished.");
-                    await Task.Delay(5000);
                 }
                 catch (Exception ex)
                 {
                     Console.WriteLine($"Error occurs while retrieving exchange report of Stock {stock.StockCode} {stock.CompanyName}. Error message: {ex}");
                 }
-            }
+                finally
+                {
+                    _semaphore.Release();
+                }
+            });
+            await Task.WhenAll(tasks);
         }
         private async Task DeleteActiveCandidate(List<Candidate> candidateList)
         {
@@ -126,7 +125,7 @@ namespace Core.Service
             List<Candidate> activeCandidateList = await _candidateRepository.GetActiveCandidate();
             if (!activeCandidateList.Any()) return;
             List<Guid> candidateToDeleteList = new List<Guid>();
-            List<Guid> duplicateActiveCandidate = activeCandidateList.GroupBy(x => x.StockCode).SelectMany(g => g.OrderByDescending(x => x.SelectDate).Skip(1)).Select(x=>x.Id).ToList();
+            List<Guid> duplicateActiveCandidate = activeCandidateList.GroupBy(x => x.StockCode).SelectMany(g => g.OrderByDescending(x => x.SelectDate).Skip(1)).Select(x => x.Id).ToList();
             candidateToDeleteList.AddRange(duplicateActiveCandidate);
             activeCandidateList = activeCandidateList.Where(x => !candidateToDeleteList.Contains(x.Id)).ToList();
             foreach (var i in activeCandidateList)
@@ -139,9 +138,9 @@ namespace Core.Service
                     }
                     else
                     {
-                        List<StockTechData> orderedTechDataList = stock.OrderedTechDataList;
-                        if (orderedTechDataList.First().Close < orderedTechDataList.Take(10).Average(x=>x.Close) &
-                            orderedTechDataList.First().Close < i.GapUpLow)
+                        List<StockTechData> techDataList = stock.TechDataList;
+                        if (techDataList.First().Close < techDataList.Take(10).Average(x => x.Close) &
+                            techDataList.First().Close < i.GapUpLow)
                         {
                             candidateToDeleteList.Add(i.Id);
                         }
@@ -154,5 +153,47 @@ namespace Core.Service
             }
             await _candidateRepository.UpdateIsDeleteById(candidateToDeleteList);
         }
+        //private async Task GetTwseDailyExchangeRecort(List<Candidate> twseStockList)
+        //{
+        //    DateTime now = _dateTimeService.GetTaiwanTime();
+        //    List<string> monthList = new List<string>();
+        //    for (int i = 0; i < 3; i++)
+        //    {
+        //        monthList.Add(now.AddMonths(i * -1).ToString("yyyyMM") + "01");
+        //    }
+        //    foreach (var stock in twseStockList)
+        //    {
+        //        try
+        //        {
+        //            foreach (var month in monthList)
+        //            {
+        //                string url = $"https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date={month}&stockNo={stock.StockCode}&response=json";
+        //                HttpResponseMessage response = await _httpClient.GetAsync(url);
+        //                string responseBody = await response.Content.ReadAsStringAsync();
+        //                TwseStockExchangeReport data = JsonConvert.DeserializeObject<TwseStockExchangeReport>(responseBody);
+        //                foreach (var i in data.Data)
+        //                {
+        //                    StockTechData techData = new StockTechData()
+        //                    {
+        //                        Date = DateTime.ParseExact((int.Parse(i[0].Replace("/", "")) + 19110000).ToString(), "yyyyMMdd", null),
+        //                        Volume = int.Parse(i[1].Replace(",", "")),
+        //                        Open = decimal.Parse(i[3]),
+        //                        High = decimal.Parse(i[4]),
+        //                        Low = decimal.Parse(i[5]),
+        //                        Close = decimal.Parse(i[6]),
+        //                    };
+        //                    stock.TechDataList.Add(techData);
+        //                }
+        //            }
+        //            Console.WriteLine($"Retrieve exchange report of Stock {stock.StockCode} {stock.CompanyName} finished.");
+        //            await Task.Delay(5000);
+        //        }
+        //        catch (Exception ex)
+        //        {
+        //            Console.WriteLine($"Error occurs while retrieving exchange report of Stock {stock.StockCode} {stock.CompanyName}. Error message: {ex}");
+        //        }
+        //    }
+        //}
+
     }
 }

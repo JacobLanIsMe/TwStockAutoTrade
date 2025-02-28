@@ -15,7 +15,6 @@ namespace Core.Model
         public string StockCode { get; set; }
         public string CompanyName { get; set; }
         public List<StockTechData> TechDataList { get; set; } = new List<StockTechData>();
-        public List<StockTechData> OrderedTechDataList { get { return TechDataList.OrderByDescending(x => x.Date).ToList(); } }
         public decimal? GapUpHigh 
         {
             get 
@@ -100,18 +99,18 @@ namespace Core.Model
         { 
             get
             {
-                if (OrderedTechDataList.Count < 25) return false;
+                if (TechDataList.Count < 25) return false;
                 StockTechData gapUpStockTechData = GetGapUpStockTechData();
-                if (gapUpStockTechData.Low <= OrderedTechDataList[5].High) return false;
-                double mv5 = OrderedTechDataList.Take(5).Average(x => x.Volume);
+                if (gapUpStockTechData.Low <= TechDataList[5].High) return false;
+                double mv5 = TechDataList.Take(5).Average(x => x.Volume);
                 if (mv5 < 100) return false;
-                decimal volatility = OrderedTechDataList.Take(5).Max(x => x.Close) / OrderedTechDataList.Take(5).Min(x => x.Close);
+                decimal volatility = TechDataList.Take(5).Max(x => x.Close) / TechDataList.Take(5).Min(x => x.Close);
                 if (volatility > (decimal)1.02) return true;
-                decimal gapUpMa5 = OrderedTechDataList.Skip(4).Take(5).Average(x => x.Close);
-                decimal gapUpMa10 = OrderedTechDataList.Skip(4).Take(10).Average(x => x.Close);
-                decimal gapUpMa20 = OrderedTechDataList.Skip(4).Take(20).Average(x => x.Close);
+                decimal gapUpMa5 = TechDataList.Skip(4).Take(5).Average(x => x.Close);
+                decimal gapUpMa10 = TechDataList.Skip(4).Take(10).Average(x => x.Close);
+                decimal gapUpMa20 = TechDataList.Skip(4).Take(20).Average(x => x.Close);
                 if (gapUpStockTechData.Close < gapUpMa5 || gapUpStockTechData.Close < gapUpMa10 || gapUpStockTechData.Close < gapUpMa20) return false;
-                List<decimal> last4Close = OrderedTechDataList.Take(4).Select(x => x.Close).ToList();
+                List<decimal> last4Close = TechDataList.Take(4).Select(x => x.Close).ToList();
                 bool isPeriodCloseHigherThanGapUpHigh = last4Close.Max() > gapUpStockTechData.High;
                 bool isPeriodCloseLowerThanGapUpLow = last4Close.Min() < gapUpStockTechData.Low;
                 if (isPeriodCloseHigherThanGapUpHigh || isPeriodCloseLowerThanGapUpLow) return false;
@@ -120,14 +119,14 @@ namespace Core.Model
         }
         private StockTechData GetGapUpStockTechData()
         {
-            if (OrderedTechDataList.Count < 5) return null;
-            return OrderedTechDataList[4];
+            if (TechDataList.Count < 5) return null;
+            return TechDataList[4];
         }
         public DateTime? SelectDate
         {
             get
             {
-                if (OrderedTechDataList.Any()) return OrderedTechDataList.First().Date;
+                if (TechDataList.Any()) return TechDataList.First().Date;
                 return SelectDate;
             }
             set
