@@ -38,8 +38,8 @@ namespace Core.Service
             List<Candidate> candidateList = SelectCandidate(mergedStockList); ;
 
 
-            //await _candidateRepository.Insert(candidateList);
-            //await DeleteActiveCandidate(mergedStockList);
+            await _candidateRepository.Insert(candidateList);
+            await DeleteActiveCandidate(mergedStockList);
         }
         private async Task<List<Candidate>> GetTwseStockCode()
         {
