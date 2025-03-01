@@ -35,11 +35,11 @@ namespace Core.Service
             var tpexStockList = await tpexStockListTask;
             List<Candidate> mergedStockList = twseStockList.Concat(tpexStockList).ToList();
             await GetDailyExchangeReport(mergedStockList);
-            SelectCandidate(mergedStockList);
-            List<Candidate> candidateList = mergedStockList.Where(x => x.IsCandidate).ToList();
+            List<Candidate> candidateList = SelectCandidate(mergedStockList); ;
 
-            await _candidateRepository.Insert(candidateList);
-            await DeleteActiveCandidate(mergedStockList);
+
+            //await _candidateRepository.Insert(candidateList);
+            //await DeleteActiveCandidate(mergedStockList);
         }
         private async Task<List<Candidate>> GetTwseStockCode()
         {
@@ -115,8 +115,9 @@ namespace Core.Service
             });
             await Task.WhenAll(tasks);
         }
-        private void SelectCandidate(List<Candidate> stockList)
+        private List<Candidate> SelectCandidate(List<Candidate> stockList)
         {
+            List<Candidate> candidateList = new List<Candidate>();
             foreach (var i in stockList)
             {
                 i.IsCandidate = IsCandidate(i.TechDataList, out StockTechData gapUpTechData);
@@ -125,7 +126,9 @@ namespace Core.Service
                 i.GapUpLow = gapUpTechData.Low;
                 i.SelectDate = i.TechDataList.First().Date;
                 i.StopLossPoint = GetStopLossPoint((decimal)i.GapUpHigh);
+                candidateList.Add(i);
             }
+            return candidateList;
         }
         private bool IsCandidate(List<StockTechData> techDataList, out StockTechData gapUpTechData)
         {
