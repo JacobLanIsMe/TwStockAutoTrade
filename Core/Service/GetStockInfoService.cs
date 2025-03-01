@@ -35,7 +35,9 @@ namespace Core.Service
             var tpexStockList = await tpexStockListTask;
             List<Candidate> mergedStockList = twseStockList.Concat(tpexStockList).ToList();
             await GetDailyExchangeReport(mergedStockList);
+            SelectCandidate(mergedStockList);
             List<Candidate> candidateList = mergedStockList.Where(x => x.IsCandidate).ToList();
+
             await _candidateRepository.Insert(candidateList);
             await DeleteActiveCandidate(mergedStockList);
         }
@@ -112,6 +114,85 @@ namespace Core.Service
                 }
             });
             await Task.WhenAll(tasks);
+        }
+        private void SelectCandidate(List<Candidate> stockList)
+        {
+            foreach (var i in stockList)
+            {
+                i.IsCandidate = IsCandidate(i.TechDataList, out StockTechData gapUpTechData);
+                if (!i.IsCandidate || gapUpTechData == null) continue;
+                i.GapUpHigh = gapUpTechData.High;
+                i.GapUpLow = gapUpTechData.Low;
+                i.SelectDate = i.TechDataList.First().Date;
+                i.StopLossPoint = GetStopLossPoint((decimal)i.GapUpHigh);
+            }
+        }
+        private bool IsCandidate(List<StockTechData> techDataList, out StockTechData gapUpTechData)
+        {
+            gapUpTechData = null;
+            if (techDataList.Count < 25) return false;
+            gapUpTechData = techDataList[4];
+            if (gapUpTechData.Low <= techDataList[5].High) return false;
+            double mv5 = techDataList.Take(5).Average(x => x.Volume);
+            if (mv5 < 100) return false;
+            decimal volatility = techDataList.Take(5).Max(x => x.Close) / techDataList.Take(5).Min(x => x.Close);
+            if (volatility > (decimal)1.02) return false;
+            decimal gapUpMa5 = techDataList.Skip(4).Take(5).Average(x => x.Close);
+            decimal gapUpMa10 = techDataList.Skip(4).Take(10).Average(x => x.Close);
+            decimal gapUpMa20 = techDataList.Skip(4).Take(20).Average(x => x.Close);
+            if (gapUpTechData.Close < gapUpMa5 || gapUpTechData.Close < gapUpMa10 || gapUpTechData.Close < gapUpMa20) return false;
+            List<decimal> last4Close = techDataList.Take(4).Select(x => x.Close).ToList();
+            bool isPeriodCloseHigherThanGapUpHigh = last4Close.Max() > gapUpTechData.High;
+            bool isPeriodCloseLowerThanGapUpLow = last4Close.Min() < gapUpTechData.Low;
+            if (isPeriodCloseHigherThanGapUpHigh || isPeriodCloseLowerThanGapUpLow) return false;
+            return true;
+        }
+        private decimal GetStopLossPoint(decimal gapUpHigh)
+        {
+            if (gapUpHigh <= 10)
+            {
+                return gapUpHigh - (decimal)(0.01 * 2);
+            }
+            else if (gapUpHigh == (decimal)10.05)
+            {
+                return (decimal)9.99;
+            }
+            else if (gapUpHigh > (decimal)10.05 & gapUpHigh <= 50)
+            {
+                return gapUpHigh - (decimal)(0.05 * 2);
+            }
+            else if (gapUpHigh == (decimal)50.1)
+            {
+                return (decimal)49.95;
+            }
+            else if (gapUpHigh > (decimal)50.1 & gapUpHigh <= 100)
+            {
+                return gapUpHigh - (decimal)(0.1 * 2);
+            }
+            else if (gapUpHigh == (decimal)100.5)
+            {
+                return (decimal)99.9;
+            }
+            else if (gapUpHigh > (decimal)100.5 & gapUpHigh <= 500)
+            {
+                return gapUpHigh - (decimal)(0.5 * 2);
+            }
+            else if (gapUpHigh == (decimal)501)
+            {
+                return (decimal)499.5;
+            }
+            else if (gapUpHigh > 501 & gapUpHigh <= 1000)
+            {
+                return gapUpHigh - (1 * 2);
+            }
+            else if (gapUpHigh == 1005)
+            {
+                return 999;
+            }
+            else
+            {
+                return gapUpHigh - (5 * 2);
+            }
         }
         private async Task DeleteActiveCandidate(List<Candidate> candidateList)
         {
