@@ -24,9 +24,9 @@ namespace Core.Repository
         {
             if (!candidateList.Any()) return;
             string sqlCommand = @"INSERT INTO [dbo].[Candidate] 
-                                ([Market], [StockCode], [CompanyName], [EntryPoint], [StopLossPoint], [SelectedDate])
+                                ([Market], [StockCode], [CompanyName], [GapUpHigh], [GapUpLow], [StopLossPoint], [SelectedDate])
                                 VALUES
-                                (@Market, @StockCode, @CompanyName, @EntryPoint, @StopLossPoint, @SelectedDate)";
+                                (@Market, @StockCode, @CompanyName, @GapUpHigh, @GapUpLow, @StopLossPoint, @SelectedDate)";
             using (SqlConnection sqlConnection = new SqlConnection(_dbConnectionString))
             {
                 await sqlConnection.ExecuteAsync(sqlCommand, candidateList);
@@ -44,11 +44,11 @@ namespace Core.Repository
         public async Task UpdateIsDeleteById(List<Guid> IdList)
         {
             if (!IdList.Any()) return;
-            DateTime deleteDate = _dateTimeService.GetTaiwanTime();
-            string sqlCommand = $@"UPDATE [dbo].[Candidate] SET IsDeleted = 1 AND DeleteDate = @DeleteDate WHERE Id IN @IdList";
+            DateTime deletedDate = _dateTimeService.GetTaiwanTime();
+            string sqlCommand = $@"UPDATE [dbo].[Candidate] SET IsDeleted = 1 AND DeletedDate = @DeletedDate WHERE Id IN @IdList";
             using (SqlConnection sqlConnection = new SqlConnection(_dbConnectionString))
             {
-                await sqlConnection.ExecuteAsync(sqlCommand, new { DeleteDate = deleteDate, IdList = IdList });
+                await sqlConnection.ExecuteAsync(sqlCommand, new { DeletedDate = deletedDate, IdList = IdList });
             }
         }
     }
