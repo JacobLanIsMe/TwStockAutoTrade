@@ -33,13 +33,10 @@ namespace Core.Service
             var tpexStockListTask = GetTwotcStockCode();
             var twseStockList = await twseStockListTask;
             var tpexStockList = await tpexStockListTask;
-            List<Candidate> mergedStockList = twseStockList.Concat(tpexStockList).ToList();
-            await GetDailyExchangeReport(mergedStockList);
-            List<Candidate> candidateList = SelectCandidate(mergedStockList); ;
-
-
-            await _candidateRepository.Insert(candidateList);
-            await DeleteActiveCandidate(mergedStockList);
+            List<Candidate> allStockInfoList = twseStockList.Concat(tpexStockList).ToList();
+            await GetDailyExchangeReport(allStockInfoList);
+            List<Candidate> candidateList = SelectCandidate(allStockInfoList);
+            await UpdateCandidate(candidateList, allStockInfoList);
         }
         private async Task<List<Candidate>> GetTwseStockCode()
         {
@@ -124,8 +121,9 @@ namespace Core.Service
                 if (!i.IsCandidate || gapUpTechData == null) continue;
                 i.GapUpHigh = gapUpTechData.High;
                 i.GapUpLow = gapUpTechData.Low;
-                i.SelectDate = i.TechDataList.First().Date;
+                i.SelectedDate = i.TechDataList.First().Date;
                 i.StopLossPoint = GetStopLossPoint((decimal)i.GapUpHigh);
+                i.Last9TechData = JsonConvert.SerializeObject(i.TechDataList.Take(9));
                 candidateList.Add(i);
             }
             return candidateList;
@@ -197,81 +195,54 @@ namespace Core.Service
                 return gapUpHigh - (5 * 2);
             }
         }
-        private async Task DeleteActiveCandidate(List<Candidate> candidateList)
+        private async Task UpdateCandidate(List<Candidate> candidateToInsertList, List<Candidate> allStockInfoList)
         {
-            Dictionary<string, Candidate> candidateDict = candidateList.ToDictionary(x => x.StockCode);
             List<Candidate> activeCandidateList = await _candidateRepository.GetActiveCandidate();
-            if (!activeCandidateList.Any()) return;
+            Dictionary<string, Candidate> candidateDict = candidateToInsertList.ToDictionary(x => x.StockCode);
+            Dictionary<string, Candidate> allStockInfoDict = allStockInfoList.ToDictionary(x => x.StockCode);
             List<Guid> candidateToDeleteList = new List<Guid>();
-            List<Guid> duplicateActiveCandidate = activeCandidateList.GroupBy(x => x.StockCode).SelectMany(g => g.OrderByDescending(x => x.SelectDate).Skip(1)).Select(x => x.Id).ToList();
-            candidateToDeleteList.AddRange(duplicateActiveCandidate);
-            activeCandidateList = activeCandidateList.Where(x => !candidateToDeleteList.Contains(x.Id)).ToList();
+            List<Candidate> candidateToUpdateList = new List<Candidate>();
             foreach (var i in activeCandidateList)
             {
-                if (candidateDict.TryGetValue(i.StockCode, out Candidate stock))
+                if (candidateDict.ContainsKey(i.StockCode))
+                {
+                    candidateToDeleteList.Add(i.Id);
+                    continue;
+                }
+                if (!allStockInfoDict.TryGetValue(i.StockCode, out Candidate stock))
+                {
+                    candidateToDeleteList.Add(i.Id);
+                    continue;
+                }
+                if (stock.TechDataList.Count <= 0)
+                {
+                    candidateToDeleteList.Add(i.Id);
+                    continue;
+                }
+                decimal todayClose = stock.TechDataList.First().Close;
+                if (todayClose < i.GapUpLow)
+                {
+                    candidateToDeleteList.Add(i.Id);
+                    continue;
+                }
+                if (todayClose >= i.GapUpHigh)
                 {
                     if (stock.TechDataList.Count < 10)
                     {
                         candidateToDeleteList.Add(i.Id);
+                        continue;
                     }
-                    else
+                    decimal ma10 = stock.TechDataList.Take(10).Average(x => x.Close);
+                    if (todayClose < ma10)
                     {
-                        List<StockTechData> techDataList = stock.TechDataList;
-                        if (techDataList.First().Close < techDataList.Take(10).Average(x => x.Close) &
-                            techDataList.First().Close < i.GapUpLow)
-                        {
-                            candidateToDeleteList.Add(i.Id);
-                        }
+                        candidateToDeleteList.Add(i.Id);
+                        continue;
                     }
                 }
-                else
-                {
-                    candidateToDeleteList.Add(i.Id);
-                }
+                i.Last9TechData = JsonConvert.SerializeObject(stock.TechDataList.Take(9));
+                candidateToUpdateList.Add(i);
             }
-            await _candidateRepository.UpdateIsDeleteById(candidateToDeleteList);
+            await _candidateRepository.Update(candidateToDeleteList, candidateToUpdateList, candidateToInsertList);
         }
-        //private async Task GetTwseDailyExchangeRecort(List<Candidate> twseStockList)
-        //{
-        //    DateTime now = _dateTimeService.GetTaiwanTime();
-        //    List<string> monthList = new List<string>();
-        //    for (int i = 0; i < 3; i++)
-        //    {
-        //        monthList.Add(now.AddMonths(i * -1).ToString("yyyyMM") + "01");
-        //    }
-        //    foreach (var stock in twseStockList)
-        //    {
-        //        try
-        //        {
-        //            foreach (var month in monthList)
-        //            {
-        //                string url = $"https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?date={month}&stockNo={stock.StockCode}&response=json";
-        //                HttpResponseMessage response = await _httpClient.GetAsync(url);
-        //                string responseBody = await response.Content.ReadAsStringAsync();
-        //                TwseStockExchangeReport data = JsonConvert.DeserializeObject<TwseStockExchangeReport>(responseBody);
-        //                foreach (var i in data.Data)
-        //                {
-        //                    StockTechData techData = new StockTechData()
-        //                    {
-        //                        Date = DateTime.ParseExact((int.Parse(i[0].Replace("/", "")) + 19110000).ToString(), "yyyyMMdd", null),
-        //                        Volume = int.Parse(i[1].Replace(",", "")),
-        //                        Open = decimal.Parse(i[3]),
-        //                        High = decimal.Parse(i[4]),
-        //                        Low = decimal.Parse(i[5]),
-        //                        Close = decimal.Parse(i[6]),
-        //                    };
-        //                    stock.TechDataList.Add(techData);
-        //                }
-        //            }
-        //            Console.WriteLine($"Retrieve exchange report of Stock {stock.StockCode} {stock.CompanyName} finished.");
-        //            await Task.Delay(5000);
-        //        }
-        //        catch (Exception ex)
-        //        {
-        //            Console.WriteLine($"Error occurs while retrieving exchange report of Stock {stock.StockCode} {stock.CompanyName}. Error message: {ex}");
-        //        }
-        //    }
-        //}
-
     }
 }

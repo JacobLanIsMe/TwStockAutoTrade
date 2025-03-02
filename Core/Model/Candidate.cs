@@ -19,8 +19,9 @@ namespace Core.Model
         public decimal? GapUpHigh { get; set; }
         public decimal? GapUpLow { get; set; }
         public decimal? StopLossPoint { get; set; }
-        public DateTime? SelectDate { get; set; }
+        public DateTime? SelectedDate { get; set; }
         public bool IsDeleted { get; set; }
         public DateTime? DeleteDate { get; set; }
+        public string Last9TechData { get; set; }
     }
 }

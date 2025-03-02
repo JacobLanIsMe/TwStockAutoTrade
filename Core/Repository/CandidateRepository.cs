@@ -20,18 +20,6 @@ namespace Core.Repository
             _dbConnectionString = config.GetConnectionString("DefaultConnection");
             _dateTimeService = dateTimeService;
         }
-        public async Task Insert(List<Candidate> candidateList)
-        {
-            if (!candidateList.Any()) return;
-            string sqlCommand = @"INSERT INTO [dbo].[Candidate] 
-                                ([Market], [StockCode], [CompanyName], [GapUpHigh], [GapUpLow], [StopLossPoint], [SelectedDate])
-                                VALUES
-                                (@Market, @StockCode, @CompanyName, @GapUpHigh, @GapUpLow, @StopLossPoint, @SelectedDate)";
-            using (SqlConnection sqlConnection = new SqlConnection(_dbConnectionString))
-            {
-                await sqlConnection.ExecuteAsync(sqlCommand, candidateList);
-            }
-        }
         public async Task<List<Candidate>> GetActiveCandidate()
         {
             string sqlCommand = $@"SELECT * FROM [dbo].[Candidate] WHERE IsDeleted = 0";
@@ -41,14 +29,35 @@ namespace Core.Repository
                 return result.ToList();
             }
         }
-        public async Task UpdateIsDeleteById(List<Guid> IdList)
+        public async Task Update(List<Guid> candidateToDeleteList, List<Candidate> candidateToUpdateList, List<Candidate> candidateToInsertList)
         {
-            if (!IdList.Any()) return;
             DateTime deletedDate = _dateTimeService.GetTaiwanTime();
-            string sqlCommand = $@"UPDATE [dbo].[Candidate] SET IsDeleted = 1 AND DeletedDate = @DeletedDate WHERE Id IN @IdList";
+            string deleteSqlCommand = @"UPDATE [dbo].[Candidate] SET [IsDeleted] = 1, [DeletedDate] = @DeletedDate WHERE [Id] IN @IdList";
+            string updateSqlCommand = @"UPDATE [dbo].[Candidate] SET [Last9TechData] = @Last9TechData WHERE [Id] = @Id";
+            string insertSqlCommand = @"INSERT INTO [dbo].[Candidate] 
+                                ([Market], [StockCode], [CompanyName], [GapUpHigh], [GapUpLow], [StopLossPoint], [SelectedDate], [Last9TechData])
+                                VALUES
+                                (@Market, @StockCode, @CompanyName, @GapUpHigh, @GapUpLow, @StopLossPoint, @SelectedDate, @Last9TechData)";
+
             using (SqlConnection sqlConnection = new SqlConnection(_dbConnectionString))
             {
-                await sqlConnection.ExecuteAsync(sqlCommand, new { DeletedDate = deletedDate, IdList = IdList });
+                await sqlConnection.OpenAsync();
+                using (var transaction = sqlConnection.BeginTransaction())
+                {
+                    if (candidateToDeleteList.Any())
+                    {
+                        await sqlConnection.ExecuteAsync(deleteSqlCommand, new { DeletedDate = deletedDate, IdList = candidateToDeleteList }, transaction: transaction);
+                    }
+                    if (candidateToUpdateList.Any())
+                    {
+                        await sqlConnection.ExecuteAsync(updateSqlCommand, candidateToUpdateList, transaction: transaction);
+                    }
+                    if (candidateToInsertList.Any())
+                    {
+                        await sqlConnection.ExecuteAsync(insertSqlCommand, candidateToInsertList, transaction: transaction);
+                    }
+                    transaction.Commit();
+                }
             }
         }
     }
