@@ -44,6 +44,9 @@
     <Reference Include="Microsoft.Extensions.Configuration.Abstractions, Version=9.0.0.2, Culture=neutral, PublicKeyToken=adb9793829ddae60, processorArchitecture=MSIL">
       <HintPath>..\packages\Microsoft.Extensions.Configuration.Abstractions.9.0.2\lib\net462\Microsoft.Extensions.Configuration.Abstractions.dll</HintPath>
     </Reference>
+    <Reference Include="Microsoft.Extensions.Configuration.Binder, Version=9.0.0.2, Culture=neutral, PublicKeyToken=adb9793829ddae60, processorArchitecture=MSIL">
+      <HintPath>..\packages\Microsoft.Extensions.Configuration.Binder.9.0.2\lib\net462\Microsoft.Extensions.Configuration.Binder.dll</HintPath>
+    </Reference>
     <Reference Include="Microsoft.Extensions.Configuration.FileExtensions, Version=9.0.0.2, Culture=neutral, PublicKeyToken=adb9793829ddae60, processorArchitecture=MSIL">
       <HintPath>..\packages\Microsoft.Extensions.Configuration.FileExtensions.9.0.2\lib\net462\Microsoft.Extensions.Configuration.FileExtensions.dll</HintPath>
     </Reference>
@@ -114,11 +117,14 @@
     <Compile Include="Model\StockSharedModel.cs" />
     <Compile Include="Model\StringListModel.cs" />
     <Compile Include="Model\Trade.cs" />
+    <Compile Include="Model\TradeConfig.cs" />
     <Compile Include="Model\TwotcIntradayStockInfo.cs" />
     <Compile Include="Model\TwseIntradayStockInfo.cs" />
     <Compile Include="Model\YahooTechData.cs" />
     <Compile Include="Repository\CandidateRepository.cs" />
     <Compile Include="Repository\Interface\ICandidateRepository.cs" />
+    <Compile Include="Repository\Interface\ITradeRepository.cs" />
+    <Compile Include="Repository\TradeRepository.cs" />
     <Compile Include="Service\Interface\IDateTimeService.cs" />
     <Compile Include="Service\Interface\ISelectorService.cs" />
     <Compile Include="Model\Candidate.cs" />

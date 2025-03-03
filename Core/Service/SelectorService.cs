@@ -18,12 +18,14 @@ namespace Core.Service
     {
         private HttpClient _httpClient;
         private readonly ICandidateRepository _candidateRepository;
+        private readonly ITradeRepository _tradeRepository;
         private readonly SemaphoreSlim _semaphore;
-        public SelectorService(ICandidateRepository candidateRepository)
+        public SelectorService(ICandidateRepository candidateRepository, ITradeRepository tradeRepository)
         {
             SimpleHttpClientFactory httpClientFactory = new SimpleHttpClientFactory();
             _httpClient = httpClientFactory.CreateClient();
             _candidateRepository = candidateRepository;
+            _tradeRepository = tradeRepository;
             int maxConcurrency = Environment.ProcessorCount * 40;
             _semaphore = new SemaphoreSlim(maxConcurrency);
         }
@@ -36,7 +38,9 @@ namespace Core.Service
             List<Candidate> allStockInfoList = twseStockList.Concat(tpexStockList).ToList();
             await GetDailyExchangeReport(allStockInfoList);
             List<Candidate> candidateList = SelectCandidate(allStockInfoList);
-            await UpdateCandidate(candidateList, allStockInfoList);
+            Dictionary<string, Candidate> allStockInfoDict = allStockInfoList.ToDictionary(x => x.StockCode);
+            await UpdateCandidate(candidateList, allStockInfoDict);
+            await UpdateTrade(allStockInfoDict);
         }
         private async Task<List<Candidate>> GetTwseStockCode()
         {
@@ -195,11 +199,10 @@ namespace Core.Service
                 return gapUpHigh - (5 * 2);
             }
         }
-        private async Task UpdateCandidate(List<Candidate> candidateToInsertList, List<Candidate> allStockInfoList)
+        private async Task UpdateCandidate(List<Candidate> candidateToInsertList, Dictionary<string, Candidate> allStockInfoDict)
         {
             List<Candidate> activeCandidateList = await _candidateRepository.GetActiveCandidate();
             Dictionary<string, Candidate> candidateDict = candidateToInsertList.ToDictionary(x => x.StockCode);
-            Dictionary<string, Candidate> allStockInfoDict = allStockInfoList.ToDictionary(x => x.StockCode);
             List<Guid> candidateToDeleteList = new List<Guid>();
             List<Candidate> candidateToUpdateList = new List<Candidate>();
             foreach (var i in activeCandidateList)
@@ -243,6 +246,20 @@ namespace Core.Service
                 candidateToUpdateList.Add(i);
             }
             await _candidateRepository.Update(candidateToDeleteList, candidateToUpdateList, candidateToInsertList);
+        }
+        public async Task UpdateTrade(Dictionary<string, Candidate> allStockInfoDict)
+        {
+            List<Trade> stockHoldingList = await _tradeRepository.GetStockHolding();
+            foreach (var i in stockHoldingList)
+            {
+                if (!allStockInfoDict.TryGetValue(i.StockCode, out Candidate stock) || stock.TechDataList.Count < 9)
+                {
+                    Console.WriteLine($"Can not retrieve last 9 tech data of stock code {i.StockCode}.");
+                    continue;
+                }
+                i.Last9TechData = JsonConvert.SerializeObject(stock.TechDataList.Take(9));
+            }
+            await _tradeRepository.UpdateLast9TechData(stockHoldingList);
         }
     }
 }

@@ -20,6 +20,7 @@ namespace Selector
                 .AddSingleton<ISelectorService, SelectorService>()
                 .AddSingleton<IDateTimeService, DateTimeService>()
                 .AddSingleton<ICandidateRepository, CandidateRepository>()
+                .AddSingleton<ITradeRepository, TradeRepository>()
                 .BuildServiceProvider();
             var getStockInfoService = serviceProvider.GetRequiredService<ISelectorService>();
             Task.Run(async () => await getStockInfoService.SelectStock()).Wait();

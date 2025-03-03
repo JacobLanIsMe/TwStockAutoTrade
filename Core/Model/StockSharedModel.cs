@@ -14,5 +14,6 @@ namespace Core.Model
         public string StockCode { get; set; }
         public string CompanyName { get; set; }
         public string Last9TechData { get; set; }
+        public decimal StopLossPoint { get; set; }
     }
 }
