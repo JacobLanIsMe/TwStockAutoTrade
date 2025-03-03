@@ -1,4 +1,6 @@
-﻿using Core.Service;
+﻿using Core.Repository.Interface;
+using Core.Repository;
+using Core.Service;
 using Core.Service.Interface;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,6 +24,8 @@ namespace Trader
                 .Build())
                 .AddSingleton<ITraderService, TraderService>()
                 .AddSingleton<IDateTimeService, DateTimeService>()
+                .AddSingleton<ICandidateRepository, CandidateRepository>()
+                .AddSingleton<ITradeRepository, TradeRepository>()
                 .BuildServiceProvider();
             var traderService = serviceProvider.GetRequiredService<ITraderService>();
             Task.Run(async () => await traderService.Trade()).Wait();

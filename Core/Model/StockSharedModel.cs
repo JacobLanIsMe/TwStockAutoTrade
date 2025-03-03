@@ -1,4 +1,5 @@
 ﻿using Core.Enum;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -15,5 +16,17 @@ namespace Core.Model
         public string CompanyName { get; set; }
         public string Last9TechData { get; set; }
         public decimal StopLossPoint { get; set; }
+        public List<decimal> Last9Close
+        {
+            get
+            {
+                if (string.IsNullOrEmpty(Last9TechData))
+                {
+                    return new List<decimal>();
+                }
+                List<StockTechData> last9TechDataList = JsonConvert.DeserializeObject<List<StockTechData>>(Last9TechData);
+                return last9TechDataList.Select(x => x.Close).ToList();
+            }
+        }
     }
 }
