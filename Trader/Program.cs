@@ -10,6 +10,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Serilog;
 
 namespace Trader
 {
@@ -17,11 +18,16 @@ namespace Trader
     {
         static void Main(string[] args)
         {
+            Log.Logger = new LoggerConfiguration()
+            .WriteTo.Console()
+            .WriteTo.File("C://Logs/Trader/log-.log", rollingInterval: RollingInterval.Day, retainedFileCountLimit: 250)
+            .CreateLogger();
             var serviceProvider = new ServiceCollection()
                 .AddSingleton<IConfiguration>(new ConfigurationBuilder()
                 .SetBasePath(Path.GetDirectoryName(System.Reflection.Assembly.GetEntryAssembly().Location))
                 .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
                 .Build())
+                .AddSingleton<ILogger>(Log.Logger)
                 .AddSingleton<ITraderService, TraderService>()
                 .AddSingleton<IDateTimeService, DateTimeService>()
                 .AddSingleton<ICandidateRepository, CandidateRepository>()

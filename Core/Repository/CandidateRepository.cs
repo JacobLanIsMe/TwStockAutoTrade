@@ -3,6 +3,7 @@ using Core.Repository.Interface;
 using Core.Service.Interface;
 using Dapper;
 using Microsoft.Extensions.Configuration;
+using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Data.SqlClient;
@@ -15,22 +16,28 @@ namespace Core.Repository
     {
         private readonly string _dbConnectionString;
         private readonly IDateTimeService _dateTimeService;
-        public CandidateRepository(IConfiguration config, IDateTimeService dateTimeService)
+        private readonly ILogger _logger;
+        public CandidateRepository(IConfiguration config, IDateTimeService dateTimeService, ILogger logger)
         {
             _dbConnectionString = config.GetConnectionString("DefaultConnection");
             _dateTimeService = dateTimeService;
+            _logger = logger;
         }
         public async Task<List<Candidate>> GetActiveCandidate()
         {
+            _logger.Information("Get candidate started.");
             string sqlCommand = $@"SELECT * FROM [dbo].[Candidate] WHERE IsDeleted = 0";
+            IEnumerable<Candidate> result;
             using (SqlConnection sqlConnection = new SqlConnection(_dbConnectionString))
             {
-                var result = await sqlConnection.QueryAsync<Candidate>(sqlCommand);
-                return result.ToList();
+                result = await sqlConnection.QueryAsync<Candidate>(sqlCommand);
             }
+            _logger.Information("Get candidate finished.");
+            return result.ToList();
         }
         public async Task Update(List<Guid> candidateToDeleteList, List<Candidate> candidateToUpdateList, List<Candidate> candidateToInsertList)
         {
+            _logger.Information("Update candidate started.");
             DateTime deletedDate = _dateTimeService.GetTaiwanTime();
             string deleteSqlCommand = @"UPDATE [dbo].[Candidate] SET [IsDeleted] = 1, [DeletedDate] = @DeletedDate WHERE [Id] IN @IdList";
             string updateSqlCommand = @"UPDATE [dbo].[Candidate] SET [Last9TechData] = @Last9TechData WHERE [Id] = @Id";
@@ -59,6 +66,7 @@ namespace Core.Repository
                     transaction.Commit();
                 }
             }
+            _logger.Information("Update candidate finished.");
         }
     }
 }

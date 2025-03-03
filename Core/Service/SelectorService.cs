@@ -4,6 +4,7 @@ using Core.Model;
 using Core.Repository.Interface;
 using Core.Service.Interface;
 using Newtonsoft.Json;
+using Serilog;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -20,7 +21,8 @@ namespace Core.Service
         private readonly ICandidateRepository _candidateRepository;
         private readonly ITradeRepository _tradeRepository;
         private readonly SemaphoreSlim _semaphore;
-        public SelectorService(ICandidateRepository candidateRepository, ITradeRepository tradeRepository)
+        private readonly ILogger _logger;
+        public SelectorService(ICandidateRepository candidateRepository, ITradeRepository tradeRepository, ILogger logger)
         {
             SimpleHttpClientFactory httpClientFactory = new SimpleHttpClientFactory();
             _httpClient = httpClientFactory.CreateClient();
@@ -28,6 +30,7 @@ namespace Core.Service
             _tradeRepository = tradeRepository;
             int maxConcurrency = Environment.ProcessorCount * 40;
             _semaphore = new SemaphoreSlim(maxConcurrency);
+            _logger = logger;
         }
         public async Task SelectStock()
         {
@@ -44,6 +47,7 @@ namespace Core.Service
         }
         private async Task<List<Candidate>> GetTwseStockCode()
         {
+            _logger.Information("Get TWSE stock code started.");
             HttpResponseMessage response = await _httpClient.GetAsync("https://openapi.twse.com.tw/v1/opendata/t187ap03_L");
             string responseBody = await response.Content.ReadAsStringAsync();
             List<TwseStockInfo> stockInfoList = JsonConvert.DeserializeObject<List<TwseStockInfo>>(responseBody);
@@ -57,10 +61,12 @@ namespace Core.Service
                 StockCode = x.公司代號.ToUpper(),
                 CompanyName = x.公司簡稱
             }).ToList();
+            _logger.Information("Get TWSE stock code finished.");
             return stockList;
         }
         private async Task<List<Candidate>> GetTwotcStockCode()
         {
+            _logger.Information("Get TWOTC stock code started.");
             HttpResponseMessage response = await _httpClient.GetAsync("https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O");
             string responseBody = await response.Content.ReadAsStringAsync();
             List<TwotcStockInfo> stockInfoList = JsonConvert.DeserializeObject<List<TwotcStockInfo>>(responseBody);
@@ -78,10 +84,12 @@ namespace Core.Service
                 StockCode = x.SecuritiesCompanyCode.ToUpper(),
                 CompanyName = x.CompanyAbbreviation
             }).ToList();
+            _logger.Information("Get TWOTC stock code finished.");
             return stockList;
         }
         private async Task GetDailyExchangeReport(List<Candidate> stockList)
         {
+            _logger.Information("Retrieve exchange report started.");
             var tasks = stockList.Select(async stock =>
             {
                 await _semaphore.WaitAsync();
@@ -115,6 +123,7 @@ namespace Core.Service
                 }
             });
             await Task.WhenAll(tasks);
+            _logger.Information("Retrieve exchange report finished.");
         }
         private List<Candidate> SelectCandidate(List<Candidate> stockList)
         {
