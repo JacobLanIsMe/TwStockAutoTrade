@@ -111,7 +111,9 @@
   <ItemGroup>
     <Compile Include="Enum\EMarket.cs" />
     <Compile Include="HttpClientFactory\SimpleHttpClientFactory.cs" />
+    <Compile Include="Model\StockSharedModel.cs" />
     <Compile Include="Model\StringListModel.cs" />
+    <Compile Include="Model\Trade.cs" />
     <Compile Include="Model\TwotcIntradayStockInfo.cs" />
     <Compile Include="Model\TwseIntradayStockInfo.cs" />
     <Compile Include="Model\YahooTechData.cs" />
