@@ -1,12 +1,15 @@
-﻿using Core.Repository;
-using Core.Repository.Interface;
-using Core.Service;
+﻿using Core.Service;
 using Core.Service.Interface;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
-namespace Selector
+
+namespace Trader
 {
     class Program
     {
@@ -17,12 +20,11 @@ namespace Selector
                 .SetBasePath(Path.GetDirectoryName(System.Reflection.Assembly.GetEntryAssembly().Location))
                 .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
                 .Build())
-                .AddSingleton<ISelectorService, SelectorService>()
+                .AddSingleton<ITraderService, TraderService>()
                 .AddSingleton<IDateTimeService, DateTimeService>()
-                .AddSingleton<ICandidateRepository, CandidateRepository>()
                 .BuildServiceProvider();
-            var getStockInfoService = serviceProvider.GetRequiredService<ISelectorService>();
-            Task.Run(async () => await getStockInfoService.SelectStock()).Wait();
+            var traderService = serviceProvider.GetRequiredService<ITraderService>();
+            Task.Run(async () => await traderService.Trade()).Wait();
         }
     }
 }

@@ -2,7 +2,7 @@
 
 namespace Core.Service.Interface
 {
-    public interface IGetStockInfoService
+    public interface ISelectorService
     {
         Task SelectStock();
     }

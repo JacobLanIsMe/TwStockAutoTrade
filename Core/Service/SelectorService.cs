@@ -14,12 +14,12 @@ using System.Threading.Tasks;
 
 namespace Core.Service
 {
-    public class GetStockInfoService : IGetStockInfoService
+    public class SelectorService : ISelectorService
     {
         private HttpClient _httpClient;
         private readonly ICandidateRepository _candidateRepository;
         private readonly SemaphoreSlim _semaphore;
-        public GetStockInfoService(ICandidateRepository candidateRepository)
+        public SelectorService(ICandidateRepository candidateRepository)
         {
             SimpleHttpClientFactory httpClientFactory = new SimpleHttpClientFactory();
             _httpClient = httpClientFactory.CreateClient();
