@@ -111,11 +111,11 @@ namespace Core.Service
                         Low = x.L,
                         Volume = x.V
                     }).OrderByDescending(x => x.Date).ToList();
-                    Console.WriteLine($"Retrieve exchange report of Stock {stock.StockCode} {stock.CompanyName} finished.");
+                    _logger.Information($"Retrieve exchange report of Stock {stock.StockCode} {stock.CompanyName} finished.");
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error occurs while retrieving exchange report of Stock {stock.StockCode} {stock.CompanyName}. Error message: {ex}");
+                    _logger.Error($"Error occurs while retrieving exchange report of Stock {stock.StockCode} {stock.CompanyName}. Error message: {ex}");
                 }
                 finally
                 {
@@ -144,9 +144,11 @@ namespace Core.Service
         private bool IsCandidate(List<StockTechData> techDataList, out StockTechData gapUpTechData)
         {
             gapUpTechData = null;
-            if (techDataList.Count < 25) return false;
+            if (techDataList.Count < 60) return false;
             gapUpTechData = techDataList[4];
             if (gapUpTechData.Low <= techDataList[5].High) return false;
+            decimal ma60 = techDataList.Take(60).Average(x => x.Close);
+            if (gapUpTechData.High / ma60 > (decimal)1.1) return false;
             double mv5 = techDataList.Take(5).Average(x => x.Volume);
             if (mv5 < 100) return false;
             decimal volatility = techDataList.Take(5).Max(x => x.Close) / techDataList.Take(5).Min(x => x.Close);
@@ -263,7 +265,7 @@ namespace Core.Service
             {
                 if (!allStockInfoDict.TryGetValue(i.StockCode, out Candidate stock) || stock.TechDataList.Count < 9)
                 {
-                    Console.WriteLine($"Can not retrieve last 9 tech data of stock code {i.StockCode}.");
+                    _logger.Error($"Can not retrieve last 9 tech data of stock code {i.StockCode}.");
                     continue;
                 }
                 i.Last9TechData = JsonConvert.SerializeObject(stock.TechDataList.Take(9));
