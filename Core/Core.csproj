@@ -125,8 +125,34 @@
     <Reference Include="System.Data" />
     <Reference Include="System.Net.Http" />
     <Reference Include="System.Xml" />
+    <Reference Include="YuantaOneAPI, Version=1.0.17.0, Culture=neutral, PublicKeyToken=1a9c65c55c74e5b3, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>YuantaOneApi\YuantaOneAPI.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="DataStructs\0A000010_10.0.0.16.cs" />
+    <Compile Include="DataStructs\0A000014_10.0.0.20.cs" />
+    <Compile Include="DataStructs\14650010_20.101.0.16.cs" />
+    <Compile Include="DataStructs\14650012_20.101.0.18.cs" />
+    <Compile Include="DataStructs\1467000B_20.103.0.11.cs" />
+    <Compile Include="DataStructs\14670016_20.103.0.22.cs" />
+    <Compile Include="DataStructs\1467140D_20.103.20.13.cs" />
+    <Compile Include="DataStructs\1467280A_20.103.40.10.cs" />
+    <Compile Include="DataStructs\14672812_20.103.40.18.cs" />
+    <Compile Include="DataStructs\14681414_20.104.20.20.cs" />
+    <Compile Include="DataStructs\1E640A1F_30.100.10.31.cs" />
+    <Compile Include="DataStructs\1E641418_30.100.20.24.cs" />
+    <Compile Include="DataStructs\1E64280C_30.100.40.12.cs" />
+    <Compile Include="DataStructs\32000010_50.0.0.16.cs" />
+    <Compile Include="DataStructs\620A460A_98.10.70.10.cs" />
+    <Compile Include="DataStructs\C80A0A1A_200.10.10.26.cs" />
+    <Compile Include="DataStructs\C80A0A1B_200.10.10.27.cs" />
+    <Compile Include="DataStructs\D20A280A_210.10.40.10.cs" />
+    <Compile Include="DataStructs\D20A3C0A_210.10.60.10.cs" />
+    <Compile Include="DataStructs\D20A460B_210.10.70.11.cs" />
+    <Compile Include="DataStructs\Login.cs" />
+    <Compile Include="DataStructs\YuantaShareStructList.cs" />
     <Compile Include="Enum\EMarket.cs" />
     <Compile Include="HttpClientFactory\SimpleHttpClientFactory.cs" />
     <Compile Include="Model\StockSharedModel.cs" />
