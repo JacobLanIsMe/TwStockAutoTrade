@@ -16,7 +16,7 @@ namespace Core.Service
     public class TraderService : ITraderService
     {
         YuantaOneAPITrader objYuantaOneAPI = new YuantaOneAPITrader();
-        enumLangType enumLng = enumLangType.NORMAL;
+        enumLangType enumLng = enumLangType.UTF8;
         string strLoginAccount = "";
         private readonly TradeConfig tradeConfig;
         private readonly ITradeRepository _tradeRepository;
