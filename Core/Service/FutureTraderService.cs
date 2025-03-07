@@ -23,6 +23,8 @@ namespace Core.Service
         private readonly ConcurrentDictionary<string, TaskCompletionSource<string>> _responseTasks = new ConcurrentDictionary<string, TaskCompletionSource<string>>();
         private readonly string _futureAccount;
         private readonly string _futurePassword;
+        private readonly string _targetFutureCode;
+        private readonly int _maxOrderQuantity;
         public FutureTraderService(IConfiguration config, ILogger logger, IYuantaService yuantaService)
         {
             objYuantaOneAPI.OnResponse += new OnResponseEventHandler(objApi_OnResponse);
@@ -32,6 +34,8 @@ namespace Core.Service
             _yuantaService = yuantaService;
             _futureAccount = _enumEnvironmentMode == enumEnvironmentMode.PROD ? Environment.GetEnvironmentVariable("FutureAccount") : "S98875005091";
             _futurePassword = _enumEnvironmentMode == enumEnvironmentMode.PROD ? Environment.GetEnvironmentVariable("FuturePassword") : "1234";
+            _targetFutureCode = config.GetValue<string>("TargetFutureCode");
+            _maxOrderQuantity = config.GetValue<int>("MaxOrderQuantity");
         }
         public async Task Trade()
         {
@@ -41,6 +45,8 @@ namespace Core.Service
                 if (!isConnected) throw new Exception("無法連線到元大");
                 bool isLogin = await Login();
                 if (!isLogin) throw new Exception("登入失敗");
+                SubscribeWatchList();
+                await Task.Delay(-1);
             }
             catch (Exception ex)
             {
@@ -62,7 +68,18 @@ namespace Core.Service
             if (result.Contains(_futureAccount)) return true;
             return false;
         }
-        public async Task<string> CallYuantaApiAsync(string apiName, Action action = null, Func<bool> func = null)
+        private void SubscribeWatchList()
+        {
+            List<Watchlist> lstWatchlist = new List<Watchlist>();
+            enumMarketType enumMarketNo = enumMarketType.TAIFEX;
+            Watchlist watch = new Watchlist();
+            watch.IndexFlag = Convert.ToByte(7);                //填入訂閱索引值, 7: 成交價
+            watch.MarketNo = Convert.ToByte(enumMarketNo);      //填入查詢市場代碼
+            watch.StockCode = _targetFutureCode;                //填入查詢股票代碼
+            lstWatchlist.Add(watch);
+            objYuantaOneAPI.SubscribeWatchlist(lstWatchlist);
+        }
+        private async Task<string> CallYuantaApiAsync(string apiName, Action action = null, Func<bool> func = null)
         {
             var tcs = new TaskCompletionSource<string>();
 
@@ -130,14 +147,32 @@ namespace Core.Service
                                 break;
                         }
                         break;
+                    case 2: //訂閱所回應
+                        switch (strIndex)
+                        {
+                            case "210.10.70.11":    //Watchlist報價表(指定欄位)
+                                strResult = _yuantaService.FunRealWatchlist_Out((byte[])objValue);
+                                break;
+                            default:
+                                {
+                                    if (strIndex == "")
+                                        strResult = Convert.ToString(objValue);
+                                    else
+                                        strResult = String.Format("{0},{1}", strIndex, objValue);
+                                }
+                                break;
+                        }
+                        break;
                     default:
                         strResult = Convert.ToString(objValue);
                         break;
                 }
+                _logger.Information(strResult);
             }
             catch (Exception ex)
             {
                 strResult = "Error: " + ex;
+                _logger.Error(strResult);
             }
             string key = intMark == 0 ? "Open" : strIndex;
             if (_responseTasks.TryGetValue(key, out var tcs))

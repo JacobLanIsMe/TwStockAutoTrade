@@ -9,7 +9,8 @@ namespace Core.Enum
 {
     public enum EMarket
     {
-        TWSE = 1,
-        TWOTC = 2
+        TWSE = 1, // 上市
+        TWOTC = 2, // 上櫃
+        TAIFEX = 3 // 期貨
     }
 }

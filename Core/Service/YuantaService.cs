@@ -11,7 +11,56 @@ namespace Core.Service
 {
     public class YuantaService : IYuantaService
     {
-        enumLangType enumLng = enumLangType.UTF8;
+        enumLangType enumLng = enumLangType.NORMAL;
+
+        /// <summary>
+        /// Watchlist指定欄位 (即時訂閱結果)
+        /// </summary>
+        /// <param name="abyData"></param>
+        /// <returns></returns>
+        public string FunRealWatchlist_Out(byte[] abyData)
+        {
+            string strResult = "";
+            try
+            {
+                RR_WatchList.ParentStruct_Out struParentOut = new RR_WatchList.ParentStruct_Out();
+
+                YuantaDataHelper dataGetter = new YuantaDataHelper(enumLng);
+                dataGetter.OutMsgLoad(abyData);
+
+                int intCheck = 1;
+                if (intCheck == 1)
+                {
+                    strResult += "WatchList指定欄位訂閱結果: \r\n";
+                    string strTemp = "";
+                    byte byTemp = new byte();
+                    int intTemp = 0;
+
+                    strTemp = dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyKey));          //鍵值
+                    byTemp = dataGetter.GetByte();                                              //市場代碼
+                    strResult += byTemp.ToString() + ",";
+                    strTemp = dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyStkCode));      //股票代碼
+                    strResult += FilterBreakChar(strTemp) + ",";
+                    byTemp = dataGetter.GetByte();                                              //索引值
+                    strResult += byTemp.ToString() + ",";
+                    intTemp = dataGetter.GetInt();                                              //資料值
+                    strResult += intTemp.ToString() + ",";
+
+                    //----------
+                    strResult += "\r\n";
+                }
+            }
+            catch
+            {
+                strResult = "";
+            }
+            return strResult;
+        }
+        /// <summary>
+        /// 帳號登入
+        /// </summary>
+        /// <param name="abyData"></param>
+        /// <returns></returns>
         public string FunAPILogin_Out(byte[] abyData)
         {
             string strResult = "";

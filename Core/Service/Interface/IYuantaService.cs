@@ -8,6 +8,7 @@ namespace Core.Service.Interface
 {
     public interface IYuantaService
     {
+        string FunRealWatchlist_Out(byte[] abyData);
         string FunAPILogin_Out(byte[] abyData);
     }
 }
