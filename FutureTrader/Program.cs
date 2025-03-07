@@ -29,7 +29,14 @@ namespace FutureTrader
                 .AddSingleton<IFutureTraderService, FutureTraderService>()
                 .BuildServiceProvider();
             var futureTraderService = serviceProvider.GetRequiredService<IFutureTraderService>();
-            Task.Run(async () => await futureTraderService.Trade()).Wait();
+            try
+            {
+                Task.Run(async () => await futureTraderService.Trade()).GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex.ToString());
+            }
         }
     }
 }

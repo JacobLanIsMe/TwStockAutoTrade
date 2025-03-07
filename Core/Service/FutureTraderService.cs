@@ -42,12 +42,22 @@ namespace Core.Service
             {
                 objYuantaOneAPI.Open(_enumEnvironmentMode);
                 await Task.Delay(-1, _cts.Token);
-                Close();
+            }
+            catch (TaskCanceledException)
+            {
+                _logger.Error("Trade() 已被取消。");
+                throw new Exception("Trade() 已被取消。");
             }
             catch (Exception ex)
             {
                 _logger.Error(ex.ToString());
-                Close();
+                throw;
+            }
+            finally
+            {
+                objYuantaOneAPI.LogOut();
+                objYuantaOneAPI.Close();
+                objYuantaOneAPI.Dispose();
             }
         }
         
@@ -221,12 +231,6 @@ namespace Core.Service
                 strResult = "";
             }
             return strResult;
-        }
-        private void Close()
-        {
-            objYuantaOneAPI.LogOut();
-            objYuantaOneAPI.Close();
-            objYuantaOneAPI.Dispose();
         }
     }
 }
