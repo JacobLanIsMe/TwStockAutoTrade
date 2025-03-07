@@ -116,11 +116,7 @@ namespace Core.Service
             {
                 // 訂閱國內期貨報價
             }
-            else if (strResult == "交易主機Is Disconnected")
-            {
-                _cts.Cancel();
-            }
-            else if (strResult == "尚未連線")
+            else
             {
                 _cts.Cancel();
             }
