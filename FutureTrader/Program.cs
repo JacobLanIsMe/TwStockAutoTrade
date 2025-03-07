@@ -18,7 +18,7 @@ namespace FutureTrader
         {
             Log.Logger = new LoggerConfiguration()
             .WriteTo.Console()
-            .WriteTo.File("C://Logs/Trader/log-.log", rollingInterval: RollingInterval.Day, retainedFileCountLimit: 250)
+            .WriteTo.File("C://Logs/FutureTrader/log-.log", rollingInterval: RollingInterval.Day, retainedFileCountLimit: 250)
             .CreateLogger();
             var serviceProvider = new ServiceCollection()
                 .AddSingleton<IConfiguration>(new ConfigurationBuilder()
@@ -27,7 +27,6 @@ namespace FutureTrader
                 .Build())
                 .AddSingleton<ILogger>(Log.Logger)
                 .AddSingleton<IFutureTraderService, FutureTraderService>()
-                .AddSingleton<IYuantaService, YuantaService>()
                 .BuildServiceProvider();
             var futureTraderService = serviceProvider.GetRequiredService<IFutureTraderService>();
             Task.Run(async () => await futureTraderService.Trade()).Wait();
