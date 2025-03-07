@@ -135,5 +135,13 @@
       <Name>Core</Name>
     </ProjectReference>
   </ItemGroup>
+  <ItemGroup>
+    <Content Include="APICOMCHECK.dll" />
+    <Content Include="APICOMCHECK64.dll" />
+    <Content Include="YuantaCAPIDLL.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="YuantaCAPIDLL64.dll" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

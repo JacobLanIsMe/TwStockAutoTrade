@@ -185,10 +185,6 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="YuantaOneApi\APICOMCHECK.dll" />
-    <Content Include="YuantaOneApi\APICOMCHECK64.dll" />
-    <Content Include="YuantaOneApi\YuantaCAPIDLL.dll" />
-    <Content Include="YuantaOneApi\YuantaCAPIDLL64.dll" />
     <Content Include="YuantaOneApi\YuantaOneAPI.dll">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>

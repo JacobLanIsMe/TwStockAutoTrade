@@ -4,10 +4,12 @@ using Core.Service.Interface;
 using Microsoft.Extensions.Configuration;
 using Serilog;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using YuantaOneAPI;
 
@@ -18,6 +20,8 @@ namespace Core.Service
         YuantaOneAPITrader objYuantaOneAPI = new YuantaOneAPITrader();
         enumLangType enumLng = enumLangType.UTF8;
         string strLoginAccount = "";
+        private BlockingCollection<string> responseQueue = new BlockingCollection<string>(new ConcurrentQueue<string>());
+        private CancellationTokenSource _cancellationTokenSource;
         private readonly TradeConfig tradeConfig;
         private readonly ITradeRepository _tradeRepository;
         private readonly ICandidateRepository _candidateRepository;
@@ -39,12 +43,18 @@ namespace Core.Service
         {
             List<Trade> stockHoldingList = await _tradeRepository.GetStockHolding();
             List<Candidate> candidateList = await _candidateRepository.GetActiveCandidate();
-            Login();
-            Logout();
+            StartTrading();
+            //Login();
+            //Logout();
+        }
+        private void StartTrading()
+        {
+            _cancellationTokenSource = new CancellationTokenSource();
+            var consumerTask = Task.Run(() => ProcessResponses(_cancellationTokenSource.Token));
+            objYuantaOneAPI.Open(_enumEnvironmentMode);
         }
         private bool Login()
         {
-            objYuantaOneAPI.Open(_enumEnvironmentMode);
             string account = _enumEnvironmentMode == enumEnvironmentMode.PROD ? Environment.GetEnvironmentVariable("StockAccount") : "S98875005091";
             string password = _enumEnvironmentMode == enumEnvironmentMode.PROD ? Environment.GetEnvironmentVariable("StockPassword") : "1234";
             bool loginCheck = objYuantaOneAPI.Login(account, password);
@@ -55,6 +65,28 @@ namespace Core.Service
             objYuantaOneAPI.LogOut();
             objYuantaOneAPI.Close();
             objYuantaOneAPI.Dispose();
+        }
+        private void ProcessResponses(CancellationToken cancellationToken)
+        {
+            foreach (string response in responseQueue.GetConsumingEnumerable())
+            {
+                DateTime now = _dateTimeService.GetTaiwanTime();
+                DateTime stopTime = DateTime.Today.AddHours(13).AddMinutes(25);
+                if (now > stopTime) break;
+                // 檢查是否被取消
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    _logger.Information("Monitoring stopped.");
+                    break;  // 退出循環
+                }
+                _logger.Information(response);
+                if (response.Contains("Connected"))
+                {
+                    string account = _enumEnvironmentMode == enumEnvironmentMode.PROD ? Environment.GetEnvironmentVariable("StockAccount") : "S98875005091";
+                    string password = _enumEnvironmentMode == enumEnvironmentMode.PROD ? Environment.GetEnvironmentVariable("StockPassword") : "1234";
+                    bool loginCheck = objYuantaOneAPI.Login(account, password);
+                }
+            }
         }
         void objApi_OnResponse(int intMark, uint dwIndex, string strIndex, object objHandle, object objValue)
         {
@@ -86,12 +118,12 @@ namespace Core.Service
                         strResult = Convert.ToString(objValue);
                         break;
                 }
-                _logger.Information(strResult);
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, "Error in objApi_OnResponse");
+                strResult = "Error: " + ex;
             }
+            responseQueue.Add(strResult);
         }
         private string FunAPILogin_Out(byte[] abyData)
         {
