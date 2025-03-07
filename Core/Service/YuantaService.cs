@@ -11,6 +11,7 @@ namespace Core.Service
 {
     public class YuantaService : IYuantaService
     {
+        enumLangType enumLng = enumLangType.UTF8;
         public string FunAPILogin_Out(byte[] abyData)
         {
             string strResult = "";
@@ -66,7 +67,7 @@ namespace Core.Service
                     }
                     else
                     {
-                        strLoginAccount = "";
+                        //strLoginAccount = "";
                     }
                 }
             }
@@ -75,6 +76,22 @@ namespace Core.Service
                 strResult = ex.Message;
             }
             return strResult;
+        }
+        private string FilterBreakChar(string strFilterData)
+        {
+            Encoding enc = Encoding.GetEncoding("Big5");//提供Big5的編解碼
+            byte[] tmp_bytearyData = enc.GetBytes(strFilterData);
+            int intCharLen = tmp_bytearyData.Length;
+            int indexCharData = intCharLen;
+            for (int i = 0; i < intCharLen; i++)
+            {
+                if (Convert.ToChar(tmp_bytearyData.GetValue(i)) == 0)
+                {
+                    indexCharData = i;
+                    break;
+                }
+            }
+            return enc.GetString(tmp_bytearyData, 0, indexCharData);
         }
     }
 }

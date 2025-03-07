@@ -25,6 +25,7 @@ namespace FutureTrader
                 .SetBasePath(Path.GetDirectoryName(System.Reflection.Assembly.GetEntryAssembly().Location))
                 .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
                 .Build())
+                .AddSingleton<ILogger>(Log.Logger)
                 .AddSingleton<IFutureTraderService, FutureTraderService>()
                 .AddSingleton<IYuantaService, YuantaService>()
                 .BuildServiceProvider();

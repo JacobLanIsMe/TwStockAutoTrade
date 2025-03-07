@@ -3,6 +3,7 @@ using Core.Service.Interface;
 using Microsoft.Extensions.Configuration;
 using Serilog;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -19,6 +20,9 @@ namespace Core.Service
 
         private readonly ILogger _logger;
         private readonly IYuantaService _yuantaService;
+        private readonly ConcurrentDictionary<string, TaskCompletionSource<string>> _responseTasks = new ConcurrentDictionary<string, TaskCompletionSource<string>>();
+        private readonly string _futureAccount;
+        private readonly string _futurePassword;
         public FutureTraderService(IConfiguration config, ILogger logger, IYuantaService yuantaService)
         {
             objYuantaOneAPI.OnResponse += new OnResponseEventHandler(objApi_OnResponse);
@@ -26,12 +30,80 @@ namespace Core.Service
             _enumEnvironmentMode = environment == "PROD" ? enumEnvironmentMode.PROD : enumEnvironmentMode.UAT;
             _logger = logger;
             _yuantaService = yuantaService;
+            _futureAccount = _enumEnvironmentMode == enumEnvironmentMode.PROD ? Environment.GetEnvironmentVariable("FutureAccount") : "S98875005091";
+            _futurePassword = _enumEnvironmentMode == enumEnvironmentMode.PROD ? Environment.GetEnvironmentVariable("FuturePassword") : "1234";
         }
         public async Task Trade()
         {
-            objYuantaOneAPI.Open(_enumEnvironmentMode);
+            try
+            {
+                bool isConnected = await TryConnectToYuanta();
+                if (!isConnected) throw new Exception("無法連線到元大");
+                bool isLogin = await Login();
+                if (!isLogin) throw new Exception("登入失敗");
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex.ToString());
+                objYuantaOneAPI.LogOut();
+                objYuantaOneAPI.Close();
+                objYuantaOneAPI.Dispose();
+            }
         }
-        private 
+        private async Task<bool> TryConnectToYuanta()
+        {
+            string result = await CallYuantaApiAsync("Open", () => objYuantaOneAPI.Open(_enumEnvironmentMode));
+            if (result.Contains("Connected")) return true;
+            return false;
+        }
+        private async Task<bool> Login()
+        {
+            string result = await CallYuantaApiAsync("Login", () => objYuantaOneAPI.Login(_futureAccount, _futurePassword));
+            if (result.Contains(_futureAccount)) return true;
+            return false;
+        }
+        public async Task<string> CallYuantaApiAsync(string apiName, Action action = null, Func<bool> func = null)
+        {
+            var tcs = new TaskCompletionSource<string>();
+
+            // 註冊 TaskCompletionSource 等待回應
+            if (!_responseTasks.TryAdd(apiName, tcs))
+            {
+                return "Call API failed, duplicated key";
+            }
+            try
+            {
+                if (action != null)
+                {
+                    action();
+                }
+                if (func != null)
+                {
+                    func();
+                }
+            }
+            catch (Exception ex)
+            {
+                _responseTasks.TryRemove(apiName, out _);
+                return $"Call API failed: {ex.Message}";
+            }
+
+            // 設定超時機制（例如 10 秒）
+            var timeoutTask = Task.Delay(TimeSpan.FromSeconds(10));
+            var completedTask = await Task.WhenAny(tcs.Task, timeoutTask);
+
+            // 無論成功或失敗都移除註冊
+            _responseTasks.TryRemove(apiName, out _);
+
+            if (completedTask == tcs.Task)
+            {
+                return tcs.Task.Result; // 成功取得回應
+            }
+            else
+            {
+                return "API timeout"; // 超時未回應
+            }
+        }
         void objApi_OnResponse(int intMark, uint dwIndex, string strIndex, object objHandle, object objValue)
         {
             string strResult = "";
@@ -62,11 +134,15 @@ namespace Core.Service
                         strResult = Convert.ToString(objValue);
                         break;
                 }
-                _logger.Information(strResult);
             }
             catch (Exception ex)
             {
-                _logger.Error("Error: " + ex);
+                strResult = "Error: " + ex;
+            }
+            string key = intMark == 0 ? "Open" : strIndex;
+            if (_responseTasks.TryGetValue(key, out var tcs))
+            {
+                tcs.TrySetResult(strResult);
             }
         }
     }
