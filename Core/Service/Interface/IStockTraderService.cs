@@ -6,8 +6,8 @@ using System.Threading.Tasks;
 
 namespace Core.Service.Interface
 {
-    public interface IYuantaService
+    public interface IStockTraderService
     {
-        string FunAPILogin_Out(byte[] abyData);
+        Task Trade();
     }
 }

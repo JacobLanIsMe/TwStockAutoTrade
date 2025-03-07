@@ -15,7 +15,7 @@ using YuantaOneAPI;
 
 namespace Core.Service
 {
-    public class TraderService : ITraderService
+    public class StockTraderService : IStockTraderService
     {
         YuantaOneAPITrader objYuantaOneAPI = new YuantaOneAPITrader();
         enumLangType enumLng = enumLangType.UTF8;
@@ -28,7 +28,7 @@ namespace Core.Service
         private readonly IDateTimeService _dateTimeService;
         private readonly ILogger _logger;
         private readonly enumEnvironmentMode _enumEnvironmentMode;
-        public TraderService(IConfiguration config, ITradeRepository tradeRepository, ICandidateRepository candidateRepository, IDateTimeService dateTimeService, ILogger logger)
+        public StockTraderService(IConfiguration config, ITradeRepository tradeRepository, ICandidateRepository candidateRepository, IDateTimeService dateTimeService, ILogger logger)
         {
             tradeConfig = config.GetSection("TradeConfig").Get<TradeConfig>();
             string environment = config.GetValue<string>("Environment").ToUpper();

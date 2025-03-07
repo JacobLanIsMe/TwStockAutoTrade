@@ -15,14 +15,14 @@ using System.Threading.Tasks;
 
 namespace Core.Service
 {
-    public class SelectorService : ISelectorService
+    public class StockSelectorService : IStockSelectorService
     {
         private HttpClient _httpClient;
         private readonly ICandidateRepository _candidateRepository;
         private readonly ITradeRepository _tradeRepository;
         private readonly SemaphoreSlim _semaphore;
         private readonly ILogger _logger;
-        public SelectorService(ICandidateRepository candidateRepository, ITradeRepository tradeRepository, ILogger logger)
+        public StockSelectorService(ICandidateRepository candidateRepository, ITradeRepository tradeRepository, ILogger logger)
         {
             SimpleHttpClientFactory httpClientFactory = new SimpleHttpClientFactory();
             _httpClient = httpClientFactory.CreateClient();

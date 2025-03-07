@@ -28,12 +28,12 @@ namespace Trader
                 .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
                 .Build())
                 .AddSingleton<ILogger>(Log.Logger)
-                .AddSingleton<ITraderService, TraderService>()
+                .AddSingleton<IStockTraderService, StockTraderService>()
                 .AddSingleton<IDateTimeService, DateTimeService>()
                 .AddSingleton<ICandidateRepository, CandidateRepository>()
                 .AddSingleton<ITradeRepository, TradeRepository>()
                 .BuildServiceProvider();
-            var traderService = serviceProvider.GetRequiredService<ITraderService>();
+            var traderService = serviceProvider.GetRequiredService<IStockTraderService>();
             Task.Run(async () => await traderService.Trade()).Wait();
         }
     }

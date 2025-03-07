@@ -166,8 +166,10 @@
     <Compile Include="Repository\Interface\ICandidateRepository.cs" />
     <Compile Include="Repository\Interface\ITradeRepository.cs" />
     <Compile Include="Repository\TradeRepository.cs" />
+    <Compile Include="Service\FutureTraderService.cs" />
     <Compile Include="Service\Interface\IDateTimeService.cs" />
-    <Compile Include="Service\Interface\ISelectorService.cs" />
+    <Compile Include="Service\Interface\IFutureTraderService.cs" />
+    <Compile Include="Service\Interface\IStockSelectorService.cs" />
     <Compile Include="Model\Candidate.cs" />
     <Compile Include="Model\StockTechData.cs" />
     <Compile Include="Model\TwotcStockInfo.cs" />
@@ -175,9 +177,11 @@
     <Compile Include="Model\TwseStockInfo.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Service\DateTimeService.cs" />
-    <Compile Include="Service\Interface\ITraderService.cs" />
-    <Compile Include="Service\SelectorService.cs" />
-    <Compile Include="Service\TraderService.cs" />
+    <Compile Include="Service\Interface\IStockTraderService.cs" />
+    <Compile Include="Service\Interface\IYuantaService.cs" />
+    <Compile Include="Service\StockSelectorService.cs" />
+    <Compile Include="Service\StockTraderService.cs" />
+    <Compile Include="Service\YuantaService.cs" />
   </ItemGroup>
   <ItemGroup />
   <ItemGroup>

@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace Core.Service.Interface
 {
-    public interface ITraderService
+    public interface IFutureTraderService
     {
         Task Trade();
     }

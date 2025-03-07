@@ -24,12 +24,12 @@ namespace Selector
                 .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
                 .Build())
                 .AddSingleton<ILogger>(Log.Logger)
-                .AddSingleton<ISelectorService, SelectorService>()
+                .AddSingleton<IStockSelectorService, StockSelectorService>()
                 .AddSingleton<IDateTimeService, DateTimeService>()
                 .AddSingleton<ICandidateRepository, CandidateRepository>()
                 .AddSingleton<ITradeRepository, TradeRepository>()
                 .BuildServiceProvider();
-            var getStockInfoService = serviceProvider.GetRequiredService<ISelectorService>();
+            var getStockInfoService = serviceProvider.GetRequiredService<IStockSelectorService>();
             Task.Run(async () => await getStockInfoService.SelectStock()).Wait();
         }
     }
