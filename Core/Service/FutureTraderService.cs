@@ -20,6 +20,7 @@ namespace Core.Service
         private readonly enumEnvironmentMode _enumEnvironmentMode;
         enumLangType enumLng = enumLangType.NORMAL;
         private CancellationTokenSource _cts = new CancellationTokenSource();
+        private ConcurrentBag<int> _openingPriceAfter5Min = new ConcurrentBag<int>();
         private readonly ILogger _logger;
         private readonly string _futureAccount;
         private readonly string _futurePassword;
@@ -45,12 +46,10 @@ namespace Core.Service
             }
             catch (TaskCanceledException)
             {
-                _logger.Error("Trade() 已被取消。");
                 throw new Exception("Trade() 已被取消。");
             }
             catch (Exception ex)
             {
-                _logger.Error(ex.ToString());
                 throw;
             }
             finally
@@ -86,8 +85,8 @@ namespace Core.Service
                     case 2: //訂閱所回應
                         switch (strIndex)
                         {
-                            case "210.10.70.11":    //Watchlist報價表(指定欄位)
-                                strResult = FunRealWatchlist_Out((byte[])objValue);
+                            case "210.10.40.10":    //訂閱個股分時明細
+                                strResult = FunRealStocktick_Out((byte[])objValue);
                                 break;
                             default:
                                 strResult = $"{strIndex},{objValue}";
@@ -114,12 +113,21 @@ namespace Core.Service
             }
             else if (strResult == "台股報價/國內期貨報價/國外期貨報價Is Connected!!")
             {
-                // 訂閱國內期貨報價
+                SubscribeFutureTick();
             }
             else
             {
                 _cts.Cancel();
             }
+        }
+        private void SubscribeFutureTick()
+        {
+            List<StockTick> lstStocktick = new List<StockTick>();
+            StockTick stocktick = new StockTick();
+            stocktick.MarketNo = Convert.ToByte(enumMarketType.TAIFEX);      //填入查詢市場代碼
+            stocktick.StockCode = _targetFutureCode;
+            lstStocktick.Add(stocktick);
+            objYuantaOneAPI.SubscribeStockTick(lstStocktick);
         }
         private string FunAPILogin_Out(byte[] abyData)
         {
@@ -187,23 +195,22 @@ namespace Core.Service
             return enc.GetString(tmp_bytearyData, 0, indexCharData);
         }
         /// <summary>
-        /// Watchlist指定欄位 (即時訂閱結果)
+        /// 分時明細(即時訂閱結果)
         /// </summary>
         /// <param name="abyData"></param>
         /// <returns></returns>
-        private string FunRealWatchlist_Out(byte[] abyData)
+        private string FunRealStocktick_Out(byte[] abyData)
         {
             string strResult = "";
             try
             {
-                RR_WatchList.ParentStruct_Out struParentOut = new RR_WatchList.ParentStruct_Out();
+                RR_WatclistAll.ParentStruct_Out struParentOut = new RR_WatclistAll.ParentStruct_Out();
+                TYuantaTime yuantaTime;
                 YuantaDataHelper dataGetter = new YuantaDataHelper(enumLng);
                 dataGetter.OutMsgLoad(abyData);
 
-                int intCheck = 1;
-                if (intCheck == 1)
                 {
-                    strResult += "WatchList指定欄位訂閱結果: \r\n";
+                    strResult += "分時明細訂閱結果: \r\n";
                     string strTemp = "";
                     byte byTemp = new byte();
                     int intTemp = 0;
@@ -213,10 +220,23 @@ namespace Core.Service
                     strResult += byTemp.ToString() + ",";
                     strTemp = dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyStkCode));      //股票代碼
                     strResult += FilterBreakChar(strTemp) + ",";
-                    byTemp = dataGetter.GetByte();                                              //索引值
-                    strResult += byTemp.ToString() + ",";
-                    intTemp = dataGetter.GetInt();                                              //資料值
+                    intTemp = dataGetter.GetInt();                                              //序號
                     strResult += intTemp.ToString() + ",";
+                    yuantaTime = dataGetter.GetTYuantaTime();                                   //時間
+                    strTemp = String.Format(" {0}:{1}:{2}.{3}", yuantaTime.bytHour, yuantaTime.bytMin, yuantaTime.bytSec, yuantaTime.ushtMSec);
+                    strResult += strTemp + ",";
+                    intTemp = dataGetter.GetInt();                                              //買價
+                    strResult += intTemp.ToString() + ",";
+                    intTemp = dataGetter.GetInt();                                              //賣價
+                    strResult += intTemp.ToString() + ",";
+                    intTemp = dataGetter.GetInt();                                              //成交價
+                    strResult += intTemp.ToString() + ",";
+                    intTemp = dataGetter.GetInt();                                              //成交量
+                    strResult += intTemp.ToString() + ",";
+                    byTemp = dataGetter.GetByte();                                              //內外盤註記
+                    strResult += byTemp.ToString() + ",";
+                    byTemp = dataGetter.GetByte();                                              //明細類別
+                    strResult += byTemp.ToString();
 
                     //----------
                     strResult += "\r\n";
