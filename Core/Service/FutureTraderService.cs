@@ -20,7 +20,10 @@ namespace Core.Service
         private readonly enumEnvironmentMode _enumEnvironmentMode;
         enumLangType enumLng = enumLangType.NORMAL;
         private CancellationTokenSource _cts = new CancellationTokenSource();
-        private ConcurrentBag<int> _openingPriceAfter5Min = new ConcurrentBag<int>();
+        private ConcurrentDictionary<int, ConcurrentBag<int>> _futureTickConDict = new ConcurrentDictionary<int, ConcurrentBag<int>>();
+        private TimeSpan _marketOpenTime;
+        private int _first5MinuteHigh;
+        private int _first5MinuteLow;
         private readonly ILogger _logger;
         private readonly string _futureAccount;
         private readonly string _futurePassword;
@@ -36,6 +39,14 @@ namespace Core.Service
             _futurePassword = _enumEnvironmentMode == enumEnvironmentMode.PROD ? Environment.GetEnvironmentVariable("FuturePassword") : "1234";
             _targetFutureCode = config.GetValue<string>("TargetFutureCode");
             _maxOrderQuantity = config.GetValue<int>("MaxOrderQuantity");
+            if (_targetFutureCode == "TMF0" || _targetFutureCode == "MXF1" || _targetFutureCode == "TXF1")
+            {
+                _marketOpenTime = new TimeSpan(8, 45, 0);
+            }
+            else if (_targetFutureCode == "MXF8")
+            {
+                _marketOpenTime = new TimeSpan(15, 0, 0);
+            }
         }
         public async Task Trade()
         {
@@ -87,6 +98,8 @@ namespace Core.Service
                         {
                             case "210.10.40.10":    //訂閱個股分時明細
                                 strResult = FunRealStocktick_Out((byte[])objValue);
+                                TickHandler(strResult);
+                                //FutureOrder();
                                 break;
                             default:
                                 strResult = $"{strIndex},{objValue}";
@@ -118,6 +131,50 @@ namespace Core.Service
             else
             {
                 _cts.Cancel();
+            }
+        }
+        private void TickHandler(string strResult)
+        {
+            if (string.IsNullOrEmpty(strResult)) return;
+            string[] tickInfo = strResult.Split(',');
+            if (!TimeSpan.TryParse(tickInfo[3], out TimeSpan tickTime))
+            {
+                _logger.Error("Tick time failed in TickHandler");
+                return;
+            }
+            if (!int.TryParse(tickInfo[6], out int tickPrice))
+            {
+                _logger.Error("Tick price failed in TickHandler");
+                return;
+            }
+            if (tickTime < _marketOpenTime)
+            {
+                tickTime += TimeSpan.FromDays(1);
+            }
+            double minutesDiff = (tickTime - _marketOpenTime).TotalMinutes;
+            int key = (int)(minutesDiff / 5);
+            tickPrice = tickPrice / 1000;
+            if (_futureTickConDict.TryGetValue(key, out ConcurrentBag<int> tickBag))
+            {
+                tickBag.Add(tickPrice);
+            }
+            else
+            {
+                int maxRetryCount = 10;
+                int retryCount = 0;
+                while (retryCount < maxRetryCount)
+                {
+                    if (!_futureTickConDict.TryAdd(key, new ConcurrentBag<int> { tickPrice }))
+                    {
+                        retryCount++;
+                        continue;
+                    }
+                    break;
+                }
+                if (retryCount >= maxRetryCount)
+                {
+                    _logger.Error("Add future tick failed in TickHandler");
+                }
             }
         }
         private void SubscribeFutureTick()
