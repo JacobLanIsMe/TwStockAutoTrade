@@ -20,15 +20,24 @@ namespace Core.Service
         private readonly enumEnvironmentMode _enumEnvironmentMode;
         enumLangType enumLng = enumLangType.NORMAL;
         private CancellationTokenSource _cts = new CancellationTokenSource();
-        private ConcurrentDictionary<int, ConcurrentBag<int>> _futureTickConDict = new ConcurrentDictionary<int, ConcurrentBag<int>>();
+        private ConcurrentBag<int> _first5MinuteTickBag = new ConcurrentBag<int>();
+        private BlockingCollection<string> _messageQueue = new BlockingCollection<string>(new ConcurrentQueue<string>());
+        private int contractQuantity = 0;
+        private int _first5MinuteHigh = 0;
+        private int _first5MinuteLow = 0;
         private TimeSpan _marketOpenTime;
-        private int _first5MinuteHigh;
-        private int _first5MinuteLow;
+        private TimeSpan _afterMarketOpen5Minute;
         private readonly ILogger _logger;
         private readonly string _futureAccount;
         private readonly string _futurePassword;
         private readonly string _targetFutureCode;
         private readonly int _maxOrderQuantity;
+        private Dictionary<string, string> _codeCommodityIdDict = new Dictionary<string, string>
+        {
+            { "TXF1", "FITX" },
+            { "MXF1", "FIMTX" },
+            { "TMF0", "FITM" }
+        };
         public FutureTraderService(IConfiguration config, ILogger logger)
         {
             objYuantaOneAPI.OnResponse += new OnResponseEventHandler(objApi_OnResponse);
@@ -47,11 +56,23 @@ namespace Core.Service
             {
                 _marketOpenTime = new TimeSpan(15, 0, 0);
             }
+            else
+            {
+                throw new Exception("Target future code is not supported.");
+            }
+            _afterMarketOpen5Minute = _marketOpenTime.Add(TimeSpan.FromMinutes(5));
         }
         public async Task Trade()
         {
             try
             {
+                Task.Run(() =>
+                {
+                    foreach (var message in _messageQueue.GetConsumingEnumerable())
+                    {
+                        ProcessMessage(message);
+                    }
+                });
                 objYuantaOneAPI.Open(_enumEnvironmentMode);
                 await Task.Delay(-1, _cts.Token);
             }
@@ -98,8 +119,8 @@ namespace Core.Service
                         {
                             case "210.10.40.10":    //訂閱個股分時明細
                                 strResult = FunRealStocktick_Out((byte[])objValue);
-                                TickHandler(strResult);
-                                //FutureOrder();
+                                TickHandler(strResult, out int tickPrice);
+                                FutureOrder(tickPrice);
                                 break;
                             default:
                                 strResult = $"{strIndex},{objValue}";
@@ -133,8 +154,9 @@ namespace Core.Service
                 _cts.Cancel();
             }
         }
-        private void TickHandler(string strResult)
+        private void TickHandler(string strResult, out int tickPrice)
         {
+            tickPrice = 0;
             if (string.IsNullOrEmpty(strResult)) return;
             string[] tickInfo = strResult.Split(',');
             if (!TimeSpan.TryParse(tickInfo[3], out TimeSpan tickTime))
@@ -142,39 +164,66 @@ namespace Core.Service
                 _logger.Error("Tick time failed in TickHandler");
                 return;
             }
-            if (!int.TryParse(tickInfo[6], out int tickPrice))
+            if (!int.TryParse(tickInfo[6], out tickPrice))
             {
                 _logger.Error("Tick price failed in TickHandler");
                 return;
             }
-            if (tickTime < _marketOpenTime)
+            if (tickTime < _afterMarketOpen5Minute && tickTime >= _marketOpenTime)
             {
-                tickTime += TimeSpan.FromDays(1);
+                _first5MinuteTickBag.Add(tickPrice);
             }
-            double minutesDiff = (tickTime - _marketOpenTime).TotalMinutes;
-            int key = (int)(minutesDiff / 5);
-            tickPrice = tickPrice / 1000;
-            if (_futureTickConDict.TryGetValue(key, out ConcurrentBag<int> tickBag))
+            if (_first5MinuteHigh == 0 && _first5MinuteLow == 0 && tickTime >= _afterMarketOpen5Minute)
             {
-                tickBag.Add(tickPrice);
+                _first5MinuteHigh = _first5MinuteTickBag.Max();
+                _first5MinuteLow = _first5MinuteTickBag.Min();
+            }
+        }
+        private void FutureOrder(int tickPrice)
+        {
+            List<FutureOrder> lstFutureOrder = new List<FutureOrder>();
+            FutureOrder futureOrder = new FutureOrder();
+
+            futureOrder.Identify = 001;                                //識別碼
+            futureOrder.Account = _futureAccount;                                                    //期貨帳號
+            futureOrder.FunctionCode = 0;                           //功能別, 0:委託單 4:取消 5:改量 7:改價                     
+            futureOrder.CommodityID1 = _codeCommodityIdDict[_targetFutureCode];                                            //商品名稱1
+            futureOrder.CallPut1 = "";                                                    //買賣權1
+            futureOrder.SettlementMonth1 = Convert.ToInt32(this.txtSettlementMonth1.Text.Trim());                   //商品年月1
+            futureOrder.StrikePrice1 = Convert.ToInt32(Convert.ToDecimal(this.txtStrikePrice1.Text.Trim()) * 1000); //屐約價1
+            futureOrder.Price = Convert.ToInt32(Convert.ToDecimal(this.txtOrderPrice1.Text.Trim()) * 10000);        //委託價格
+            futureOrder.OrderQty1 = Convert.ToInt16(this.txtOrderQty1.Text.Trim());                                 //委託口數1
+            futureOrder.BuySell1 = this.txtBuySell1.Text.Trim();                                                    //買賣別
+            futureOrder.CommodityID2 = this.txtCommodityID2.Text.Trim();                                            //商品名稱2
+            futureOrder.CallPut2 = this.txtCallPut2.Text.Trim();                                                    //買賣權2
+            futureOrder.SettlementMonth2 = Convert.ToInt32(this.txtSettlementMonth2.Text.Trim());                   //商品年月2
+            futureOrder.StrikePrice2 = Convert.ToInt32(Convert.ToDecimal(this.txtStrikePrice2.Text.Trim()) * 1000); //屐約價2                 
+            futureOrder.OrderQty2 = Convert.ToInt16(this.txtOrderQty2.Text.Trim());                                 //委託口數2
+            futureOrder.BuySell2 = this.txtBuySell2.Text.Trim();                                                   //買賣別2
+            futureOrder.OpenOffsetKind = this.txtOpenOffsetKind.Text.Trim();                                        //新平倉碼                                              
+            futureOrder.DayTradeID = this.txtDayTradeID.Text;                                                       //當沖註記
+            futureOrder.OrderType = this.txtFutOrderType.Text.Trim();                                               //委託方式    
+            futureOrder.OrderCond = this.txtOrderCond.Text;                                                         //委託條件                                           
+            futureOrder.SellerNo = Convert.ToInt16(this.txtFutSellerNo.Text.Trim());                                //營業員代碼                                            
+            futureOrder.OrderNo = this.txtFutOrderNo.Text.Trim();                                                  //委託書編號           
+            futureOrder.TradeDate = this.txtFutTradeDate.Text;                                                      //交易日期                            
+            futureOrder.BasketNo = this.txtFutBasketNo.Text.Trim();                                                 //BasketNo
+            futureOrder.Session = this.txtSession.Text.Trim();                                                     //通路種類                                    
+
+            lstFutureOrder.Add(futureOrder);
+
+            bool bResult = objYuantaOneAPI.SendFutureOrder(this.cboAccountList.SelectedItem != null ? this.cboAccountList.SelectedItem.ToString().Trim() : "", lstFutureOrder);
+            if (tickPrice > _first5MinuteHigh && tickPrice < _first5MinuteHigh + 3)
+            {
+
+            }
+            else if (tickPrice < _first5MinuteLow && tickPrice > _first5MinuteLow - 3)
+            {
+
             }
             else
             {
-                int maxRetryCount = 10;
-                int retryCount = 0;
-                while (retryCount < maxRetryCount)
-                {
-                    if (!_futureTickConDict.TryAdd(key, new ConcurrentBag<int> { tickPrice }))
-                    {
-                        retryCount++;
-                        continue;
-                    }
-                    break;
-                }
-                if (retryCount >= maxRetryCount)
-                {
-                    _logger.Error("Add future tick failed in TickHandler");
-                }
+                return;
             }
         }
         private void SubscribeFutureTick()
