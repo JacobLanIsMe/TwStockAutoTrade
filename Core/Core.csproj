@@ -153,6 +153,8 @@
     <Compile Include="DataStructs\D20A460B_210.10.70.11.cs" />
     <Compile Include="DataStructs\Login.cs" />
     <Compile Include="DataStructs\YuantaShareStructList.cs" />
+    <Compile Include="Enum\EBuySellType.cs" />
+    <Compile Include="Enum\EFutureOrderType.cs" />
     <Compile Include="Enum\EMarket.cs" />
     <Compile Include="HttpClientFactory\SimpleHttpClientFactory.cs" />
     <Compile Include="Model\StockSharedModel.cs" />
