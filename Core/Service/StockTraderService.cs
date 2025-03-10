@@ -19,8 +19,8 @@ namespace Core.Service
     {
         YuantaOneAPITrader objYuantaOneAPI = new YuantaOneAPITrader();
         private CancellationTokenSource _cts = new CancellationTokenSource();
-        private List<StockTrade> _stockHoldingList = new List<StockTrade>();
-        private List<StockCandidate> _stockCandidateList = new List<StockCandidate>();
+        private Dictionary<string, StockTrade> _stockHoldingDict = new Dictionary<string, StockTrade>();
+        private Dictionary<string, StockCandidate> _stockCandidateDict = new Dictionary<string, StockCandidate>();
 
         private readonly StockTradeConfig tradeConfig;
         private readonly ITradeRepository _tradeRepository;
@@ -49,8 +49,8 @@ namespace Core.Service
         {
             try
             {
-                _stockHoldingList = await _tradeRepository.GetStockHolding();
-                _stockCandidateList = await _candidateRepository.GetActiveCandidate();
+                _stockHoldingDict = (await _tradeRepository.GetStockHolding()).ToDictionary(x => x.StockCode);
+                _stockCandidateDict = (await _candidateRepository.GetActiveCandidate()).ToDictionary(x=>x.StockCode);
                 objYuantaOneAPI.Open(_enumEnvironmentMode);
                 await Task.Delay(-1, _cts.Token);
             }
@@ -88,12 +88,20 @@ namespace Core.Service
                                 strResult = _yuantaService.FunAPILogin_Out((byte[])objValue);
                                 break;
                             default:           //不在表列中的直接呈現訊息
-                                {
-                                    if (strIndex == "")
-                                        strResult = Convert.ToString(objValue);
-                                    else
-                                        strResult = String.Format("{0},{1}", strIndex, objValue);
-                                }
+                                strResult = $"{strIndex},{objValue}";
+                                break;
+                        }
+                        break;
+                    case 2: //訂閱所回應
+                        switch (strIndex)
+                        {
+                            case "210.10.70.11":    //Watchlist報價表(指定欄位)
+                                strResult = _yuantaService.FunRealWatchlist_Out((byte[])objValue);
+                                TickHandler(strResult, out string stockCode, out decimal tickPrice);
+                                StockOrder(stockCode, tickPrice);
+                                break;
+                            default:
+                                strResult = $"{strIndex},{objValue}";
                                 break;
                         }
                         break;
@@ -109,22 +117,50 @@ namespace Core.Service
                 _logger.Error(strResult);
             }
         }
+        private void TickHandler(string strResult, out string stockCode, out decimal tickPrice)
+        {
+            stockCode = "";
+            tickPrice = 0;
+            if (string.IsNullOrEmpty(strResult)) return;
+            string[] tickInfo = strResult.Split(',');
+            stockCode = tickInfo[1];
+            if (!decimal.TryParse(tickInfo[3], out tickPrice))
+            {
+                _logger.Error($"The price of Stock code {stockCode} is error");
+                return;
+            }
+            tickPrice = tickPrice / 10000;
+        }
+        private void StockOrder(string stockCode, decimal tickPrice)
+        {
+            
+            bool hasStockHolding = _stockHoldingDict.Values.Select(x => x.SaleDate == null).Count() > 0;
+            if (hasStockHolding)
+            {
+                
+            }
+            else
+            {
+
+            }
+        }
         private void SubscribeStockTick()
         {
-
-            List<StockTick> lstStocktick = new List<StockTick>();
-            lstStocktick.AddRange(_stockHoldingList.Select(x => new StockTick
+            List<Watchlist> lstWatchlist = new List<Watchlist>();
+            lstWatchlist.AddRange(_stockHoldingDict.Select(x => new Watchlist
             {
-                MarketNo = Convert.ToByte(x.Market),
-                StockCode = x.StockCode,
+                IndexFlag = Convert.ToByte(7),  // 訂閱索引值, 7: 成交價
+                MarketNo = Convert.ToByte(x.Value.Market),
+                StockCode = x.Value.StockCode,
             }));
-            lstStocktick.AddRange(_stockCandidateList.Select(x => new StockTick
+            lstWatchlist.AddRange(_stockCandidateDict.Select(x => new Watchlist
             {
-                MarketNo = Convert.ToByte(x.Market),
-                StockCode = x.StockCode
+                IndexFlag = Convert.ToByte(7),  // 訂閱索引值, 7: 成交價
+                MarketNo = Convert.ToByte(x.Value.Market),
+                StockCode = x.Value.StockCode
             }));
-            lstStocktick = lstStocktick.GroupBy(x => x.StockCode).Select(g => g.First()).ToList();
-            objYuantaOneAPI.SubscribeStockTick(lstStocktick);
+            lstWatchlist = lstWatchlist.GroupBy(x => x.StockCode).Select(g => g.First()).ToList();
+            objYuantaOneAPI.SubscribeWatchlist(lstWatchlist);
         }
     }
 }

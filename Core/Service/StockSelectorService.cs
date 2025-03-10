@@ -169,50 +169,32 @@ namespace Core.Service
         }
         private decimal GetStopLossPoint(decimal gapUpHigh)
         {
-            if (gapUpHigh <= 10)
+            decimal tick = 0;
+            if (gapUpHigh <= 10) 
             {
-                return gapUpHigh - (decimal)(0.01 * 2);
+                tick = 0.01m;
             }
-            else if (gapUpHigh == (decimal)10.05)
+            else if (gapUpHigh <= 50)
             {
-                return (decimal)9.99;
+               tick = 0.05m;
             }
-            else if (gapUpHigh > (decimal)10.05 & gapUpHigh <= 50)
+            else if (gapUpHigh <= 100)
             {
-                return gapUpHigh - (decimal)(0.05 * 2);
+                tick = 0.1m;
             }
-            else if (gapUpHigh == (decimal)50.1)
+            else if (gapUpHigh <= 500)
             {
-                return (decimal)49.95;
+                tick = 0.5m;
             }
-            else if (gapUpHigh > (decimal)50.1 & gapUpHigh <= 100)
+            else if (gapUpHigh <= 1000)
             {
-                return gapUpHigh - (decimal)(0.1 * 2);
-            }
-            else if (gapUpHigh == (decimal)100.5)
-            {
-                return (decimal)99.9;
-            }
-            else if (gapUpHigh > (decimal)100.5 & gapUpHigh <= 500)
-            {
-                return gapUpHigh - (decimal)(0.5 * 2);
-            }
-            else if (gapUpHigh == (decimal)501)
-            {
-                return (decimal)499.5;
-            }
-            else if (gapUpHigh > 501 & gapUpHigh <= 1000)
-            {
-                return gapUpHigh - (1 * 2);
-            }
-            else if (gapUpHigh == 1005)
-            {
-                return 999;
+                tick = 1m;
             }
             else
             {
-                return gapUpHigh - (5 * 2);
+                tick = 5m;
             }
+            return gapUpHigh - tick;
         }
         private async Task UpdateCandidate(List<StockCandidate> candidateToInsertList, Dictionary<string, StockCandidate> allStockInfoDict)
         {

@@ -19,7 +19,6 @@ namespace Core.Service
     {
         YuantaOneAPITrader objYuantaOneAPI = new YuantaOneAPITrader();
         private readonly enumEnvironmentMode _enumEnvironmentMode;
-        private readonly enumLangType enumLng = enumLangType.NORMAL;
         private CancellationTokenSource _cts = new CancellationTokenSource();
         private ConcurrentBag<int> _first5MinuteTickBag = new ConcurrentBag<int>();
         private BlockingCollection<FutureOrder> _futureOrderMessageQueue = new BlockingCollection<FutureOrder>(new ConcurrentQueue<FutureOrder>());
@@ -211,10 +210,11 @@ namespace Core.Service
         }
         private void FutureOrder(int tickPrice)
         {
+            if (tickPrice == 0) return;
             if (!hasLongOrder && !hasLongContract && tickPrice > _first5MinuteHigh && tickPrice < _first5MinuteHigh + 5)
             {
                 FutureOrder futureOrder = new FutureOrder();
-                futureOrder.Price = _first5MinuteHigh * 1000;                    //委託價格
+                futureOrder.Price = _first5MinuteHigh * 10000;                    //委託價格
                 futureOrder.BuySell1 = EBuySellType.B.ToString();                 //買賣別, "B":買 "S":賣
                 futureOrder.OrderType = ((int)EFutureOrderType.限價).ToString();   //委託方式, 1:市價 2:限價 3:範圍市價
                 futureOrder.OrderCond = "";                                       //委託條件, "":ROD 1:FOK 2:IOC
@@ -223,7 +223,7 @@ namespace Core.Service
             else if (hasLongContract && (tickPrice <= _longStopLossPoint || tickPrice >= _longProfitPoint))
             {
                 FutureOrder futureOrder = new FutureOrder();
-                futureOrder.Price = tickPrice * 1000;
+                futureOrder.Price = tickPrice * 10000;
                 futureOrder.BuySell1 = EBuySellType.S.ToString();
                 futureOrder.OrderType = ((int)EFutureOrderType.市價).ToString();
                 futureOrder.OrderCond = "";
@@ -232,7 +232,7 @@ namespace Core.Service
             else if (!hasShortOrder && !hasShortContract && tickPrice < _first5MinuteLow && tickPrice > _first5MinuteLow - 5)
             {
                 FutureOrder futureOrder = new FutureOrder();
-                futureOrder.Price = _first5MinuteLow * 1000;                     //委託價格
+                futureOrder.Price = _first5MinuteLow * 10000;                     //委託價格
                 futureOrder.BuySell1 = EBuySellType.S.ToString();                 //買賣別, "B":買 "S":賣
                 futureOrder.OrderType = ((int)EFutureOrderType.限價).ToString();   //委託方式, 1:市價 2:限價 3:範圍市價
                 futureOrder.OrderCond = "";                                       //委託條件, "":ROD 1:FOK 2:IOC
@@ -241,7 +241,7 @@ namespace Core.Service
             else if (hasShortContract && (tickPrice >= _shortStopLossPoint || tickPrice <= _shortProfitPoint))
             {
                 FutureOrder futureOrder = new FutureOrder();
-                futureOrder.Price = tickPrice * 1000;
+                futureOrder.Price = tickPrice * 10000;
                 futureOrder.BuySell1 = EBuySellType.B.ToString();
                 futureOrder.OrderType = ((int)EFutureOrderType.市價).ToString();
                 futureOrder.OrderCond = "";
