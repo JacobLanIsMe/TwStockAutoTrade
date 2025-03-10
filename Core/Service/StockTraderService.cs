@@ -98,10 +98,10 @@ namespace Core.Service
                     case 2: //訂閱所回應
                         switch (strIndex)
                         {
-                            case "210.10.70.11":    //Watchlist報價表(指定欄位)
-                                strResult = _yuantaService.FunRealWatchlist_Out((byte[])objValue);
-                                TickHandler(strResult, out string stockCode, out decimal tickPrice);
-                                StockOrder(stockCode, tickPrice);
+                            case "210.10.60.10":    //訂閱五檔報價
+                                strResult = _yuantaService.FunRealFivetick_Out((byte[])objValue);
+                                FiveTickHandler(strResult, out string stockCode, out decimal level1AskPrice, out int level1AskSize);
+                                StockOrder(stockCode, level1AskPrice, level1AskSize);
                                 break;
                             default:
                                 strResult = $"{strIndex},{objValue}";
@@ -120,21 +120,22 @@ namespace Core.Service
                 _logger.Error(strResult);
             }
         }
-        private void TickHandler(string strResult, out string stockCode, out decimal tickPrice)
+        private void FiveTickHandler(string strResult, out string stockCode, out decimal level1AskPrice, out int level1AskSize)
         {
             stockCode = "";
-            tickPrice = 0;
+            level1AskPrice = 0;
+            level1AskSize = 0;
             if (string.IsNullOrEmpty(strResult)) return;
             string[] tickInfo = strResult.Split(',');
             stockCode = tickInfo[1];
-            if (!decimal.TryParse(tickInfo[3], out tickPrice))
+            if (!decimal.TryParse(tickInfo[13], out level1AskPrice) || !int.TryParse(tickInfo[18], out level1AskSize))
             {
-                _logger.Error($"The price of Stock code {stockCode} is error");
+                _logger.Error($"The level1AskPrice or level1AskSize of Stock code {stockCode} is error");
                 return;
             }
-            tickPrice = tickPrice / 10000;
+            level1AskPrice = level1AskPrice / 10000;
         }
-        private void StockOrder(string stockCode, decimal tickPrice)
+        private void StockOrder(string stockCode, decimal level1AskPrice, int level1AskSize)
         {
             
             bool hasStockHolding = _stockHoldingDict.Values.Select(x => x.SaleDate == null).Count() > 0;
@@ -144,26 +145,27 @@ namespace Core.Service
             }
             else
             {
-
+                if (!_stockCandidateDict.TryGetValue(stockCode, out StockCandidate candidate)) return;
+                if (level1AskPrice == 0 || level1AskSize == 0) return;
+                
+                
             }
         }
         private void SubscribeStockTick()
         {
-            List<Watchlist> lstWatchlist = new List<Watchlist>();
-            lstWatchlist.AddRange(_stockHoldingDict.Select(x => new Watchlist
+            List<FiveTickA> lstFiveTick = new List<FiveTickA>();
+            lstFiveTick.AddRange(_stockHoldingDict.Select(x => new FiveTickA
             {
-                IndexFlag = Convert.ToByte(7),  // 訂閱索引值, 7: 成交價
                 MarketNo = Convert.ToByte(x.Value.Market),
                 StockCode = x.Value.StockCode,
             }));
-            lstWatchlist.AddRange(_stockCandidateDict.Select(x => new Watchlist
+            lstFiveTick.AddRange(_stockCandidateDict.Select(x => new FiveTickA
             {
-                IndexFlag = Convert.ToByte(7),  // 訂閱索引值, 7: 成交價
                 MarketNo = Convert.ToByte(x.Value.Market),
                 StockCode = x.Value.StockCode
             }));
-            lstWatchlist = lstWatchlist.GroupBy(x => x.StockCode).Select(g => g.First()).ToList();
-            objYuantaOneAPI.SubscribeWatchlist(lstWatchlist);
+            lstFiveTick = lstFiveTick.GroupBy(x => x.StockCode).Select(g => g.First()).ToList();
+            objYuantaOneAPI.SubscribeFiveTickA(lstFiveTick);
         }
     }
 }

@@ -42,9 +42,9 @@ namespace Core.Repository
             string deleteSqlCommand = @"UPDATE [dbo].[Candidate] SET [IsDeleted] = 1, [DeletedDate] = @DeletedDate WHERE [Id] IN @IdList";
             string updateSqlCommand = @"UPDATE [dbo].[Candidate] SET [Last9TechData] = @Last9TechData WHERE [Id] = @Id";
             string insertSqlCommand = @"INSERT INTO [dbo].[Candidate] 
-                                ([Market], [StockCode], [CompanyName], [GapUpHigh], [GapUpLow], [StopLossPoint], [SelectedDate], [Last9TechData])
+                                ([Market], [StockCode], [CompanyName], [GapUpHigh], [GapUpLow], [EntryPoint], [StopLossPoint], [SelectedDate], [Last9TechData])
                                 VALUES
-                                (@Market, @StockCode, @CompanyName, @GapUpHigh, @GapUpLow, @StopLossPoint, @SelectedDate, @Last9TechData)";
+                                (@Market, @StockCode, @CompanyName, @GapUpHigh, @GapUpLow, @EntryPoint, @StopLossPoint, @SelectedDate, @Last9TechData)";
 
             using (SqlConnection sqlConnection = new SqlConnection(_dbConnectionString))
             {

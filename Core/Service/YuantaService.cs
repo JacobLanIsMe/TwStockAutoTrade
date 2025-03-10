@@ -161,49 +161,7 @@ namespace Core.Service
             }
             return strResult;
         }
-        /// <summary>
-        /// Watchlist指定欄位 (即時訂閱結果)
-        /// </summary>
-        /// <param name="abyData"></param>
-        /// <returns></returns>
-        public string FunRealWatchlist_Out(byte[] abyData)
-        {
-            string strResult = "";
-            try
-            {
-                RR_WatchList.ParentStruct_Out struParentOut = new RR_WatchList.ParentStruct_Out();
-
-                YuantaDataHelper dataGetter = new YuantaDataHelper(enumLng);
-                dataGetter.OutMsgLoad(abyData);
-
-                int intCheck = 1;
-                if (intCheck == 1)
-                {
-                    strResult += "WatchList指定欄位訂閱結果: \r\n";
-                    string strTemp = "";
-                    byte byTemp = new byte();
-                    int intTemp = 0;
-
-                    strTemp = dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyKey));          //鍵值
-                    byTemp = dataGetter.GetByte();                                              //市場代碼
-                    strResult += byTemp.ToString() + ",";
-                    strTemp = dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyStkCode));      //股票代碼
-                    strResult += FilterBreakChar(strTemp) + ",";
-                    byTemp = dataGetter.GetByte();                                              //索引值
-                    strResult += byTemp.ToString() + ",";
-                    intTemp = dataGetter.GetInt();                                              //資料值
-                    strResult += intTemp.ToString() + ",";
-
-                    //----------
-                    strResult += "\r\n";
-                }
-            }
-            catch
-            {
-                strResult = "";
-            }
-            return strResult;
-        }
+        
         /// <summary>
         /// 現貨下單 回應
         /// </summary>
@@ -254,6 +212,96 @@ namespace Core.Service
                     }
                 }
 
+            }
+            catch
+            {
+                strResult = "";
+            }
+            return strResult;
+        }
+        /// <summary>
+        /// 五檔(即時訂閱結果)
+        /// </summary>
+        /// <param name="abyData"></param>
+        /// <returns></returns>
+        public string FunRealFivetick_Out(byte[] abyData)
+        {
+            string strResult = "";
+            try
+            {
+                RR_WatclistAll.ParentStruct_Out struParentOut = new RR_WatclistAll.ParentStruct_Out();
+
+                YuantaDataHelper dataGetter = new YuantaDataHelper(enumLng);
+                dataGetter.OutMsgLoad(abyData);
+
+                int intCheck = 1;
+                if (intCheck == 1)
+                {
+                    strResult += "五檔訂閱結果: \r\n";
+                    string strTemp = "";
+                    byte byTemp = new byte();
+                    int intTemp = 0;
+                    uint uintTemp = 0;
+
+                    strTemp = dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyKey));                  //鍵值
+                    byTemp = dataGetter.GetByte();                                                      //市場代碼
+                    strResult += byTemp.ToString() + ",";
+                    strTemp = dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyStkCode));              //股票代碼
+                    strResult += FilterBreakChar(strTemp) + ",";
+                    byTemp = dataGetter.GetByte();                                                      //索引值
+                    strResult += byTemp.ToString() + ",";
+
+                    switch (byTemp)
+                    {
+                        case 50:
+                            intTemp = dataGetter.GetInt();                                              //第一買價
+                            strResult += intTemp.ToString() + ",";
+                            intTemp = dataGetter.GetInt();                                              //第二買價
+                            strResult += intTemp.ToString() + ",";
+                            intTemp = dataGetter.GetInt();                                              //第三買價
+                            strResult += intTemp.ToString() + ",";
+                            intTemp = dataGetter.GetInt();                                              //第四買價
+                            strResult += intTemp.ToString() + ",";
+                            intTemp = dataGetter.GetInt();                                              //第五買價
+                            strResult += intTemp.ToString() + ",";
+
+                            uintTemp = dataGetter.GetUInt();                                            //第一買量
+                            strResult += uintTemp.ToString() + ",";
+                            uintTemp = dataGetter.GetUInt();                                            //第二買量
+                            strResult += uintTemp.ToString() + ",";
+                            uintTemp = dataGetter.GetUInt();                                            //第三買量
+                            strResult += uintTemp.ToString() + ",";
+                            uintTemp = dataGetter.GetUInt();                                            //第四買量
+                            strResult += uintTemp.ToString() + ",";
+                            uintTemp = dataGetter.GetUInt();                                            //第五買量
+                            strResult += uintTemp.ToString() + ",";
+
+                            intTemp = dataGetter.GetInt();                                              //第一賣價
+                            strResult += intTemp.ToString() + ",";
+                            intTemp = dataGetter.GetInt();                                              //第二賣價
+                            strResult += intTemp.ToString() + ",";
+                            intTemp = dataGetter.GetInt();                                              //第三賣價
+                            strResult += intTemp.ToString() + ",";
+                            intTemp = dataGetter.GetInt();                                              //第四賣價
+                            strResult += intTemp.ToString() + ",";
+                            intTemp = dataGetter.GetInt();                                              //第五賣價
+                            strResult += intTemp.ToString() + ",";
+
+                            uintTemp = dataGetter.GetUInt();                                            //第一賣量
+                            strResult += uintTemp.ToString() + ",";
+                            uintTemp = dataGetter.GetUInt();                                            //第二賣量
+                            strResult += uintTemp.ToString() + ",";
+                            uintTemp = dataGetter.GetUInt();                                            //第三賣量
+                            strResult += uintTemp.ToString() + ",";
+                            uintTemp = dataGetter.GetUInt();                                            //第四賣量
+                            strResult += uintTemp.ToString() + ",";
+                            uintTemp = dataGetter.GetUInt();                                            //第五賣量
+                            strResult += uintTemp.ToString();
+                            break;
+                    }
+
+                    strResult += "\r\n";
+                }
             }
             catch
             {

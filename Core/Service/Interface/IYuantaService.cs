@@ -14,7 +14,7 @@ namespace Core.Service.Interface
         void SystemResponseHandler(string strResult, YuantaOneAPITrader objYuantaOneAPI, string account, string password, CancellationTokenSource cts, Action subscribeStockTick);
         string FunAPILogin_Out(byte[] abyData);
         string FunRealStocktick_Out(byte[] abyData);
-        string FunRealWatchlist_Out(byte[] abyData);
         string FunStkOrder_Out(byte[] abyData);
+        string FunRealFivetick_Out(byte[] abyData);
     }
 }

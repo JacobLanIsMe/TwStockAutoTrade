@@ -139,7 +139,8 @@ namespace Core.Service
                 i.GapUpHigh = gapUpTechData.High;
                 i.GapUpLow = gapUpTechData.Low;
                 i.SelectedDate = i.TechDataList.First().Date;
-                i.StopLossPoint = GetStopLossPoint((decimal)i.GapUpHigh);
+                i.EntryPoint = GetEntryPoint(i.GapUpHigh);
+                i.StopLossPoint = GetStopLossPoint(i.GapUpHigh);
                 i.Last9TechData = JsonConvert.SerializeObject(i.TechDataList.Take(9));
                 candidateList.Add(i);
             }
@@ -166,6 +167,35 @@ namespace Core.Service
             bool isPeriodCloseLowerThanGapUpLow = last4Close.Min() < gapUpTechData.Low;
             if (isPeriodCloseHigherThanGapUpHigh || isPeriodCloseLowerThanGapUpLow) return false;
             return true;
+        }
+        private decimal GetEntryPoint(decimal gapUpHigh)
+        {
+            decimal tick = 0;
+            if (gapUpHigh < 10)
+            {
+                tick = 0.01m;
+            }
+            else if (gapUpHigh < 50)
+            {
+                tick = 0.05m;
+            }
+            else if (gapUpHigh < 100)
+            {
+                tick = 0.1m;
+            }
+            else if (gapUpHigh < 500)
+            {
+                tick = 0.5m;
+            }
+            else if (gapUpHigh < 1000)
+            {
+                tick = 1m;
+            }
+            else
+            {
+                tick = 5m;
+            }
+            return gapUpHigh + tick;
         }
         private decimal GetStopLossPoint(decimal gapUpHigh)
         {
