@@ -31,10 +31,10 @@ namespace Core.Service
         private int _shortStopLossPoint = 0;
         private List<FutureOrder> _lstFutureOrder = new List<FutureOrder>();
         private FutureOrder _futureOrder = new FutureOrder();
-        private bool hasLongOrder = false;
-        private bool hasLongContract = false;
-        private bool hasShortOrder = false;
-        private bool hasShortContract = false;
+        private bool _hasLongOrder = false;
+        private bool _hasLongContract = false;
+        private bool _hasShortOrder = false;
+        private bool _hasShortContract = false;
         private readonly TimeSpan _marketOpenTime = new TimeSpan(8, 45, 0);
         private readonly TimeSpan _afterMarketOpen5Minute;
         private readonly ILogger _logger;
@@ -211,7 +211,7 @@ namespace Core.Service
         private void FutureOrder(int tickPrice)
         {
             if (tickPrice == 0) return;
-            if (!hasLongOrder && !hasLongContract && tickPrice > _first5MinuteHigh && tickPrice < _first5MinuteHigh + 5)
+            if (!_hasLongOrder && !_hasLongContract && tickPrice > _first5MinuteHigh && tickPrice < _first5MinuteHigh + 5)
             {
                 FutureOrder futureOrder = new FutureOrder();
                 futureOrder.Price = _first5MinuteHigh * 10000;                    //委託價格
@@ -220,7 +220,7 @@ namespace Core.Service
                 futureOrder.OrderCond = "";                                       //委託條件, "":ROD 1:FOK 2:IOC
                 _futureOrderMessageQueue.Add(futureOrder);
             }
-            else if (hasLongContract && (tickPrice <= _longStopLossPoint || tickPrice >= _longProfitPoint))
+            else if (_hasLongContract && (tickPrice <= _longStopLossPoint || tickPrice >= _longProfitPoint))
             {
                 FutureOrder futureOrder = new FutureOrder();
                 futureOrder.Price = tickPrice * 10000;
@@ -229,7 +229,7 @@ namespace Core.Service
                 futureOrder.OrderCond = "";
                 _futureOrderMessageQueue.Add(futureOrder);
             }
-            else if (!hasShortOrder && !hasShortContract && tickPrice < _first5MinuteLow && tickPrice > _first5MinuteLow - 5)
+            else if (!_hasShortOrder && !_hasShortContract && tickPrice < _first5MinuteLow && tickPrice > _first5MinuteLow - 5)
             {
                 FutureOrder futureOrder = new FutureOrder();
                 futureOrder.Price = _first5MinuteLow * 10000;                     //委託價格
@@ -238,7 +238,7 @@ namespace Core.Service
                 futureOrder.OrderCond = "";                                       //委託條件, "":ROD 1:FOK 2:IOC
                 _futureOrderMessageQueue.Add(futureOrder);
             }
-            else if (hasShortContract && (tickPrice >= _shortStopLossPoint || tickPrice <= _shortProfitPoint))
+            else if (_hasShortContract && (tickPrice >= _shortStopLossPoint || tickPrice <= _shortProfitPoint))
             {
                 FutureOrder futureOrder = new FutureOrder();
                 futureOrder.Price = tickPrice * 10000;
@@ -254,7 +254,7 @@ namespace Core.Service
         }
         private void ProcessFutureOrder(FutureOrder order)
         {
-            if (!hasLongOrder && !hasLongContract && order.BuySell1 == EBuySellType.B.ToString() && order.OrderType == ((int)EFutureOrderType.限價).ToString())
+            if (!_hasLongOrder && !_hasLongContract && order.BuySell1 == EBuySellType.B.ToString() && order.OrderType == ((int)EFutureOrderType.限價).ToString())
             {
 
             }
