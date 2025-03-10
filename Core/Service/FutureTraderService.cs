@@ -176,7 +176,7 @@ namespace Core.Service
                 _logger.Error("Tick price failed in TickHandler");
                 return;
             }
-            tickPrice = tickPrice / 10000;
+            tickPrice = tickPrice / 1000;
             if (tickTime < _afterMarketOpen5Minute && tickTime >= _marketOpenTime)
             {
                 _first5MinuteTickBag.Add(tickPrice);
@@ -197,36 +197,36 @@ namespace Core.Service
             DateTime now = _dateTimeService.GetTaiwanTime();
             DateTime thirdWednesday = GetThirdWednesday(now.Year, now.Month);
             string settlementMonth = now.Day > thirdWednesday.Day ? now.AddMonths(1).ToString("yyyyMM") : now.ToString("yyyyMM");
-            _futureOrder.Identify = 001;                                                                    //識別碼
-            _futureOrder.Account = _futureAccount;                                                          //期貨帳號
-            _futureOrder.FunctionCode = 0;                                                                  //功能別, 0:委託單 4:取消 5:改量 7:改價                     
-            _futureOrder.CommodityID1 = commodityId;                                                        //商品名稱1
-            _futureOrder.CallPut1 = "";                                                                     //買賣權1
-            _futureOrder.SettlementMonth1 = Convert.ToInt32(settlementMonth);                               //商品年月1
+            _futureOrder.Identify = 001;                                                     //識別碼
+            _futureOrder.Account = _futureAccount;                                           //期貨帳號
+            _futureOrder.FunctionCode = 0;                                                   //功能別, 0:委託單 4:取消 5:改量 7:改價                     
+            _futureOrder.CommodityID1 = commodityId;                                         //商品名稱1
+            _futureOrder.CallPut1 = "";                                                      //買賣權1
+            _futureOrder.SettlementMonth1 = Convert.ToInt32(settlementMonth);                //商品年月1
             _futureOrder.StrikePrice1 = Convert.ToInt32(Convert.ToDecimal(this.txtStrikePrice1.Text.Trim()) * 1000); //屐約價1
-            _futureOrder.OrderQty1 = Convert.ToInt16(_maxOrderQuantity);                                    //委託口數1
+            _futureOrder.OrderQty1 = Convert.ToInt16(_maxOrderQuantity);                     //委託口數1
             #region 組合單應填欄位
-            _futureOrder.CommodityID2 = "";                                                                 //商品名稱2
-            _futureOrder.CallPut2 = "";                                                                     //買賣權2
-            _futureOrder.SettlementMonth2 = 0;                                                              //商品年月2
-            _futureOrder.StrikePrice2 = 0;                                                                  //屐約價2                 
-            _futureOrder.OrderQty2 = 0;                                                                     //委託口數2
-            _futureOrder.BuySell2 = "";                                                                     //買賣別2
+            _futureOrder.CommodityID2 = "";                                                  //商品名稱2
+            _futureOrder.CallPut2 = "";                                                      //買賣權2
+            _futureOrder.SettlementMonth2 = 0;                                               //商品年月2
+            _futureOrder.StrikePrice2 = 0;                                                   //屐約價2                 
+            _futureOrder.OrderQty2 = 0;                                                      //委託口數2
+            _futureOrder.BuySell2 = "";                                                      //買賣別2
             #endregion
-            _futureOrder.OpenOffsetKind = 2.ToString();                                                     //新平倉碼, 0:新倉 1:平倉 2:自動                                          
-            _futureOrder.DayTradeID = "Y";                                                                  //當沖註記, Y:當沖  "":非當沖
-            _futureOrder.SellerNo = Convert.ToInt16(this.txtFutSellerNo.Text.Trim());                       //營業員代碼                                            
-            _futureOrder.OrderNo = this.txtFutOrderNo.Text.Trim();                                          //委託書編號           
-            _futureOrder.TradeDate = now.ToString("yyyy/MM/dd");                                            //交易日期                            
-            _futureOrder.BasketNo = this.txtFutBasketNo.Text.Trim();                                        //BasketNo
-            _futureOrder.Session = "";                                                                      //通路種類, 1:預約 "":盤中單                             
+            _futureOrder.OpenOffsetKind = 2.ToString();                                      //新平倉碼, 0:新倉 1:平倉 2:自動                                          
+            _futureOrder.DayTradeID = "Y";                                                   //當沖註記, Y:當沖  "":非當沖
+            _futureOrder.SellerNo = Convert.ToInt16(this.txtFutSellerNo.Text.Trim());        //營業員代碼                                            
+            _futureOrder.OrderNo = this.txtFutOrderNo.Text.Trim();                           //委託書編號           
+            _futureOrder.TradeDate = now.ToString("yyyy/MM/dd");                             //交易日期                            
+            _futureOrder.BasketNo = this.txtFutBasketNo.Text.Trim();                         //BasketNo
+            _futureOrder.Session = "";                                                       //通路種類, 1:預約 "":盤中單                             
         }
         private void FutureOrder(int tickPrice)
         {
             if (!hasLongOrder && !hasLongContract && tickPrice > _first5MinuteHigh && tickPrice < _first5MinuteHigh + 5)
             {
                 FutureOrder futureOrder = new FutureOrder();
-                futureOrder.Price = _first5MinuteHigh * 10000;                    //委託價格
+                futureOrder.Price = _first5MinuteHigh * 1000;                    //委託價格
                 futureOrder.BuySell1 = EBuySellType.B.ToString();                 //買賣別, "B":買 "S":賣
                 futureOrder.OrderType = ((int)EFutureOrderType.限價).ToString();   //委託方式, 1:市價 2:限價 3:範圍市價
                 futureOrder.OrderCond = "";                                       //委託條件, "":ROD 1:FOK 2:IOC
@@ -235,7 +235,7 @@ namespace Core.Service
             else if (hasLongContract && (tickPrice <= _longStopLossPoint || tickPrice >= _longProfitPoint))
             {
                 FutureOrder futureOrder = new FutureOrder();
-                futureOrder.Price = tickPrice * 10000;
+                futureOrder.Price = tickPrice * 1000;
                 futureOrder.BuySell1 = EBuySellType.S.ToString();
                 futureOrder.OrderType = ((int)EFutureOrderType.市價).ToString();
                 futureOrder.OrderCond = "";
@@ -244,7 +244,7 @@ namespace Core.Service
             else if (!hasShortOrder && !hasShortContract && tickPrice < _first5MinuteLow && tickPrice > _first5MinuteLow - 5)
             {
                 FutureOrder futureOrder = new FutureOrder();
-                futureOrder.Price = _first5MinuteLow * 10000;                    //委託價格
+                futureOrder.Price = _first5MinuteLow * 1000;                     //委託價格
                 futureOrder.BuySell1 = EBuySellType.S.ToString();                 //買賣別, "B":買 "S":賣
                 futureOrder.OrderType = ((int)EFutureOrderType.限價).ToString();   //委託方式, 1:市價 2:限價 3:範圍市價
                 futureOrder.OrderCond = "";                                       //委託條件, "":ROD 1:FOK 2:IOC
@@ -253,7 +253,7 @@ namespace Core.Service
             else if (hasShortContract && (tickPrice >= _shortStopLossPoint || tickPrice <= _shortProfitPoint))
             {
                 FutureOrder futureOrder = new FutureOrder();
-                futureOrder.Price = tickPrice * 10000;
+                futureOrder.Price = tickPrice * 1000;
                 futureOrder.BuySell1 = EBuySellType.B.ToString();
                 futureOrder.OrderType = ((int)EFutureOrderType.市價).ToString();
                 futureOrder.OrderCond = "";
@@ -270,7 +270,8 @@ namespace Core.Service
             {
 
             }
-                _futureOrder.Price = order.Price;
+
+            _futureOrder.Price = order.Price;
             _futureOrder.BuySell1 = order.BuySell1;
             _futureOrder.OrderType = order.OrderType;
             _futureOrder.OrderCond = order.OrderCond;
