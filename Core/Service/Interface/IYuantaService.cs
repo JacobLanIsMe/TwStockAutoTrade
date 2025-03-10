@@ -15,5 +15,6 @@ namespace Core.Service.Interface
         string FunAPILogin_Out(byte[] abyData);
         string FunRealStocktick_Out(byte[] abyData);
         string FunRealWatchlist_Out(byte[] abyData);
+        string FunStkOrder_Out(byte[] abyData);
     }
 }

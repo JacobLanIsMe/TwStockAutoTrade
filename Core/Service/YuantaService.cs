@@ -204,5 +204,62 @@ namespace Core.Service
             }
             return strResult;
         }
+        /// <summary>
+        /// 現貨下單 回應
+        /// </summary>
+        /// <param name="abyData"></param>
+        /// <returns></returns>
+        public string FunStkOrder_Out(byte[] abyData)
+        {
+            string strResult = "";
+            try
+            {
+                OdrStkSOrder.ParentStruct_Out struParentOut = new OdrStkSOrder.ParentStruct_Out();
+                OdrStkSOrder.ChildStruct_Out struChildOut = new OdrStkSOrder.ChildStruct_Out();
+
+
+                YuantaDataHelper dataGetter = new YuantaDataHelper(enumLng);
+                dataGetter.OutMsgLoad(abyData);
+                {
+                    strResult += "現貨下單結果: \r\n";
+
+                    strResult += dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyRtnCode)) + ",";
+
+                    strResult += dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyRtnMessage)) + ",";
+
+                    int intCount = 0;
+
+                    intCount = (int)dataGetter.GetUInt();
+
+                    strResult += "下單筆數:" + intCount.ToString() + "\r\n";
+
+                    for (int i = 0; i < intCount; i++)
+                    {
+                        strResult += String.Format("{0}", dataGetter.GetInt()) + ",";
+
+                        strResult += String.Format("{0}", dataGetter.GetShort()) + ",";
+
+                        strResult += dataGetter.GetStr(Marshal.SizeOf(struChildOut.abyOrderNO)) + ",";
+
+                        TYuantaDate yuantaDate = dataGetter.GetTYuantaDate();
+                        strResult += String.Format("{0}/{1}/{2}", yuantaDate.ushtYear, yuantaDate.bytMon, yuantaDate.bytDay) + ",";
+
+                        strResult += dataGetter.GetStr(Marshal.SizeOf(struChildOut.abyErrKind)) + ",";
+
+                        strResult += dataGetter.GetStr(Marshal.SizeOf(struChildOut.abyErrNO)) + ",";
+
+                        strResult += dataGetter.GetStr(Marshal.SizeOf(struChildOut.abyAdvisory)) + ",";
+
+                        strResult += "\r\n";
+                    }
+                }
+
+            }
+            catch
+            {
+                strResult = "";
+            }
+            return strResult;
+        }
     }
 }

@@ -87,6 +87,9 @@ namespace Core.Service
                             case "Login":       //一般/子帳登入
                                 strResult = _yuantaService.FunAPILogin_Out((byte[])objValue);
                                 break;
+                            case "30.100.10.31"://現貨下單
+                                strResult = _yuantaService.FunStkOrder_Out((byte[])objValue);
+                                break;
                             default:           //不在表列中的直接呈現訊息
                                 strResult = $"{strIndex},{objValue}";
                                 break;
