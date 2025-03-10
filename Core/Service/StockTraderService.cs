@@ -18,17 +18,17 @@ namespace Core.Service
     public class StockTraderService : IStockTraderService
     {
         YuantaOneAPITrader objYuantaOneAPI = new YuantaOneAPITrader();
-        enumLangType enumLng = enumLangType.UTF8;
+        
         string strLoginAccount = "";
         private BlockingCollection<string> responseQueue = new BlockingCollection<string>(new ConcurrentQueue<string>());
-        private CancellationTokenSource _cancellationTokenSource;
         private readonly TradeConfig tradeConfig;
         private readonly ITradeRepository _tradeRepository;
         private readonly ICandidateRepository _candidateRepository;
         private readonly IDateTimeService _dateTimeService;
         private readonly ILogger _logger;
         private readonly enumEnvironmentMode _enumEnvironmentMode;
-        public StockTraderService(IConfiguration config, ITradeRepository tradeRepository, ICandidateRepository candidateRepository, IDateTimeService dateTimeService, ILogger logger)
+        private readonly IYuantaService _yuantaService;
+        public StockTraderService(IConfiguration config, ITradeRepository tradeRepository, ICandidateRepository candidateRepository, IDateTimeService dateTimeService, ILogger logger, IYuantaService yuantaService)
         {
             tradeConfig = config.GetSection("TradeConfig").Get<TradeConfig>();
             string environment = config.GetValue<string>("Environment").ToUpper();
@@ -38,56 +38,15 @@ namespace Core.Service
             _dateTimeService = dateTimeService;
             _logger = logger;
             objYuantaOneAPI.OnResponse += new OnResponseEventHandler(objApi_OnResponse);
+            _yuantaService = yuantaService;
         }
         public async Task Trade()
         {
             List<Trade> stockHoldingList = await _tradeRepository.GetStockHolding();
             List<Candidate> candidateList = await _candidateRepository.GetActiveCandidate();
-            StartTrading();
-            //Login();
-            //Logout();
+            
         }
-        private void StartTrading()
-        {
-            _cancellationTokenSource = new CancellationTokenSource();
-            var consumerTask = Task.Run(() => ProcessResponses(_cancellationTokenSource.Token));
-            objYuantaOneAPI.Open(_enumEnvironmentMode);
-        }
-        private bool Login()
-        {
-            string account = _enumEnvironmentMode == enumEnvironmentMode.PROD ? Environment.GetEnvironmentVariable("StockAccount") : "S98875005091";
-            string password = _enumEnvironmentMode == enumEnvironmentMode.PROD ? Environment.GetEnvironmentVariable("StockPassword") : "1234";
-            bool loginCheck = objYuantaOneAPI.Login(account, password);
-            return loginCheck;
-        }
-        private void Logout()
-        {
-            objYuantaOneAPI.LogOut();
-            objYuantaOneAPI.Close();
-            objYuantaOneAPI.Dispose();
-        }
-        private void ProcessResponses(CancellationToken cancellationToken)
-        {
-            foreach (string response in responseQueue.GetConsumingEnumerable())
-            {
-                DateTime now = _dateTimeService.GetTaiwanTime();
-                DateTime stopTime = DateTime.Today.AddHours(13).AddMinutes(25);
-                if (now > stopTime) break;
-                // 檢查是否被取消
-                if (cancellationToken.IsCancellationRequested)
-                {
-                    _logger.Information("Monitoring stopped.");
-                    break;  // 退出循環
-                }
-                _logger.Information(response);
-                if (response.Contains("Connected"))
-                {
-                    string account = _enumEnvironmentMode == enumEnvironmentMode.PROD ? Environment.GetEnvironmentVariable("StockAccount") : "S98875005091";
-                    string password = _enumEnvironmentMode == enumEnvironmentMode.PROD ? Environment.GetEnvironmentVariable("StockPassword") : "1234";
-                    bool loginCheck = objYuantaOneAPI.Login(account, password);
-                }
-            }
-        }
+        
         void objApi_OnResponse(int intMark, uint dwIndex, string strIndex, object objHandle, object objValue)
         {
             string strResult = "";
@@ -102,7 +61,7 @@ namespace Core.Service
                         switch (strIndex)
                         {
                             case "Login":       //一般/子帳登入
-                                strResult = FunAPILogin_Out((byte[])objValue);
+                                strResult = _yuantaService.FunAPILogin_Out((byte[])objValue);
                                 break;
                             default:           //不在表列中的直接呈現訊息
                                 {
@@ -122,89 +81,8 @@ namespace Core.Service
             catch (Exception ex)
             {
                 strResult = "Error: " + ex;
+                _logger.Error(strResult);
             }
-            responseQueue.Add(strResult);
-        }
-        private string FunAPILogin_Out(byte[] abyData)
-        {
-            string strResult = "";
-            try
-            {
-                SgnAPILogin.ParentStruct_Out struParentOut = new SgnAPILogin.ParentStruct_Out();
-                SgnAPILogin.ChildStruct_Out struChildOut = new SgnAPILogin.ChildStruct_Out();
-
-                YuantaDataHelper dataGetter = new YuantaDataHelper(enumLng);
-                dataGetter.OutMsgLoad(abyData);
-
-                {
-                    string strMsgCode = "";
-                    string strMsgContent = "";
-                    int intCount = 0;
-
-                    strMsgCode = dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyMsgCode));
-                    strMsgContent = dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyMsgContent));
-                    intCount = (int)dataGetter.GetUInt();
-
-                    strResult += FilterBreakChar(strMsgCode) + "," + FilterBreakChar(strMsgContent) + "\r\n";
-                    if (strMsgCode == "0001" || strMsgCode == "00001")
-                    {
-                        strResult += "帳號筆數: " + intCount.ToString() + "\r\n";
-                        for (int i = 0; i < intCount; i++)
-                        {
-                            string strAccount = "", strSubAccount = "", strID = "";
-                            short shtSellNo = 0;
-
-                            strAccount = dataGetter.GetStr(Marshal.SizeOf(struChildOut.abyAccount));
-                            strSubAccount = dataGetter.GetStr(Marshal.SizeOf(struChildOut.abySubAccName));
-                            strID = dataGetter.GetStr(Marshal.SizeOf(struChildOut.abyInvesotrID));
-
-                            strResult += FilterBreakChar(strAccount) + ",";
-                            strResult += FilterBreakChar(strSubAccount) + ",";
-                            strResult += FilterBreakChar(strID) + ",";
-
-                            shtSellNo = dataGetter.GetShort();
-
-                            strResult += shtSellNo.ToString() + ",";
-
-                            strResult += "\r\n";
-                        }
-
-                        //cboAccountList.BeginInvoke(new Action(() =>
-                        //{
-                        //    if (this.cboAccountList.Items.IndexOf((object)strLoginAccount) < 0)
-                        //    {
-                        //        this.cboAccountList.Items.Add((object)strLoginAccount);
-                        //        this.cboAccountList.SelectedItem = this.cboAccountList.Items[this.cboAccountList.Items.Count - 1];
-                        //    }
-                        //}));
-                    }
-                    else
-                    {
-                        strLoginAccount = "";
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                strResult = ex.Message;
-            }
-            return strResult;
-        }
-        private string FilterBreakChar(string strFilterData)
-        {
-            Encoding enc = Encoding.GetEncoding("Big5");//提供Big5的編解碼
-            byte[] tmp_bytearyData = enc.GetBytes(strFilterData);
-            int intCharLen = tmp_bytearyData.Length;
-            int indexCharData = intCharLen;
-            for (int i = 0; i < intCharLen; i++)
-            {
-                if (Convert.ToChar(tmp_bytearyData.GetValue(i)) == 0)
-                {
-                    indexCharData = i;
-                    break;
-                }
-            }
-            return enc.GetString(tmp_bytearyData, 0, indexCharData);
         }
     }
 }

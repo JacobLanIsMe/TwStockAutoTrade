@@ -46,13 +46,14 @@ namespace Core.Service
         private readonly int _profitPoint;
         private readonly int _stopLossPoint;
         private readonly IDateTimeService _dateTimeService;
+        private readonly IYuantaService _yuantaService;
         private readonly Dictionary<string, string> _codeCommodityIdDict = new Dictionary<string, string>
         {
             { "TXF1", "FITX" },
             { "MXF1", "FIMTX" },
             { "TMF0", "FITM" }
         };
-        public FutureTraderService(IConfiguration config, ILogger logger, IDateTimeService dateTimeService)
+        public FutureTraderService(IConfiguration config, ILogger logger, IDateTimeService dateTimeService, IYuantaService yuantaService)
         {
             objYuantaOneAPI.OnResponse += new OnResponseEventHandler(objApi_OnResponse);
             string environment = config.GetValue<string>("Environment").ToUpper();
@@ -68,6 +69,7 @@ namespace Core.Service
             _dateTimeService = dateTimeService;
             SetDefaultFutureOrder();
             _lstFutureOrder.Add(_futureOrder);
+            _yuantaService = yuantaService;
         }
         public async Task Trade()
         {
@@ -114,7 +116,7 @@ namespace Core.Service
                         switch (strIndex)
                         {
                             case "Login":       //一般/子帳登入
-                                strResult = FunAPILogin_Out((byte[])objValue);
+                                strResult = _yuantaService.FunAPILogin_Out((byte[])objValue);
                                 break;
                             default:           //不在表列中的直接呈現訊息
                                 strResult = $"{strIndex},{objValue}";
@@ -125,7 +127,7 @@ namespace Core.Service
                         switch (strIndex)
                         {
                             case "210.10.40.10":    //訂閱個股分時明細
-                                strResult = FunRealStocktick_Out((byte[])objValue);
+                                strResult = _yuantaService.FunRealStocktick_Out((byte[])objValue);
                                 TickHandler(strResult, out int tickPrice);
                                 FutureOrder(tickPrice);
                                 break;
@@ -286,125 +288,8 @@ namespace Core.Service
             lstStocktick.Add(stocktick);
             objYuantaOneAPI.SubscribeStockTick(lstStocktick);
         }
-        private string FunAPILogin_Out(byte[] abyData)
-        {
-            string strResult = "";
-            try
-            {
-                SgnAPILogin.ParentStruct_Out struParentOut = new SgnAPILogin.ParentStruct_Out();
-                SgnAPILogin.ChildStruct_Out struChildOut = new SgnAPILogin.ChildStruct_Out();
-
-                YuantaDataHelper dataGetter = new YuantaDataHelper(enumLng);
-                dataGetter.OutMsgLoad(abyData);
-                {
-                    string strMsgCode = "";
-                    string strMsgContent = "";
-                    int intCount = 0;
-                    strMsgCode = dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyMsgCode));
-                    strMsgContent = dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyMsgContent));
-                    intCount = (int)dataGetter.GetUInt();
-
-                    strResult += FilterBreakChar(strMsgCode) + "," + FilterBreakChar(strMsgContent) + "\r\n";
-                    if (strMsgCode == "0001" || strMsgCode == "00001")
-                    {
-                        strResult += "帳號筆數: " + intCount.ToString() + "\r\n";
-                        for (int i = 0; i < intCount; i++)
-                        {
-                            string strAccount = "", strSubAccount = "", strID = "";
-                            short shtSellNo = 0;
-                            strAccount = dataGetter.GetStr(Marshal.SizeOf(struChildOut.abyAccount));
-                            strSubAccount = dataGetter.GetStr(Marshal.SizeOf(struChildOut.abySubAccName));
-                            strID = dataGetter.GetStr(Marshal.SizeOf(struChildOut.abyInvesotrID));
-                            strResult += FilterBreakChar(strAccount) + ",";
-                            strResult += FilterBreakChar(strSubAccount) + ",";
-                            strResult += FilterBreakChar(strID) + ",";
-                            shtSellNo = dataGetter.GetShort();
-                            strResult += shtSellNo.ToString() + ",";
-                            strResult += "\r\n";
-                        }
-                    }
-                    else
-                    {
-                        throw new Exception("Login failed");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                strResult = ex.Message;
-            }
-            return strResult;
-        }
-        private string FilterBreakChar(string strFilterData)
-        {
-            Encoding enc = Encoding.GetEncoding("Big5");//提供Big5的編解碼
-            byte[] tmp_bytearyData = enc.GetBytes(strFilterData);
-            int intCharLen = tmp_bytearyData.Length;
-            int indexCharData = intCharLen;
-            for (int i = 0; i < intCharLen; i++)
-            {
-                if (Convert.ToChar(tmp_bytearyData.GetValue(i)) == 0)
-                {
-                    indexCharData = i;
-                    break;
-                }
-            }
-            return enc.GetString(tmp_bytearyData, 0, indexCharData);
-        }
-        /// <summary>
-        /// 分時明細(即時訂閱結果)
-        /// </summary>
-        /// <param name="abyData"></param>
-        /// <returns></returns>
-        private string FunRealStocktick_Out(byte[] abyData)
-        {
-            string strResult = "";
-            try
-            {
-                RR_WatclistAll.ParentStruct_Out struParentOut = new RR_WatclistAll.ParentStruct_Out();
-                TYuantaTime yuantaTime;
-                YuantaDataHelper dataGetter = new YuantaDataHelper(enumLng);
-                dataGetter.OutMsgLoad(abyData);
-
-                {
-                    strResult += "分時明細訂閱結果: \r\n";
-                    string strTemp = "";
-                    byte byTemp = new byte();
-                    int intTemp = 0;
-
-                    strTemp = dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyKey));          //鍵值
-                    byTemp = dataGetter.GetByte();                                              //市場代碼
-                    strResult += byTemp.ToString() + ",";
-                    strTemp = dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyStkCode));      //股票代碼
-                    strResult += FilterBreakChar(strTemp) + ",";
-                    intTemp = dataGetter.GetInt();                                              //序號
-                    strResult += intTemp.ToString() + ",";
-                    yuantaTime = dataGetter.GetTYuantaTime();                                   //時間
-                    strTemp = String.Format(" {0}:{1}:{2}.{3}", yuantaTime.bytHour, yuantaTime.bytMin, yuantaTime.bytSec, yuantaTime.ushtMSec);
-                    strResult += strTemp + ",";
-                    intTemp = dataGetter.GetInt();                                              //買價
-                    strResult += intTemp.ToString() + ",";
-                    intTemp = dataGetter.GetInt();                                              //賣價
-                    strResult += intTemp.ToString() + ",";
-                    intTemp = dataGetter.GetInt();                                              //成交價
-                    strResult += intTemp.ToString() + ",";
-                    intTemp = dataGetter.GetInt();                                              //成交量
-                    strResult += intTemp.ToString() + ",";
-                    byTemp = dataGetter.GetByte();                                              //內外盤註記
-                    strResult += byTemp.ToString() + ",";
-                    byTemp = dataGetter.GetByte();                                              //明細類別
-                    strResult += byTemp.ToString();
-
-                    //----------
-                    strResult += "\r\n";
-                }
-            }
-            catch
-            {
-                strResult = "";
-            }
-            return strResult;
-        }
+        
+        
         private DateTime GetThirdWednesday(int year, int month)
         {
             // 取得該月的第一天
