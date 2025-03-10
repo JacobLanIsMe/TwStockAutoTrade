@@ -12,6 +12,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using YuantaOneAPI;
 
 namespace Core.Service
 {
@@ -38,14 +39,14 @@ namespace Core.Service
             var tpexStockListTask = GetTwotcStockCode();
             var twseStockList = await twseStockListTask;
             var tpexStockList = await tpexStockListTask;
-            List<Candidate> allStockInfoList = twseStockList.Concat(tpexStockList).ToList();
+            List<StockCandidate> allStockInfoList = twseStockList.Concat(tpexStockList).ToList();
             await GetDailyExchangeReport(allStockInfoList);
-            List<Candidate> candidateList = SelectCandidate(allStockInfoList);
-            Dictionary<string, Candidate> allStockInfoDict = allStockInfoList.ToDictionary(x => x.StockCode);
+            List<StockCandidate> candidateList = SelectCandidate(allStockInfoList);
+            Dictionary<string, StockCandidate> allStockInfoDict = allStockInfoList.ToDictionary(x => x.StockCode);
             await UpdateCandidate(candidateList, allStockInfoDict);
             await UpdateTrade(allStockInfoDict);
         }
-        private async Task<List<Candidate>> GetTwseStockCode()
+        private async Task<List<StockCandidate>> GetTwseStockCode()
         {
             _logger.Information("Get TWSE stock code started.");
             HttpResponseMessage response = await _httpClient.GetAsync("https://openapi.twse.com.tw/v1/opendata/t187ap03_L");
@@ -55,16 +56,16 @@ namespace Core.Service
             string intradayResponseBody = await intradayResponse.Content.ReadAsStringAsync();
             List<TwseIntradayStockInfo> intradayStockInfoList = JsonConvert.DeserializeObject<List<TwseIntradayStockInfo>>(intradayResponseBody);
             HashSet<string> intradayStockCodeHashSet = new HashSet<string>(intradayStockInfoList.Select(x => x.Code.ToUpper()));
-            List<Candidate> stockList = stockInfoList.Where(x => intradayStockCodeHashSet.Contains(x.公司代號.ToUpper())).Select(x => new Candidate()
+            List<StockCandidate> stockList = stockInfoList.Where(x => intradayStockCodeHashSet.Contains(x.公司代號.ToUpper())).Select(x => new StockCandidate()
             {
-                Market = EMarket.TWSE,
+                Market = enumMarketType.TWSE,
                 StockCode = x.公司代號.ToUpper(),
                 CompanyName = x.公司簡稱
             }).ToList();
             _logger.Information("Get TWSE stock code finished.");
             return stockList;
         }
-        private async Task<List<Candidate>> GetTwotcStockCode()
+        private async Task<List<StockCandidate>> GetTwotcStockCode()
         {
             _logger.Information("Get TWOTC stock code started.");
             HttpResponseMessage response = await _httpClient.GetAsync("https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O");
@@ -78,16 +79,16 @@ namespace Core.Service
             {
                 intradayStockCodeHashSet = new HashSet<string>(intradayStockInfoList.Tables.First().Data.Select(x => x[0].ToUpper()));
             }
-            List<Candidate> stockList = stockInfoList.Where(x => intradayStockCodeHashSet.Contains(x.SecuritiesCompanyCode.ToUpper())).Select(x => new Candidate()
+            List<StockCandidate> stockList = stockInfoList.Where(x => intradayStockCodeHashSet.Contains(x.SecuritiesCompanyCode.ToUpper())).Select(x => new StockCandidate()
             {
-                Market = EMarket.TWOTC,
+                Market = enumMarketType.TWOTC,
                 StockCode = x.SecuritiesCompanyCode.ToUpper(),
                 CompanyName = x.CompanyAbbreviation
             }).ToList();
             _logger.Information("Get TWOTC stock code finished.");
             return stockList;
         }
-        private async Task GetDailyExchangeReport(List<Candidate> stockList)
+        private async Task GetDailyExchangeReport(List<StockCandidate> stockList)
         {
             _logger.Information("Retrieve exchange report started.");
             var tasks = stockList.Select(async stock =>
@@ -125,9 +126,9 @@ namespace Core.Service
             await Task.WhenAll(tasks);
             _logger.Information("Retrieve exchange report finished.");
         }
-        private List<Candidate> SelectCandidate(List<Candidate> stockList)
+        private List<StockCandidate> SelectCandidate(List<StockCandidate> stockList)
         {
-            List<Candidate> candidateList = new List<Candidate>();
+            List<StockCandidate> candidateList = new List<StockCandidate>();
             foreach (var i in stockList)
             {
                 i.IsCandidate = IsCandidate(i.TechDataList, out StockTechData gapUpTechData);
@@ -210,12 +211,12 @@ namespace Core.Service
                 return gapUpHigh - (5 * 2);
             }
         }
-        private async Task UpdateCandidate(List<Candidate> candidateToInsertList, Dictionary<string, Candidate> allStockInfoDict)
+        private async Task UpdateCandidate(List<StockCandidate> candidateToInsertList, Dictionary<string, StockCandidate> allStockInfoDict)
         {
-            List<Candidate> activeCandidateList = await _candidateRepository.GetActiveCandidate();
-            Dictionary<string, Candidate> candidateDict = candidateToInsertList.ToDictionary(x => x.StockCode);
+            List<StockCandidate> activeCandidateList = await _candidateRepository.GetActiveCandidate();
+            Dictionary<string, StockCandidate> candidateDict = candidateToInsertList.ToDictionary(x => x.StockCode);
             List<Guid> candidateToDeleteList = new List<Guid>();
-            List<Candidate> candidateToUpdateList = new List<Candidate>();
+            List<StockCandidate> candidateToUpdateList = new List<StockCandidate>();
             foreach (var i in activeCandidateList)
             {
                 if (candidateDict.ContainsKey(i.StockCode))
@@ -223,7 +224,7 @@ namespace Core.Service
                     candidateToDeleteList.Add(i.Id);
                     continue;
                 }
-                if (!allStockInfoDict.TryGetValue(i.StockCode, out Candidate stock))
+                if (!allStockInfoDict.TryGetValue(i.StockCode, out StockCandidate stock))
                 {
                     candidateToDeleteList.Add(i.Id);
                     continue;
@@ -258,12 +259,12 @@ namespace Core.Service
             }
             await _candidateRepository.Update(candidateToDeleteList, candidateToUpdateList, candidateToInsertList);
         }
-        public async Task UpdateTrade(Dictionary<string, Candidate> allStockInfoDict)
+        public async Task UpdateTrade(Dictionary<string, StockCandidate> allStockInfoDict)
         {
-            List<Trade> stockHoldingList = await _tradeRepository.GetStockHolding();
+            List<StockTrade> stockHoldingList = await _tradeRepository.GetStockHolding();
             foreach (var i in stockHoldingList)
             {
-                if (!allStockInfoDict.TryGetValue(i.StockCode, out Candidate stock) || stock.TechDataList.Count < 9)
+                if (!allStockInfoDict.TryGetValue(i.StockCode, out StockCandidate stock) || stock.TechDataList.Count < 9)
                 {
                     _logger.Error($"Can not retrieve last 9 tech data of stock code {i.StockCode}.");
                     continue;

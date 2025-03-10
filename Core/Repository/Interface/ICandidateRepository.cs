@@ -7,7 +7,7 @@ namespace Core.Repository.Interface
 {
     public interface ICandidateRepository
     {
-        Task<List<Candidate>> GetActiveCandidate();
-        Task Update(List<Guid> candidateToDeleteList, List<Candidate> candidateToUpdateList, List<Candidate> candidateToInsertList);
+        Task<List<StockCandidate>> GetActiveCandidate();
+        Task Update(List<Guid> candidateToDeleteList, List<StockCandidate> candidateToUpdateList, List<StockCandidate> candidateToInsertList);
     }
 }

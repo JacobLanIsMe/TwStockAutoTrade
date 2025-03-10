@@ -27,6 +27,7 @@ namespace FutureTrader
                 .Build())
                 .AddSingleton<ILogger>(Log.Logger)
                 .AddSingleton<IFutureTraderService, FutureTraderService>()
+                .AddSingleton<IYuantaService, YuantaService>()
                 .BuildServiceProvider();
             var futureTraderService = serviceProvider.GetRequiredService<IFutureTraderService>();
             try

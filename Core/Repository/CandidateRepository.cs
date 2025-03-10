@@ -23,19 +23,19 @@ namespace Core.Repository
             _dateTimeService = dateTimeService;
             _logger = logger;
         }
-        public async Task<List<Candidate>> GetActiveCandidate()
+        public async Task<List<StockCandidate>> GetActiveCandidate()
         {
             _logger.Information("Get candidate started.");
             string sqlCommand = $@"SELECT * FROM [dbo].[Candidate] WHERE IsDeleted = 0";
-            IEnumerable<Candidate> result;
+            IEnumerable<StockCandidate> result;
             using (SqlConnection sqlConnection = new SqlConnection(_dbConnectionString))
             {
-                result = await sqlConnection.QueryAsync<Candidate>(sqlCommand);
+                result = await sqlConnection.QueryAsync<StockCandidate>(sqlCommand);
             }
             _logger.Information("Get candidate finished.");
             return result.ToList();
         }
-        public async Task Update(List<Guid> candidateToDeleteList, List<Candidate> candidateToUpdateList, List<Candidate> candidateToInsertList)
+        public async Task Update(List<Guid> candidateToDeleteList, List<StockCandidate> candidateToUpdateList, List<StockCandidate> candidateToInsertList)
         {
             _logger.Information("Update candidate started.");
             DateTime deletedDate = _dateTimeService.GetTaiwanTime();

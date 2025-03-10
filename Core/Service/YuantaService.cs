@@ -1,10 +1,12 @@
-﻿using Core.Service.Interface;
+﻿using Core.Model;
+using Core.Service.Interface;
 using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using YuantaOneAPI;
 
@@ -17,6 +19,21 @@ namespace Core.Service
         public YuantaService(ILogger logger) 
         {
             _logger = logger;
+        }
+        public void SystemResponseHandler(string strResult, YuantaOneAPITrader objYuantaOneAPI, string account, string password, CancellationTokenSource cts, Action subscribeStockTick)
+        {
+            if (strResult == "交易主機Is Connected!!")
+            {
+                objYuantaOneAPI.Login(account, password);
+            }
+            else if (strResult == "台股報價/國內期貨報價/國外期貨報價Is Connected!!")
+            {
+                subscribeStockTick?.Invoke();
+            }
+            else
+            {
+                cts.Cancel();
+            }
         }
         public string FunAPILogin_Out(byte[] abyData)
         {

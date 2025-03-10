@@ -155,12 +155,11 @@
     <Compile Include="DataStructs\YuantaShareStructList.cs" />
     <Compile Include="Enum\EBuySellType.cs" />
     <Compile Include="Enum\EFutureOrderType.cs" />
-    <Compile Include="Enum\EMarket.cs" />
     <Compile Include="HttpClientFactory\SimpleHttpClientFactory.cs" />
     <Compile Include="Model\StockSharedModel.cs" />
     <Compile Include="Model\StringListModel.cs" />
-    <Compile Include="Model\Trade.cs" />
-    <Compile Include="Model\TradeConfig.cs" />
+    <Compile Include="Model\StockTrade.cs" />
+    <Compile Include="Model\StockTradeConfig.cs" />
     <Compile Include="Model\TwotcIntradayStockInfo.cs" />
     <Compile Include="Model\TwseIntradayStockInfo.cs" />
     <Compile Include="Model\YahooTechData.cs" />
@@ -172,7 +171,7 @@
     <Compile Include="Service\Interface\IDateTimeService.cs" />
     <Compile Include="Service\Interface\IFutureTraderService.cs" />
     <Compile Include="Service\Interface\IStockSelectorService.cs" />
-    <Compile Include="Model\Candidate.cs" />
+    <Compile Include="Model\StockCandidate.cs" />
     <Compile Include="Model\StockTechData.cs" />
     <Compile Include="Model\TwotcStockInfo.cs" />
     <Compile Include="Model\TwseStockExchangeReport.cs" />

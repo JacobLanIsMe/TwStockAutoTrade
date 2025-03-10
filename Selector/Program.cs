@@ -16,7 +16,7 @@ namespace Selector
         {
             Log.Logger = new LoggerConfiguration()
             .WriteTo.Console()
-            .WriteTo.File("C://Logs/Selector/log-.log", rollingInterval: RollingInterval.Day, retainedFileCountLimit: 250)
+            .WriteTo.File("C://Logs/StockSelector/log-.log", rollingInterval: RollingInterval.Day, retainedFileCountLimit: 250)
             .CreateLogger();
             var serviceProvider = new ServiceCollection()
                 .AddSingleton<IConfiguration>(new ConfigurationBuilder()

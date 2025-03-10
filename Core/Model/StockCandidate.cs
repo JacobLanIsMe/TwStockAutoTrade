@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace Core.Model
 {
-    public class Candidate : StockSharedModel
+    public class StockCandidate : StockSharedModel
     {
         public List<StockTechData> TechDataList { get; set; } = new List<StockTechData>();
         public bool IsCandidate { get; set; }

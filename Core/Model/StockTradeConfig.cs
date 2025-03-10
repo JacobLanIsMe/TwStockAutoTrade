@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace Core.Model
 {
-    public class TradeConfig
+    public class StockTradeConfig
     {
         public int MaxStockCount { get; set; }
         public int MaxAmountPerStock { get; set; }

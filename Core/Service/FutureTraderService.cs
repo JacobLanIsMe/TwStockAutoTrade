@@ -110,7 +110,7 @@ namespace Core.Service
                 {
                     case 0: //系統回應
                         strResult = Convert.ToString(objValue);
-                        SystemResponseHandler(strResult);
+                        _yuantaService.SystemResponseHandler(strResult, objYuantaOneAPI, _futureAccount, _futurePassword, _cts, SubscribeFutureTick);
                         break;
                     case 1: //代表為RQ/RP 所回應的
                         switch (strIndex)
@@ -148,21 +148,7 @@ namespace Core.Service
                 _logger.Error(strResult);
             }
         }
-        private void SystemResponseHandler(string strResult)
-        {
-            if (strResult == "交易主機Is Connected!!")
-            {
-                objYuantaOneAPI.Login(_futureAccount, _futurePassword);
-            }
-            else if (strResult == "台股報價/國內期貨報價/國外期貨報價Is Connected!!")
-            {
-                SubscribeFutureTick();
-            }
-            else
-            {
-                _cts.Cancel();
-            }
-        }
+        
         private void TickHandler(string strResult, out int tickPrice)
         {
             tickPrice = 0;
@@ -205,7 +191,7 @@ namespace Core.Service
             _futureOrder.CommodityID1 = commodityId;                                         //商品名稱1
             _futureOrder.CallPut1 = "";                                                      //買賣權1
             _futureOrder.SettlementMonth1 = Convert.ToInt32(settlementMonth);                //商品年月1
-            _futureOrder.StrikePrice1 = Convert.ToInt32(Convert.ToDecimal(this.txtStrikePrice1.Text.Trim()) * 1000); //屐約價1
+            //_futureOrder.StrikePrice1 = Convert.ToInt32(Convert.ToDecimal(this.txtStrikePrice1.Text.Trim()) * 1000); //屐約價1
             _futureOrder.OrderQty1 = Convert.ToInt16(_maxOrderQuantity);                     //委託口數1
             #region 組合單應填欄位
             _futureOrder.CommodityID2 = "";                                                  //商品名稱2
@@ -217,10 +203,10 @@ namespace Core.Service
             #endregion
             _futureOrder.OpenOffsetKind = 2.ToString();                                      //新平倉碼, 0:新倉 1:平倉 2:自動                                          
             _futureOrder.DayTradeID = "Y";                                                   //當沖註記, Y:當沖  "":非當沖
-            _futureOrder.SellerNo = Convert.ToInt16(this.txtFutSellerNo.Text.Trim());        //營業員代碼                                            
-            _futureOrder.OrderNo = this.txtFutOrderNo.Text.Trim();                           //委託書編號           
+            //_futureOrder.SellerNo = Convert.ToInt16(this.txtFutSellerNo.Text.Trim());        //營業員代碼                                            
+            //_futureOrder.OrderNo = this.txtFutOrderNo.Text.Trim();                           //委託書編號           
             _futureOrder.TradeDate = now.ToString("yyyy/MM/dd");                             //交易日期                            
-            _futureOrder.BasketNo = this.txtFutBasketNo.Text.Trim();                         //BasketNo
+            //_futureOrder.BasketNo = this.txtFutBasketNo.Text.Trim();                         //BasketNo
             _futureOrder.Session = "";                                                       //通路種類, 1:預約 "":盤中單                             
         }
         private void FutureOrder(int tickPrice)

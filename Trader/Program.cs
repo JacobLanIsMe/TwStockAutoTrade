@@ -20,7 +20,7 @@ namespace Trader
         {
             Log.Logger = new LoggerConfiguration()
             .WriteTo.Console()
-            .WriteTo.File("C://Logs/Trader/log-.log", rollingInterval: RollingInterval.Day, retainedFileCountLimit: 250)
+            .WriteTo.File("C://Logs/StockTrader/log-.log", rollingInterval: RollingInterval.Day, retainedFileCountLimit: 250)
             .CreateLogger();
             var serviceProvider = new ServiceCollection()
                 .AddSingleton<IConfiguration>(new ConfigurationBuilder()
@@ -32,9 +32,17 @@ namespace Trader
                 .AddSingleton<IDateTimeService, DateTimeService>()
                 .AddSingleton<ICandidateRepository, CandidateRepository>()
                 .AddSingleton<ITradeRepository, TradeRepository>()
+                .AddSingleton<IYuantaService, YuantaService>()
                 .BuildServiceProvider();
-            var traderService = serviceProvider.GetRequiredService<IStockTraderService>();
-            Task.Run(async () => await traderService.Trade()).Wait();
+            var stockTraderService = serviceProvider.GetRequiredService<IStockTraderService>();
+            try
+            {
+                Task.Run(async () => await stockTraderService.Trade()).GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex.ToString());
+            }
         }
     }
 }

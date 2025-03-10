@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace Core.Model
 {
-    public class Trade : StockSharedModel
+    public class StockTrade : StockSharedModel
     {
         public int PurchasedLot { get; set; }
         public DateTime PurchaseDate { get; set; }
