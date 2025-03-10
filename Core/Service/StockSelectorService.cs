@@ -23,7 +23,8 @@ namespace Core.Service
         private readonly ITradeRepository _tradeRepository;
         private readonly SemaphoreSlim _semaphore;
         private readonly ILogger _logger;
-        public StockSelectorService(ICandidateRepository candidateRepository, ITradeRepository tradeRepository, ILogger logger)
+        private readonly IDateTimeService _dateTimeService;
+        public StockSelectorService(ICandidateRepository candidateRepository, ITradeRepository tradeRepository, ILogger logger, IDateTimeService dateTimeService)
         {
             SimpleHttpClientFactory httpClientFactory = new SimpleHttpClientFactory();
             _httpClient = httpClientFactory.CreateClient();
@@ -32,6 +33,7 @@ namespace Core.Service
             int maxConcurrency = Environment.ProcessorCount * 40;
             _semaphore = new SemaphoreSlim(maxConcurrency);
             _logger = logger;
+            _dateTimeService = dateTimeService;
         }
         public async Task SelectStock()
         {
@@ -41,6 +43,7 @@ namespace Core.Service
             var tpexStockList = await tpexStockListTask;
             List<StockCandidate> allStockInfoList = twseStockList.Concat(tpexStockList).ToList();
             await GetDailyExchangeReport(allStockInfoList);
+            if (!doesNeedUpdate(allStockInfoList)) return;
             List<StockCandidate> candidateList = SelectCandidate(allStockInfoList);
             Dictionary<string, StockCandidate> allStockInfoDict = allStockInfoList.ToDictionary(x => x.StockCode);
             await UpdateCandidate(candidateList, allStockInfoDict);
@@ -259,7 +262,7 @@ namespace Core.Service
             }
             await _candidateRepository.Update(candidateToDeleteList, candidateToUpdateList, candidateToInsertList);
         }
-        public async Task UpdateTrade(Dictionary<string, StockCandidate> allStockInfoDict)
+        private async Task UpdateTrade(Dictionary<string, StockCandidate> allStockInfoDict)
         {
             List<StockTrade> stockHoldingList = await _tradeRepository.GetStockHolding();
             foreach (var i in stockHoldingList)
@@ -272,6 +275,12 @@ namespace Core.Service
                 i.Last9TechData = JsonConvert.SerializeObject(stock.TechDataList.Take(9));
             }
             await _tradeRepository.UpdateLast9TechData(stockHoldingList);
+        }
+        private bool doesNeedUpdate(List<StockCandidate> stockList)
+        {
+            DateTime latestTechDate = stockList.SelectMany(x => x.TechDataList).Max(x => x.Date);
+            if (_dateTimeService.GetTaiwanTime().Date > latestTechDate.Date) return false;
+            return true;
         }
     }
 }
