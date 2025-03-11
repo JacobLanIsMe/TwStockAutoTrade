@@ -163,63 +163,6 @@ namespace Core.Service
         }
         
         /// <summary>
-        /// 現貨下單 回應
-        /// </summary>
-        /// <param name="abyData"></param>
-        /// <returns></returns>
-        public string FunStkOrder_Out(byte[] abyData)
-        {
-            string strResult = "";
-            try
-            {
-                OdrStkSOrder.ParentStruct_Out struParentOut = new OdrStkSOrder.ParentStruct_Out();
-                OdrStkSOrder.ChildStruct_Out struChildOut = new OdrStkSOrder.ChildStruct_Out();
-
-
-                YuantaDataHelper dataGetter = new YuantaDataHelper(enumLng);
-                dataGetter.OutMsgLoad(abyData);
-                {
-                    strResult += "現貨下單結果: \r\n";
-
-                    strResult += dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyRtnCode)) + ",";
-
-                    strResult += dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyRtnMessage)) + ",";
-
-                    int intCount = 0;
-
-                    intCount = (int)dataGetter.GetUInt();
-
-                    strResult += "下單筆數:" + intCount.ToString() + "\r\n";
-
-                    for (int i = 0; i < intCount; i++)
-                    {
-                        strResult += String.Format("{0}", dataGetter.GetInt()) + ",";
-
-                        strResult += String.Format("{0}", dataGetter.GetShort()) + ",";
-
-                        strResult += dataGetter.GetStr(Marshal.SizeOf(struChildOut.abyOrderNO)) + ",";
-
-                        TYuantaDate yuantaDate = dataGetter.GetTYuantaDate();
-                        strResult += String.Format("{0}/{1}/{2}", yuantaDate.ushtYear, yuantaDate.bytMon, yuantaDate.bytDay) + ",";
-
-                        strResult += dataGetter.GetStr(Marshal.SizeOf(struChildOut.abyErrKind)) + ",";
-
-                        strResult += dataGetter.GetStr(Marshal.SizeOf(struChildOut.abyErrNO)) + ",";
-
-                        strResult += dataGetter.GetStr(Marshal.SizeOf(struChildOut.abyAdvisory)) + ",";
-
-                        strResult += "\r\n";
-                    }
-                }
-
-            }
-            catch
-            {
-                strResult = "";
-            }
-            return strResult;
-        }
-        /// <summary>
         /// 五檔(即時訂閱結果)
         /// </summary>
         /// <param name="abyData"></param>
@@ -302,6 +245,91 @@ namespace Core.Service
 
                     strResult += "\r\n";
                 }
+            }
+            catch
+            {
+                strResult = "";
+            }
+            return strResult;
+        }
+        /// <summary>
+        /// 即時回報(訂閱結果）
+        /// </summary>
+        /// <param name="abyData"></param>
+        /// <returns></returns>
+        public string FunRealReport_Out(byte[] abyData)
+        {
+            string strResult = "";
+            try
+            {
+                RR_RealReport.ParentStruct_Out struParentOut = new RR_RealReport.ParentStruct_Out();
+
+                YuantaDataHelper dataGetter = new YuantaDataHelper(enumLng);
+                dataGetter.OutMsgLoad(abyData);
+
+                strResult += "===============\r\n即時回報(訂閱結果)\r\n===============\r\n";
+
+                strResult += "帳號:" + dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyAccount)) + ",";
+
+                strResult += "回報類別:" + String.Format("{0}", dataGetter.GetByte()) + ",";
+
+                strResult += "委託單號" + dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyOrderNo)) + ",";
+
+                strResult += String.Format("{0}", dataGetter.GetByte()) + ",";
+
+                strResult += dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyCompanyNo)) + ",";
+
+                strResult += dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyStkName)) + ",";
+
+                TYuantaDate yuantaDate = dataGetter.GetTYuantaDate();
+                strResult += String.Format("{0}/{1}/{2}", yuantaDate.ushtYear, yuantaDate.bytMon, yuantaDate.bytDay) + ",";
+
+                TYuantaTime yuantaTime = dataGetter.GetTYuantaTime();
+                strResult += String.Format("{0}:{1}:{2}.{3}", yuantaTime.bytHour, yuantaTime.bytMin, yuantaTime.bytSec, yuantaTime.ushtMSec) + ",";
+
+                strResult += dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyOrderType)) + ",";
+
+                strResult += dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyBS)) + ",";
+
+                strResult += dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyPrice)) + ",";
+
+                strResult += dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyTouchPrice)) + ",";
+
+                strResult += String.Format("{0}", dataGetter.GetInt()) + ",";
+
+                strResult += String.Format("{0}", dataGetter.GetInt()) + ",";
+
+                strResult += dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyOpenOffsetKind)) + ",";
+
+                strResult += dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyDayTrade)) + ",";
+
+                strResult += dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyOrderCond)) + ",";
+
+                strResult += dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyOrderErrorNo)) + ",";
+
+                strResult += String.Format("{0}", dataGetter.GetByte()) + ",";
+
+                strResult += String.Format("{0}", dataGetter.GetByte()) + ",";
+
+                strResult += dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyBasketNo)) + ",";
+
+                strResult += String.Format("{0}", dataGetter.GetByte()) + ",";
+
+                strResult += String.Format("{0}", dataGetter.GetByte()) + ",";
+
+                strResult += String.Format("{0}", dataGetter.GetByte()) + ",";
+
+                strResult += String.Format("{0}", dataGetter.GetByte()) + ",";
+
+                strResult += dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyBelongStkCode)) + ",";
+
+                strResult += dataGetter.GetUInt().ToString() + ",";
+
+                strResult += dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyPriceType)) + ",";
+
+                strResult += dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyStkErrCode));
+                //----------
+                strResult += "\r\n";
             }
             catch
             {
