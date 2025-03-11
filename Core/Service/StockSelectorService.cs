@@ -255,7 +255,7 @@ namespace Core.Service
                     candidateToDeleteList.Add(i.Id);
                     continue;
                 }
-                if (todayClose >= i.GapUpHigh)
+                if (todayClose > i.EntryPoint)
                 {
                     if (stock.TechDataList.Count < 10)
                     {
