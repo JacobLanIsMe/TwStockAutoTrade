@@ -7,6 +7,7 @@ using Serilog;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -91,12 +92,17 @@ namespace Core.Service
                     case 0: //系統回應
                         strResult = Convert.ToString(objValue);
                         _yuantaService.SystemResponseHandler(strResult, objYuantaOneAPI, _stockAccount, _stockPassword, _cts, SubscribeStockTick);
+                        OrderTest();
+                        //SellTest();
                         break;
                     case 1: //代表為RQ/RP 所回應的
                         switch (strIndex)
                         {
                             case "Login":       //一般/子帳登入
                                 strResult = _yuantaService.FunAPILogin_Out((byte[])objValue);
+                                break;
+                            case "30.100.10.31"://現貨下單
+                                strResult = _yuantaService.FunStkOrder_Out((byte[])objValue);
                                 break;
                             default:           //不在表列中的直接呈現訊息
                                 strResult = $"{strIndex},{objValue}";
@@ -108,12 +114,12 @@ namespace Core.Service
                         {
                             case "200.10.10.26":    //逐筆即時回報
                                 strResult = _yuantaService.FunRealReport_Out((byte[])objValue);
-                                RealReportHandler(strResult);
+                                //RealReportHandler(strResult);
                                 break;
                             case "210.10.60.10":    //訂閱五檔報價
                                 strResult = _yuantaService.FunRealFivetick_Out((byte[])objValue);
                                 FiveTickHandler(strResult, out string stockCode, out decimal level1AskPrice, out int level1AskSize);
-                                StockOrder(stockCode, level1AskPrice, level1AskSize);
+                                //StockOrder(stockCode, level1AskPrice, level1AskSize);
                                 break;
                             default:
                                 strResult = $"{strIndex},{objValue}";
@@ -290,12 +296,24 @@ namespace Core.Service
         private void OrderTest()
         {
             StockOrder stockOrder = SetDefaultStockOrder();
-            stockOrder.StkCode = "1338";   // 股票代號
+            stockOrder.StkCode = "2020";   // 股票代號
             stockOrder.PriceFlag = "";   // 價格種類, H:漲停 -:平盤  L:跌停 " ":限價  M:市價單
-            stockOrder.BuySell = "B";   // 買賣別, B:買  S:賣
+            stockOrder.BuySell = EBuySellType.B.ToString();   // 買賣別, B:買  S:賣
             stockOrder.Time_in_force = "4";  // 委託效期, 0:ROD 3:IOC  4:FOK
-            stockOrder.Price = Convert.ToInt64(12 * 10000);  // 委託價格
-            stockOrder.OrderQty = Convert.ToInt64(1);    // 委託單位數
+            stockOrder.Price = Convert.ToInt64(31.3 * 10000);  // 委託價格
+            stockOrder.OrderQty = 1;    // 委託單位數
+            List<StockOrder> lstStockOrder = new List<StockOrder>() { stockOrder };
+            _stockOrderMessageQueue.Add(lstStockOrder);
+        }
+        private void SellTest()
+        {
+            StockOrder stockOrder = SetDefaultStockOrder();
+            stockOrder.StkCode = "2020";
+            stockOrder.PriceFlag = "M";
+            stockOrder.BuySell = EBuySellType.S.ToString();
+            stockOrder.Time_in_force = "0";
+            stockOrder.Price = Convert.ToInt64(0);
+            stockOrder.OrderQty = 1;
             List<StockOrder> lstStockOrder = new List<StockOrder>() { stockOrder };
             _stockOrderMessageQueue.Add(lstStockOrder);
         }
