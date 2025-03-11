@@ -21,7 +21,7 @@ namespace Core.Service
         private readonly enumEnvironmentMode _enumEnvironmentMode;
         private CancellationTokenSource _cts = new CancellationTokenSource();
         private ConcurrentBag<int> _first5MinuteTickBag = new ConcurrentBag<int>();
-        private BlockingCollection<FutureOrder> _futureOrderMessageQueue = new BlockingCollection<FutureOrder>(new ConcurrentQueue<FutureOrder>());
+        private BlockingQueue<FutureOrder> _futureOrderMessageQueue;
         private int contractQuantity = 0;
         private int _first5MinuteHigh = 0;
         private int _first5MinuteLow = 0;
@@ -65,18 +65,12 @@ namespace Core.Service
             _afterMarketOpen5Minute = _marketOpenTime.Add(TimeSpan.FromMinutes(5));
             _dateTimeService = dateTimeService;
             _yuantaService = yuantaService;
+            _futureOrderMessageQueue = new BlockingQueue<FutureOrder>(ProcessFutureOrder);
         }
         public async Task Trade()
         {
             try
             {
-                Task.Run(() =>
-                {
-                    foreach (FutureOrder order in _futureOrderMessageQueue.GetConsumingEnumerable())
-                    {
-                        ProcessFutureOrder(order);
-                    }
-                });
                 objYuantaOneAPI.Open(_enumEnvironmentMode);
                 await Task.Delay(-1, _cts.Token);
             }

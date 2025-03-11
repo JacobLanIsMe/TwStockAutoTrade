@@ -23,7 +23,7 @@ namespace Core.Service
         private CancellationTokenSource _cts = new CancellationTokenSource();
         private List<StockTrade> _stockHoldingList = new List<StockTrade>();
         private List<StockCandidate> _stockCandidateList = new List<StockCandidate>();
-        private BlockingCollection<StockOrder> _stockOrderMessageQueue = new BlockingCollection<StockOrder>(new ConcurrentQueue<StockOrder>());
+        private BlockingQueue<StockOrder> _stockOrderMessageQueue;
         private bool _hasStockOrder = false;
 
         private readonly StockTradeConfig tradeConfig;
@@ -48,7 +48,7 @@ namespace Core.Service
             _yuantaService = yuantaService;
             _stockAccount = _enumEnvironmentMode == enumEnvironmentMode.PROD ? Environment.GetEnvironmentVariable("StockAccount", EnvironmentVariableTarget.Machine) : "S98875005091";
             _stockPassword = _enumEnvironmentMode == enumEnvironmentMode.PROD ? Environment.GetEnvironmentVariable("StockPassword", EnvironmentVariableTarget.Machine) : "1234";
-           
+            _stockOrderMessageQueue = new BlockingQueue<StockOrder>(ProcessStockOrder);
         }
         public async Task Trade()
         {
@@ -56,13 +56,6 @@ namespace Core.Service
             {
                 _stockHoldingList = await _tradeRepository.GetStockHolding();
                 _stockCandidateList = await _candidateRepository.GetActiveCandidate();
-                Task.Run(() =>
-                {
-                    foreach (StockOrder order in _stockOrderMessageQueue.GetConsumingEnumerable())
-                    {
-                        ProcessStockOrder(order);
-                    }
-                });
                 objYuantaOneAPI.Open(_enumEnvironmentMode);
                 await Task.Delay(-1, _cts.Token);
             }
