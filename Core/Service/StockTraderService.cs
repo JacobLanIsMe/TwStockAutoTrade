@@ -23,7 +23,7 @@ namespace Core.Service
         private CancellationTokenSource _cts = new CancellationTokenSource();
         private List<StockTrade> _stockHoldingList = new List<StockTrade>();
         private List<StockCandidate> _stockCandidateList = new List<StockCandidate>();
-        private BlockingCollection<List<StockOrder>> _stockOrderMessageQueue = new BlockingCollection<List<StockOrder>>(new ConcurrentQueue<List<StockOrder>>());
+        private BlockingCollection<StockOrder> _stockOrderMessageQueue = new BlockingCollection<StockOrder>(new ConcurrentQueue<StockOrder>());
         private bool _hasStockOrder = false;
 
         private readonly StockTradeConfig tradeConfig;
@@ -58,7 +58,7 @@ namespace Core.Service
                 _stockCandidateList = await _candidateRepository.GetActiveCandidate();
                 Task.Run(() =>
                 {
-                    foreach (List<StockOrder> order in _stockOrderMessageQueue.GetConsumingEnumerable())
+                    foreach (StockOrder order in _stockOrderMessageQueue.GetConsumingEnumerable())
                     {
                         ProcessStockOrder(order);
                     }
@@ -173,8 +173,7 @@ namespace Core.Service
                     stockOrder.Time_in_force = "0";
                     stockOrder.Price = Convert.ToInt64(0);
                     stockOrder.OrderQty = trade.PurchasedLot;
-                    List<StockOrder> lstStockOrder = new List<StockOrder>() { stockOrder };
-                    _stockOrderMessageQueue.Add(lstStockOrder);
+                    _stockOrderMessageQueue.Add(stockOrder);
                 }
             }
             else
@@ -195,8 +194,7 @@ namespace Core.Service
                     stockOrder.Time_in_force = "4";  // 委託效期, 0:ROD 3:IOC  4:FOK
                     stockOrder.Price = Convert.ToInt64(level1AskPrice * 10000);  // 委託價格
                     stockOrder.OrderQty = Convert.ToInt64(orderQty);    // 委託單位數
-                    List<StockOrder> lstStockOrder = new List<StockOrder>() { stockOrder };
-                    _stockOrderMessageQueue.Add(lstStockOrder);
+                    _stockOrderMessageQueue.Add(stockOrder);
                 }
             }
         }
@@ -214,10 +212,9 @@ namespace Core.Service
             stockOrder.BasketNo = ""; // this.txtBasketNo.Text.Trim(); // BasketNo
             return stockOrder;
         }
-        private void ProcessStockOrder(List<StockOrder> stockOrderList)
+        private void ProcessStockOrder(StockOrder stockOrder)
         {
-            if (_hasStockOrder || !stockOrderList.Any()) return;
-            StockOrder stockOrder = stockOrderList.First();
+            if (_hasStockOrder) return;
             bool hasStockHolding = GetStockHoldingList().Any();
             if (hasStockHolding)
             {
@@ -228,7 +225,7 @@ namespace Core.Service
             {
                 if (stockOrder.BuySell != EBuySellType.B.ToString()) return;
             }
-            bool bResult = objYuantaOneAPI.SendStockOrder(_stockAccount, stockOrderList);
+            bool bResult = objYuantaOneAPI.SendStockOrder(_stockAccount, new List<StockOrder>() { stockOrder });
             if (bResult)
             {
                 _hasStockOrder = true;
@@ -302,8 +299,7 @@ namespace Core.Service
             stockOrder.Time_in_force = "4";  // 委託效期, 0:ROD 3:IOC  4:FOK
             stockOrder.Price = Convert.ToInt64(31.3 * 10000);  // 委託價格
             stockOrder.OrderQty = 1;    // 委託單位數
-            List<StockOrder> lstStockOrder = new List<StockOrder>() { stockOrder };
-            _stockOrderMessageQueue.Add(lstStockOrder);
+            _stockOrderMessageQueue.Add(stockOrder);
         }
         private void SellTest()
         {
@@ -314,8 +310,7 @@ namespace Core.Service
             stockOrder.Time_in_force = "0";
             stockOrder.Price = Convert.ToInt64(0);
             stockOrder.OrderQty = 1;
-            List<StockOrder> lstStockOrder = new List<StockOrder>() { stockOrder };
-            _stockOrderMessageQueue.Add(lstStockOrder);
+            _stockOrderMessageQueue.Add(stockOrder);
         }
     }
 }
