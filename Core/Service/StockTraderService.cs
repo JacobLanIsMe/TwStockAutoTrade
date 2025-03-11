@@ -222,7 +222,11 @@ namespace Core.Service
             {
                 if (stockOrder.BuySell != EBuySellType.B.ToString()) return;
             }
-            _hasStockOrder = objYuantaOneAPI.SendStockOrder(_stockAccount, stockOrderList);
+            bool bResult = objYuantaOneAPI.SendStockOrder(_stockAccount, stockOrderList);
+            if (bResult)
+            {
+                _hasStockOrder = true;
+            }
         }
         private void RealReportHandler(string strResult)
         {
