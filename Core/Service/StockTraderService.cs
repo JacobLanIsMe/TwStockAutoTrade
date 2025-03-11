@@ -227,9 +227,39 @@ namespace Core.Service
             {
                 _hasStockOrder = true;
             }
+            else
+            {
+                _logger.Error($"SendStockOrder error. Stock code: {stockOrder.StkCode}, Buy or Sell: {stockOrder.BuySell}");
+            }
         }
         private void RealReportHandler(string strResult)
         {
+            string[] reportArray = strResult.Split(',');
+            if(!int.TryParse(reportArray[1].Split(':')[1], out int reportType))
+            {
+                _logger.Error("Report type error");
+            }
+            //if (reportType != 51) return;
+            string buySell = reportArray[9];
+            if (buySell == EBuySellType.B.ToString())
+            {
+                StockTrade stockTrade = new StockTrade();
+
+            }
+
+            string orderNo = reportArray[2].Substring(5);
+            string stockCode = reportArray[4];
+            string companyName = reportArray[5];
+            string reportDateTimeString = reportArray[6] + " " + reportArray[7];
+            if (!DateTime.TryParse(reportDateTimeString, out DateTime reportDateTime))
+            {
+                _logger.Error("DateTime error");
+            }
+            if (!decimal.TryParse(reportArray[10], out decimal price))
+            {
+                _logger.Error("Price error");
+            }
+
 
         }
         private List<StockTrade> GetStockHoldingList()
