@@ -84,7 +84,7 @@ namespace Core.Service
                 {
                     case 0: //系統回應
                         strResult = Convert.ToString(objValue);
-                        _yuantaService.SystemResponseHandler(strResult, objYuantaOneAPI, _stockAccount, _stockPassword, _cts, SubscribeStockTick);
+                        _yuantaService.SystemResponseHandler(strResult, objYuantaOneAPI, _stockAccount, _stockPassword, _cts, Subscribe);
                         OrderTest();
                         //SellTest();
                         break;
@@ -108,6 +108,10 @@ namespace Core.Service
                             case "200.10.10.26":    //逐筆即時回報
                                 strResult = _yuantaService.FunRealReport_Out((byte[])objValue);
                                 //RealReportHandler(strResult);
+                                break;
+                            case "210.10.70.11":    //Watchlist報價表(指定欄位)
+                                strResult = _yuantaService.FunRealWatchlist_Out((byte[])objValue);
+                                WatchListHandler(strResult);
                                 break;
                             case "210.10.60.10":    //訂閱五檔報價
                                 strResult = _yuantaService.FunRealFivetick_Out((byte[])objValue);
@@ -255,28 +259,70 @@ namespace Core.Service
             {
                 _logger.Error("Price error");
             }
-
-
+        }
+        private void WatchListHandler(string strResult)
+        {
+            string[] watchListResult = strResult.Split(',');
+            string stockCode = watchListResult[1];
+            if (!decimal.TryParse(watchListResult[3], out decimal tradePrice)) return;
+            
+            foreach (var i in _stockHoldingList)
+            {
+                if (i.StockCode != stockCode) continue;
+                i.IsTradingStarted = true;
+                UnsubscribeWatchlist(i.Market, i.StockCode);
+            }
+            foreach (var i in _stockCandidateList)
+            {
+                if (i.StockCode != stockCode) continue;
+                i.IsTradingStarted = true;
+                UnsubscribeWatchlist(i.Market, i.StockCode);
+            }
         }
         private List<StockTrade> GetStockHoldingList()
         {
             return _stockHoldingList.Where(x => x.SaleDate == null).ToList();
         }
-        private void SubscribeStockTick()
+        private void Subscribe()
         {
             List<FiveTickA> lstFiveTick = new List<FiveTickA>();
-            lstFiveTick.AddRange(_stockHoldingList.Select(x => new FiveTickA
+            List<Watchlist> lstWatchlist = new List<Watchlist>();
+            foreach (var i in _stockHoldingList)
             {
-                MarketNo = Convert.ToByte(x.Market),
-                StockCode = x.StockCode,
-            }));
-            lstFiveTick.AddRange(_stockCandidateList.Select(x => new FiveTickA
+                FiveTickA fiveTickA = new FiveTickA();
+                fiveTickA.MarketNo = Convert.ToByte(i.Market);
+                fiveTickA.StockCode = i.StockCode;
+                lstFiveTick.Add(fiveTickA);
+                Watchlist watch = new Watchlist();
+                watch.IndexFlag = Convert.ToByte(7);    //填入訂閱索引值, 7: 成交價
+                watch.MarketNo = Convert.ToByte(i.Market);      //填入查詢市場代碼
+                watch.StockCode = i.StockCode;
+                lstWatchlist.Add(watch);
+            }
+            foreach (var i in _stockCandidateList)
             {
-                MarketNo = Convert.ToByte(x.Market),
-                StockCode = x.StockCode
-            }));
+                FiveTickA fiveTickA = new FiveTickA();
+                fiveTickA.MarketNo = Convert.ToByte(i.Market);
+                fiveTickA.StockCode = i.StockCode;
+                lstFiveTick.Add(fiveTickA);
+                Watchlist watch = new Watchlist();
+                watch.IndexFlag = Convert.ToByte(7);    //填入訂閱索引值, 7: 成交價
+                watch.MarketNo = Convert.ToByte(i.Market);      //填入查詢市場代碼
+                watch.StockCode = i.StockCode;
+                lstWatchlist.Add(watch);
+            }
             lstFiveTick = lstFiveTick.GroupBy(x => x.StockCode).Select(g => g.First()).ToList();
+            lstWatchlist = lstWatchlist.GroupBy(x => x.StockCode).Select(g => g.First()).ToList();
             objYuantaOneAPI.SubscribeFiveTickA(lstFiveTick);
+            objYuantaOneAPI.SubscribeWatchlist(lstWatchlist);
+        }
+        private void UnsubscribeWatchlist(enumMarketType enumMarketNo, string stockCode)
+        {
+            Watchlist watch = new Watchlist();
+            watch.IndexFlag = Convert.ToByte(7);    //填入定閱索引值, 7: 成交價
+            watch.MarketNo = Convert.ToByte(enumMarketNo);      //填入查詢市場代碼
+            watch.StockCode = stockCode;                     //填入查詢股票代碼
+            objYuantaOneAPI.UnsubscribeWatchlist(new List<Watchlist>() { watch });
         }
 
 

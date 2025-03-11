@@ -17,5 +17,6 @@ namespace Core.Service.Interface
         string FunRealFivetick_Out(byte[] abyData);
         string FunRealReport_Out(byte[] abyData);
         string FunStkOrder_Out(byte[] abyData);
+        string FunRealWatchlist_Out(byte[] abyData);
     }
 }

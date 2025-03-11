@@ -22,7 +22,6 @@ namespace Core.Service
         private CancellationTokenSource _cts = new CancellationTokenSource();
         private ConcurrentBag<int> _first5MinuteTickBag = new ConcurrentBag<int>();
         private BlockingQueue<FutureOrder> _futureOrderMessageQueue;
-        private int contractQuantity = 0;
         private int _first5MinuteHigh = 0;
         private int _first5MinuteLow = 0;
         private int _longProfitPoint = 0;
@@ -42,8 +41,10 @@ namespace Core.Service
         private readonly int _maxOrderQuantity;
         private readonly int _profitPoint;
         private readonly int _stopLossPoint;
-        private readonly IDateTimeService _dateTimeService;
         private readonly IYuantaService _yuantaService;
+        private readonly DateTime _now;
+        private readonly string _targetCommodityId;
+        private readonly string _settlementMonth;
         private readonly Dictionary<string, string> _codeCommodityIdDict = new Dictionary<string, string>
         {
             { "TXF1", "FITX" },
@@ -63,9 +64,12 @@ namespace Core.Service
             _profitPoint = config.GetValue<int>("ProfitPoint");
             _stopLossPoint = config.GetValue<int>("StopLossPoint");
             _afterMarketOpen5Minute = _marketOpenTime.Add(TimeSpan.FromMinutes(5));
-            _dateTimeService = dateTimeService;
             _yuantaService = yuantaService;
             _futureOrderMessageQueue = new BlockingQueue<FutureOrder>(ProcessFutureOrder);
+            if (!_codeCommodityIdDict.TryGetValue(_targetFutureCode, out _targetCommodityId)) throw new Exception($"Can't find commodityId by code {_targetFutureCode}");
+            _now = dateTimeService.GetTaiwanTime();
+            DateTime thirdWednesday = GetThirdWednesday(_now.Year, _now.Month);
+            _settlementMonth = _now.Day > thirdWednesday.Day ? _now.AddMonths(1).ToString("yyyyMM") : _now.ToString("yyyyMM");
         }
         public async Task Trade()
         {
@@ -170,18 +174,14 @@ namespace Core.Service
         }
         private FutureOrder SetDefaultFutureOrder()
         {
-            if (!_codeCommodityIdDict.TryGetValue(_targetFutureCode, out string commodityId)) throw new Exception($"Can't find commodityId by code {_targetFutureCode}");
-            DateTime now = _dateTimeService.GetTaiwanTime();
-            DateTime thirdWednesday = GetThirdWednesday(now.Year, now.Month);
-            string settlementMonth = now.Day > thirdWednesday.Day ? now.AddMonths(1).ToString("yyyyMM") : now.ToString("yyyyMM");
             FutureOrder futureOrder = new FutureOrder();
             futureOrder.Identify = 001;                                                     //識別碼
             futureOrder.Account = _futureAccount;                                           //期貨帳號
             futureOrder.FunctionCode = 0;                                                   //功能別, 0:委託單 4:取消 5:改量 7:改價                     
-            futureOrder.CommodityID1 = commodityId;                                         //商品名稱1
+            futureOrder.CommodityID1 = _targetCommodityId;                                  //商品名稱1
             futureOrder.CallPut1 = "";                                                      //買賣權1
-            futureOrder.SettlementMonth1 = Convert.ToInt32(settlementMonth);                //商品年月1
-            //_futureOrder.StrikePrice1 = Convert.ToInt32(Convert.ToDecimal(this.txtStrikePrice1.Text.Trim()) * 1000); //屐約價1
+            futureOrder.SettlementMonth1 = Convert.ToInt32(_settlementMonth);               //商品年月1
+            futureOrder.StrikePrice1 = 0;                                                   //屐約價1
             futureOrder.OrderQty1 = Convert.ToInt16(_maxOrderQuantity);                     //委託口數1
             #region 組合單應填欄位
             futureOrder.CommodityID2 = "";                                                  //商品名稱2
@@ -191,12 +191,12 @@ namespace Core.Service
             futureOrder.OrderQty2 = 0;                                                      //委託口數2
             futureOrder.BuySell2 = "";                                                      //買賣別2
             #endregion
-            futureOrder.OpenOffsetKind = 2.ToString();                                      //新平倉碼, 0:新倉 1:平倉 2:自動                                          
+            futureOrder.OpenOffsetKind = "2";                                               //新平倉碼, 0:新倉 1:平倉 2:自動                                          
             futureOrder.DayTradeID = "Y";                                                   //當沖註記, Y:當沖  "":非當沖
-            //_futureOrder.SellerNo = Convert.ToInt16(this.txtFutSellerNo.Text.Trim());        //營業員代碼                                            
-            //_futureOrder.OrderNo = this.txtFutOrderNo.Text.Trim();                           //委託書編號           
-            futureOrder.TradeDate = now.ToString("yyyy/MM/dd");                             //交易日期                            
-            //_futureOrder.BasketNo = this.txtFutBasketNo.Text.Trim();                         //BasketNo
+            futureOrder.SellerNo = 0;                                                       //營業員代碼                                            
+            futureOrder.OrderNo = "";                                                       //委託書編號           
+            futureOrder.TradeDate = _now.ToString("yyyy/MM/dd");                            //交易日期                            
+            futureOrder.BasketNo = "";                                                      //BasketNo
             futureOrder.Session = "";                                                       //通路種類, 1:預約 "":盤中單
             return futureOrder;                                                                             
         }

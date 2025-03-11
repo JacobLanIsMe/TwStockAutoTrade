@@ -30,5 +30,6 @@ namespace Core.Model
                 return last9TechDataList.Select(x => x.Close).ToList();
             }
         }
+        public bool IsTradingStarted { get; set; }
     }
 }
