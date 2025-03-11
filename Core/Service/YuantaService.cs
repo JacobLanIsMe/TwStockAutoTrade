@@ -30,6 +30,10 @@ namespace Core.Service
             {
                 subscribeStockTick?.Invoke();
             }
+            else if (strResult == "台股報價/國外期貨報價Is Connected!!")
+            {
+                subscribeStockTick?.Invoke();
+            }
             else
             {
                 cts.Cancel();

@@ -20,8 +20,8 @@ namespace Core.Service
     {
         YuantaOneAPITrader objYuantaOneAPI = new YuantaOneAPITrader();
         private CancellationTokenSource _cts = new CancellationTokenSource();
-        private Dictionary<string, StockTrade> _stockHoldingDict = new Dictionary<string, StockTrade>();
-        private Dictionary<string, StockCandidate> _stockCandidateDict = new Dictionary<string, StockCandidate>();
+        private List<StockTrade> _stockHoldingList = new List<StockTrade>();
+        private List<StockCandidate> _stockCandidateList = new List<StockCandidate>();
         private BlockingCollection<List<StockOrder>> _stockOrderMessageQueue = new BlockingCollection<List<StockOrder>>(new ConcurrentQueue<List<StockOrder>>());
         private bool _hasStockOrder = false;
 
@@ -45,16 +45,16 @@ namespace Core.Service
             _logger = logger;
             objYuantaOneAPI.OnResponse += new OnResponseEventHandler(objApi_OnResponse);
             _yuantaService = yuantaService;
-            _stockAccount = _enumEnvironmentMode == enumEnvironmentMode.PROD ? Environment.GetEnvironmentVariable("StockAccount") : "S98875005091";
-            _stockPassword = _enumEnvironmentMode == enumEnvironmentMode.PROD ? Environment.GetEnvironmentVariable("StockPassword") : "1234";
+            _stockAccount = _enumEnvironmentMode == enumEnvironmentMode.PROD ? Environment.GetEnvironmentVariable("StockAccount", EnvironmentVariableTarget.Machine) : "S98875005091";
+            _stockPassword = _enumEnvironmentMode == enumEnvironmentMode.PROD ? Environment.GetEnvironmentVariable("StockPassword", EnvironmentVariableTarget.Machine) : "1234";
            
         }
         public async Task Trade()
         {
             try
             {
-                _stockHoldingDict = (await _tradeRepository.GetStockHolding()).ToDictionary(x => x.StockCode);
-                _stockCandidateDict = (await _candidateRepository.GetActiveCandidate()).ToDictionary(x => x.StockCode);
+                _stockHoldingList = await _tradeRepository.GetStockHolding();
+                _stockCandidateList = await _candidateRepository.GetActiveCandidate();
                 Task.Run(() =>
                 {
                     foreach (List<StockOrder> order in _stockOrderMessageQueue.GetConsumingEnumerable())
@@ -152,10 +152,11 @@ namespace Core.Service
         private void StockOrder(string stockCode, decimal level1AskPrice, int level1AskSize)
         {
             if (level1AskPrice == 0 || level1AskSize == 0) return;
-            Dictionary<string, StockTrade> stockHoldingDict = GetStockHoldingDict();
-            if (stockHoldingDict.Any())
+            List<StockTrade> stockHoldingList = GetStockHoldingList();
+            if (stockHoldingList.Any())
             {
-                if (!stockHoldingDict.TryGetValue(stockCode, out StockTrade trade)) return;
+                StockTrade trade = stockHoldingList.FirstOrDefault(x => x.StockCode == stockCode);
+                if (trade == null) return;
                 if ((level1AskPrice <= trade.EntryPoint && level1AskPrice <= trade.StopLossPoint) ||
                     (level1AskPrice > trade.EntryPoint && level1AskPrice < (trade.Last9Close.Sum() + level1AskPrice) / 10))
                 {
@@ -173,7 +174,8 @@ namespace Core.Service
             else
             {
                 if (_hasStockOrder) return;
-                if (!_stockCandidateDict.TryGetValue(stockCode, out StockCandidate candidate)) return;
+                StockCandidate candidate = _stockCandidateList.FirstOrDefault(x => x.StockCode == stockCode);
+                if (candidate == null) return;
                 int orderQty = (int)(tradeConfig.MaxAmountPerStock / (candidate.EntryPoint * 1000));
                 if (orderQty <= 0) return;
                 if (level1AskPrice == candidate.EntryPoint &&
@@ -206,37 +208,42 @@ namespace Core.Service
             stockOrder.BasketNo = ""; // this.txtBasketNo.Text.Trim(); // BasketNo
             return stockOrder;
         }
-        private void ProcessStockOrder(List<StockOrder> stockOrder)
+        private void ProcessStockOrder(List<StockOrder> stockOrderList)
         {
-            if (!_hasStockOrder && !GetStockHoldingDict().Any() )
+            if (_hasStockOrder || !stockOrderList.Any()) return;
+            StockOrder stockOrder = stockOrderList.First();
+            bool hasStockHolding = GetStockHoldingList().Any();
+            if (hasStockHolding)
             {
-                bool bResult = objYuantaOneAPI.SendStockOrder(_stockAccount, stockOrder);
-                if (bResult)
-                {
-                    _hasStockOrder = true;
-                }
+                if (stockOrder.BuySell != EBuySellType.S.ToString()) return;
+                if (!GetStockHoldingList().Any(x => x.StockCode == stockOrder.StkCode)) return;
             }
+            else
+            {
+                if (stockOrder.BuySell != EBuySellType.B.ToString()) return;
+            }
+            _hasStockOrder = objYuantaOneAPI.SendStockOrder(_stockAccount, stockOrderList);
         }
         private void RealReportHandler(string strResult)
         {
 
         }
-        private Dictionary<string, StockTrade> GetStockHoldingDict()
+        private List<StockTrade> GetStockHoldingList()
         {
-            return _stockHoldingDict.Where(x => x.Value.SaleDate == null).ToDictionary(x => x.Key, x => x.Value);
+            return _stockHoldingList.Where(x => x.SaleDate == null).ToList();
         }
         private void SubscribeStockTick()
         {
             List<FiveTickA> lstFiveTick = new List<FiveTickA>();
-            lstFiveTick.AddRange(_stockHoldingDict.Select(x => new FiveTickA
+            lstFiveTick.AddRange(_stockHoldingList.Select(x => new FiveTickA
             {
-                MarketNo = Convert.ToByte(x.Value.Market),
-                StockCode = x.Value.StockCode,
+                MarketNo = Convert.ToByte(x.Market),
+                StockCode = x.StockCode,
             }));
-            lstFiveTick.AddRange(_stockCandidateDict.Select(x => new FiveTickA
+            lstFiveTick.AddRange(_stockCandidateList.Select(x => new FiveTickA
             {
-                MarketNo = Convert.ToByte(x.Value.Market),
-                StockCode = x.Value.StockCode
+                MarketNo = Convert.ToByte(x.Market),
+                StockCode = x.StockCode
             }));
             lstFiveTick = lstFiveTick.GroupBy(x => x.StockCode).Select(g => g.First()).ToList();
             objYuantaOneAPI.SubscribeFiveTickA(lstFiveTick);
