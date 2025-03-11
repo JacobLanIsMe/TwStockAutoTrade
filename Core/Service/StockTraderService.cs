@@ -116,7 +116,7 @@ namespace Core.Service
                             case "210.10.60.10":    //訂閱五檔報價
                                 strResult = _yuantaService.FunRealFivetick_Out((byte[])objValue);
                                 FiveTickHandler(strResult, out string stockCode, out decimal level1AskPrice, out int level1AskSize);
-                                //StockOrder(stockCode, level1AskPrice, level1AskSize);
+                                StockOrder(stockCode, level1AskPrice, level1AskSize);
                                 break;
                             default:
                                 strResult = $"{strIndex},{objValue}";
@@ -159,7 +159,7 @@ namespace Core.Service
             if (stockHoldingList.Any())
             {
                 StockTrade trade = stockHoldingList.FirstOrDefault(x => x.StockCode == stockCode);
-                if (trade == null) return;
+                if (trade == null || !trade.IsTradingStarted) return;
                 if ((level1AskPrice <= trade.EntryPoint && level1AskPrice <= trade.StopLossPoint) ||
                     (level1AskPrice > trade.EntryPoint && level1AskPrice < (trade.Last9Close.Sum() + level1AskPrice) / 10))
                 {
@@ -177,7 +177,7 @@ namespace Core.Service
             {
                 if (_hasStockOrder) return;
                 StockCandidate candidate = _stockCandidateList.FirstOrDefault(x => x.StockCode == stockCode);
-                if (candidate == null) return;
+                if (candidate == null || !candidate.IsTradingStarted) return;
                 int orderQty = (int)(tradeConfig.MaxAmountPerStock / (candidate.EntryPoint * 1000));
                 if (orderQty <= 0) return;
                 if (level1AskPrice == candidate.EntryPoint &&
