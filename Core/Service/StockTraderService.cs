@@ -5,12 +5,8 @@ using Core.Service.Interface;
 using Microsoft.Extensions.Configuration;
 using Serilog;
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
-using System.Runtime.InteropServices;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using YuantaOneAPI;
@@ -20,10 +16,10 @@ namespace Core.Service
     public class StockTraderService : IStockTraderService
     {
         YuantaOneAPITrader objYuantaOneAPI = new YuantaOneAPITrader();
-        private CancellationTokenSource _cts = new CancellationTokenSource();
         private List<StockTrade> _stockHoldingList = new List<StockTrade>();
         private List<StockCandidate> _stockCandidateList = new List<StockCandidate>();
         private BlockingQueue<StockOrder> _stockOrderMessageQueue;
+        private CancellationTokenSource _cts;
         private bool _hasStockOrder = false;
 
         private readonly StockTradeConfig tradeConfig;
@@ -42,7 +38,11 @@ namespace Core.Service
             _enumEnvironmentMode = environment == "PROD" ? enumEnvironmentMode.PROD : enumEnvironmentMode.UAT;
             _tradeRepository = tradeRepository;
             _candidateRepository = candidateRepository;
-            _todayDate = dateTimeService.GetTaiwanTime().ToString("yyyy/MM/dd");
+            DateTime now = dateTimeService.GetTaiwanTime();
+            DateTime stopTime = now.Date.AddHours(13).AddMinutes(30);
+            TimeSpan delayTime = stopTime - now;
+            _cts = new CancellationTokenSource(delayTime);
+            _todayDate = now.ToString("yyyy/MM/dd");
             _logger = logger;
             objYuantaOneAPI.OnResponse += new OnResponseEventHandler(objApi_OnResponse);
             _yuantaService = yuantaService;
