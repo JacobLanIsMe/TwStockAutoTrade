@@ -56,6 +56,7 @@ namespace Core.Service
             {
                 _stockHoldingList = await _tradeRepository.GetStockHolding();
                 _stockCandidateList = await _candidateRepository.GetActiveCandidate();
+                if (!_stockHoldingList.Any() && !_stockCandidateList.Any()) return;
                 objYuantaOneAPI.Open(_enumEnvironmentMode);
                 await Task.Delay(-1, _cts.Token);
             }
