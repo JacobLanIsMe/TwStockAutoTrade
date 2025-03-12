@@ -157,6 +157,7 @@
     <Compile Include="Enum\EFutureOrderType.cs" />
     <Compile Include="HttpClientFactory\SimpleHttpClientFactory.cs" />
     <Compile Include="Model\BlockingQueue.cs" />
+    <Compile Include="Model\FutureConfig.cs" />
     <Compile Include="Model\StockSharedModel.cs" />
     <Compile Include="Model\StringListModel.cs" />
     <Compile Include="Model\StockTrade.cs" />
