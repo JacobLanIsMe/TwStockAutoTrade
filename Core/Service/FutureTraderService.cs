@@ -134,8 +134,8 @@ namespace Core.Service
                                 break;
                             case "210.10.40.10":    //訂閱個股分時明細
                                 strResult = _yuantaService.FunRealStocktick_Out((byte[])objValue);
-                                TickHandler(strResult, out int tickPrice);
-                                //FutureOrder(tickPrice);
+                                TickHandler(strResult, out TimeSpan tickTime, out int tickPrice);
+                                FutureOrder(tickTime, tickPrice);
                                 break;
                             default:
                                 strResult = $"{strIndex},{objValue}";
@@ -155,12 +155,13 @@ namespace Core.Service
             }
         }
         
-        private void TickHandler(string strResult, out int tickPrice)
+        private void TickHandler(string strResult, out TimeSpan tickTime, out int tickPrice)
         {
             tickPrice = 0;
+            tickTime = TimeSpan.Zero;
             if (string.IsNullOrEmpty(strResult)) return;
             string[] tickInfo = strResult.Split(',');
-            if (!TimeSpan.TryParse(tickInfo[3], out TimeSpan tickTime))
+            if (!TimeSpan.TryParse(tickInfo[3], out tickTime))
             {
                 _logger.Error("Tick time failed in TickHandler");
                 return;
@@ -210,9 +211,9 @@ namespace Core.Service
             futureOrder.Session = "";                                                       //通路種類, 1:預約 "":盤中單
             return futureOrder;                                                                             
         }
-        private void FutureOrder(int tickPrice)
+        private void FutureOrder(TimeSpan tickTime, int tickPrice)
         {
-            if (tickPrice == 0 || _hasFutureOrder) return;
+            if (tickTime == TimeSpan.Zero || tickPrice == 0 || _hasFutureOrder) return;
             if (_first5MinuteHigh == 0 || _first5MinuteLow == 0 || 
                 _longProfitPoint == 0 || _longStopLossPoint == 0 || 
                 _shortProfitPoint == 0 || _shortStopLossPoint == 0) return;
