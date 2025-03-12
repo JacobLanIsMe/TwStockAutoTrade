@@ -69,6 +69,10 @@ namespace Core.Service
             }
             finally
             {
+                List<StockTrade> tradeToInsertList = _stockHoldingList.Where(x => x.Id == default).ToList();
+                List<StockTrade> tradeToUpdateList = _stockHoldingList.Where(x => x.Id != default).ToList();
+                await _tradeRepository.Insert(tradeToInsertList);
+                await _tradeRepository.UpdateSaleDate(tradeToUpdateList);
                 objYuantaOneAPI.LogOut();
                 objYuantaOneAPI.Close();
                 objYuantaOneAPI.Dispose();

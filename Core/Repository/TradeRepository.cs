@@ -44,5 +44,30 @@ namespace Core.Repository
             }   
             _logger.Information("Update Last9TechData of table Trader finished.");
         }
+        public async Task UpdateSaleDate(List<StockTrade> tradeList)
+        {
+            if (!tradeList.Any()) return;
+            _logger.Information("Update SaleDate of table Trader started.");
+            string sqlCommand = @"UPDATE [dbo].[Trade] SET [SaleDate] = @SaleDate WHERE [Id] = @Id";
+            using (SqlConnection sqlConnection = new SqlConnection(_dbConnectionString))
+            {
+                await sqlConnection.ExecuteAsync(sqlCommand, tradeList);
+            }
+            _logger.Information("Update SaleDate of table Trader finished.");
+        }
+        public async Task Insert(List<StockTrade> tradeList)
+        {
+            if (!tradeList.Any()) return;
+            _logger.Information("Insert into table Trader started.");
+            string sqlCommand = @"INSERT INTO [dbo].[Trade] 
+                                  ([Market], [StockCode], [CompanyName], [PurchasedLot], [PurchaseDate], [EntryPoint], [StopLossPoint], [SaleDate], [Last9TechData])
+                                  VALUES
+                                  (@Market, @StockCode, @CompanyName, @PurchasedLot, @PurchaseDate, @EntryPoint, @StopLossPoint, @SaleDate, @Last9TechData)";
+            using (SqlConnection sqlConnection = new SqlConnection(_dbConnectionString))
+            {
+                await sqlConnection.ExecuteAsync(sqlCommand, tradeList);
+            }
+            _logger.Information("Insert into table Trader finished.");
+        }
     }
 }

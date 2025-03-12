@@ -11,5 +11,7 @@ namespace Core.Repository.Interface
     {
         Task<List<StockTrade>> GetStockHolding();
         Task UpdateLast9TechData(List<StockTrade> tradeList);
+        Task UpdateSaleDate(List<StockTrade> tradeList);
+        Task Insert(List<StockTrade> tradeList);
     }
 }
