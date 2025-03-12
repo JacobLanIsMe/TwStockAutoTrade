@@ -49,7 +49,8 @@ namespace Core.Service
         {
             { "TXF1", "FITX" },
             { "MXF1", "FIMTX" },
-            { "TMF0", "FITM" }
+            { "TMF0", "FITM" },
+            { "MXF8", "FIMTX" }
         };
         public FutureTraderService(IConfiguration config, ILogger logger, IDateTimeService dateTimeService, IYuantaService yuantaService)
         {
@@ -58,7 +59,7 @@ namespace Core.Service
             _enumEnvironmentMode = environment == "PROD" ? enumEnvironmentMode.PROD : enumEnvironmentMode.UAT;
             _logger = logger;
             _futureAccount = _enumEnvironmentMode == enumEnvironmentMode.PROD ? Environment.GetEnvironmentVariable("FutureAccount", EnvironmentVariableTarget.Machine) : "S98875005091";
-            _futurePassword = _enumEnvironmentMode == enumEnvironmentMode.PROD ? Environment.GetEnvironmentVariable("FuturePassword", EnvironmentVariableTarget.Machine) : "1234";
+            _futurePassword = _enumEnvironmentMode == enumEnvironmentMode.PROD ? Environment.GetEnvironmentVariable("StockPassword", EnvironmentVariableTarget.Machine) : "1234";
             _targetFutureCode = config.GetValue<string>("TargetFutureCode");
             _maxOrderQuantity = config.GetValue<int>("MaxOrderQuantity");
             _profitPoint = config.GetValue<int>("ProfitPoint");
@@ -111,6 +112,9 @@ namespace Core.Service
                             case "Login":       //一般/子帳登入
                                 strResult = _yuantaService.FunAPILogin_Out((byte[])objValue);
                                 break;
+                            case "30.100.20.24"://期貨下單(新)
+                                strResult = _yuantaService.FunFutOrder_Out((byte[])objValue);
+                                break;
                             default:           //不在表列中的直接呈現訊息
                                 strResult = $"{strIndex},{objValue}";
                                 break;
@@ -119,10 +123,14 @@ namespace Core.Service
                     case 2: //訂閱所回應
                         switch (strIndex)
                         {
+                            case "200.10.10.26":    //逐筆即時回報
+                                strResult = _yuantaService.FunRealReport_Out((byte[])objValue);
+                                //RealReportHandler(strResult);
+                                break;
                             case "210.10.40.10":    //訂閱個股分時明細
                                 strResult = _yuantaService.FunRealStocktick_Out((byte[])objValue);
                                 TickHandler(strResult, out int tickPrice);
-                                FutureOrder(tickPrice);
+                                //FutureOrder(tickPrice);
                                 break;
                             default:
                                 strResult = $"{strIndex},{objValue}";

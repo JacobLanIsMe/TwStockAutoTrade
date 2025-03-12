@@ -85,8 +85,6 @@ namespace Core.Service
                     case 0: //系統回應
                         strResult = Convert.ToString(objValue);
                         _yuantaService.SystemResponseHandler(strResult, objYuantaOneAPI, _stockAccount, _stockPassword, _cts, Subscribe);
-                        OrderTest();
-                        //SellTest();
                         break;
                     case 1: //代表為RQ/RP 所回應的
                         switch (strIndex)
@@ -107,11 +105,13 @@ namespace Core.Service
                         {
                             case "200.10.10.26":    //逐筆即時回報
                                 strResult = _yuantaService.FunRealReport_Out((byte[])objValue);
-                                //RealReportHandler(strResult);
+                                RealReportHandler(strResult);
                                 break;
                             case "210.10.70.11":    //Watchlist報價表(指定欄位)
                                 strResult = _yuantaService.FunRealWatchlist_Out((byte[])objValue);
                                 WatchListHandler(strResult);
+                                //OrderTest();
+                                //SellTest();
                                 break;
                             case "210.10.60.10":    //訂閱五檔報價
                                 strResult = _yuantaService.FunRealFivetick_Out((byte[])objValue);
@@ -239,19 +239,8 @@ namespace Core.Service
             {
                 _logger.Error("Report type error");
             }
-            //if (reportType != 51) return;
-            string buySell = reportArray[9];
-            if (buySell == EBuySellType.B.ToString())
-            {
-                StockTrade stockTrade = new StockTrade();
-
-            }
-
-            string orderNo = reportArray[2].Substring(5);
-            string stockCode = reportArray[4];
-            string companyName = reportArray[5];
-            string reportDateTimeString = reportArray[6] + " " + reportArray[7];
-            if (!DateTime.TryParse(reportDateTimeString, out DateTime reportDateTime))
+            if (reportType != 51) return;
+            if (!DateTime.TryParse(reportArray[6] + " " + reportArray[7], out DateTime reportDateTime))
             {
                 _logger.Error("DateTime error");
             }
@@ -259,6 +248,33 @@ namespace Core.Service
             {
                 _logger.Error("Price error");
             }
+            if (!int.TryParse(reportArray[13], out int purchasedLot))
+            {
+                _logger.Error("PurchasedLot error");
+            }
+            string stockCode = reportArray[4].Trim();
+            if (reportArray[9] == EBuySellType.B.ToString())
+            {
+                StockCandidate candidate = _stockCandidateList.FirstOrDefault(x => x.StockCode == stockCode);
+                if (candidate == null) return;
+                StockTrade newTrade = new StockTrade();
+                newTrade.Market = candidate.Market;
+                newTrade.StockCode = stockCode;
+                newTrade.CompanyName = reportArray[5];
+                newTrade.Last9TechData = candidate.Last9TechData;
+                newTrade.EntryPoint = price;
+                newTrade.StopLossPoint = candidate.StopLossPoint;
+                newTrade.IsTradingStarted = true;
+                newTrade.PurchasedLot = purchasedLot;
+                newTrade.PurchaseDate = reportDateTime;
+                _stockHoldingList.Add(newTrade);
+            }
+            else
+            {
+                StockTrade stockTrade = GetStockHoldingList().FirstOrDefault(x => x.StockCode == stockCode);
+                stockTrade.SaleDate = reportDateTime;
+            }
+            _hasStockOrder = false;
         }
         private void WatchListHandler(string strResult)
         {
@@ -332,18 +348,18 @@ namespace Core.Service
         private void OrderTest()
         {
             StockOrder stockOrder = SetDefaultStockOrder();
-            stockOrder.StkCode = "2020";   // 股票代號
+            stockOrder.StkCode = "2887";   // 股票代號
             stockOrder.PriceFlag = "";   // 價格種類, H:漲停 -:平盤  L:跌停 " ":限價  M:市價單
             stockOrder.BuySell = EBuySellType.B.ToString();   // 買賣別, B:買  S:賣
             stockOrder.Time_in_force = "4";  // 委託效期, 0:ROD 3:IOC  4:FOK
-            stockOrder.Price = Convert.ToInt64(31.3 * 10000);  // 委託價格
+            stockOrder.Price = Convert.ToInt64(17.6 * 10000);  // 委託價格
             stockOrder.OrderQty = 1;    // 委託單位數
             _stockOrderMessageQueue.Add(stockOrder);
         }
         private void SellTest()
         {
             StockOrder stockOrder = SetDefaultStockOrder();
-            stockOrder.StkCode = "2020";
+            stockOrder.StkCode = "2887";
             stockOrder.PriceFlag = "M";
             stockOrder.BuySell = EBuySellType.S.ToString();
             stockOrder.Time_in_force = "0";

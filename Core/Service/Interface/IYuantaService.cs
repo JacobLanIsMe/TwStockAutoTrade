@@ -18,5 +18,6 @@ namespace Core.Service.Interface
         string FunRealReport_Out(byte[] abyData);
         string FunStkOrder_Out(byte[] abyData);
         string FunRealWatchlist_Out(byte[] abyData);
+        string FunFutOrder_Out(byte[] abyData);
     }
 }

@@ -256,6 +256,7 @@ namespace Core.Service
             }
             return strResult;
         }
+       
         /// <summary>
         /// 即時回報(訂閱結果）
         /// </summary>
@@ -434,6 +435,64 @@ namespace Core.Service
                     //----------
                     strResult += "\r\n";
                 }
+            }
+            catch
+            {
+                strResult = "";
+            }
+            return strResult;
+        }
+        /// <summary>
+        /// 期貨下單 回應
+        /// </summary>
+        /// <param name="abyData"></param>
+        /// <returns></returns>
+        public string FunFutOrder_Out(byte[] abyData)
+        {
+            string strResult = "";
+            try
+            {
+                OdrFutOrder.ParentStruct_Out struParentOut = new OdrFutOrder.ParentStruct_Out();
+                OdrFutOrder.ChildStruct_Out struChildOut = new OdrFutOrder.ChildStruct_Out();
+
+                YuantaDataHelper dataGetter = new YuantaDataHelper(enumLng);
+                dataGetter.OutMsgLoad(abyData);
+                {
+
+                    strResult += "期貨下單結果: \r\n";
+
+                    strResult += dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyRtnCode)) + ",";
+
+                    strResult += dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyRtnMessage)) + ",";
+
+                    int intCount = 0;
+
+                    intCount = (int)dataGetter.GetUInt();
+
+                    strResult += "筆數:" + intCount.ToString() + "\r\n";
+
+                    for (int i = 0; i < intCount; i++)
+                    {
+                        strResult += String.Format("{0}", dataGetter.GetInt()) + ",";
+
+                        strResult += String.Format("{0}", dataGetter.GetShort()) + ",";
+
+                        strResult += dataGetter.GetStr(Marshal.SizeOf(struChildOut.abyOrderNO)) + ",";
+
+                        TYuantaDate yuantaDate = dataGetter.GetTYuantaDate();
+                        strResult += String.Format("{0}/{1}/{2}", yuantaDate.ushtYear, yuantaDate.bytMon, yuantaDate.bytDay) + ",";
+
+                        strResult += dataGetter.GetStr(Marshal.SizeOf(struChildOut.abyErrKind)) + ",";
+
+                        strResult += dataGetter.GetStr(Marshal.SizeOf(struChildOut.abyErrNO)) + ",";
+
+                        strResult += dataGetter.GetStr(Marshal.SizeOf(struChildOut.abyAdvisory)) + ",";
+
+                        strResult += "\r\n";
+                        //
+                    }
+                }
+                dataGetter.ClearOutputData();
             }
             catch
             {
