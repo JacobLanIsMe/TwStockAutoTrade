@@ -114,8 +114,6 @@ namespace Core.Service
                             case "210.10.70.11":    //Watchlist報價表(指定欄位)
                                 strResult = _yuantaService.FunRealWatchlist_Out((byte[])objValue);
                                 WatchListHandler(strResult);
-                                //OrderTest();
-                                //SellTest();
                                 break;
                             case "210.10.60.10":    //訂閱五檔報價
                                 strResult = _yuantaService.FunRealFivetick_Out((byte[])objValue);
