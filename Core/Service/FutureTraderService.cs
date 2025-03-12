@@ -31,13 +31,11 @@ namespace Core.Service
         private bool _hasFutureOrder = false;
         private bool _hasLongContract = false;
         private bool _hasShortContract = false;
-        private readonly TimeSpan _marketOpenTime = new TimeSpan(8, 45, 0);
         private readonly TimeSpan _afterMarketOpen5Minute;
         private readonly ILogger _logger;
         private readonly string _futureAccount;
         private readonly string _futurePassword;
         private readonly FutureConfig _targetFutureConfig;
-        private readonly string _targetFutureCode;
         private readonly int _maxOrderQuantity;
         private readonly int _profitPoint;
         private readonly int _stopLossPoint;
@@ -49,8 +47,9 @@ namespace Core.Service
         {
             { "TXF1", "FITX" },
             { "MXF1", "FIMTX" },
+            { "MXF8", "FIMTX" },
             { "TMF0", "FITM" },
-            { "MXF8", "FIMTX" }
+            { "TMF8", "FITM" }
         };
         public FutureTraderService(IConfiguration config, ILogger logger, IDateTimeService dateTimeService, IYuantaService yuantaService)
         {
@@ -64,24 +63,19 @@ namespace Core.Service
             DateTime thirdWednesday = GetThirdWednesday(now.Year, now.Month);
             _settlementMonth = now.Day > thirdWednesday.Day ? now.AddMonths(1).ToString("yyyyMM") : now.ToString("yyyyMM");
             _tradeDate = now.ToString("yyyy/MM/dd");
-
-
-
             List<FutureConfig> futureConfigList = config.GetSection("TargetFuture").Get<List<FutureConfig>>();
             bool isDay = now.Hour < 14 ? true : false;
             _targetFutureConfig = now.Hour < 14 ? futureConfigList.First(x => x.IsDayMarket) : futureConfigList.First(x => !x.IsDayMarket);
-
-
-
-            _targetFutureCode = config.GetValue<string>("TargetFutureCode");
             _maxOrderQuantity = config.GetValue<int>("MaxOrderQuantity");
             _profitPoint = config.GetValue<int>("ProfitPoint");
             _stopLossPoint = config.GetValue<int>("StopLossPoint");
-            _afterMarketOpen5Minute = _marketOpenTime.Add(TimeSpan.FromMinutes(5));
+            _first5MinuteHigh = config.GetValue<int>("First5MinuteHigh");
+            _first5MinuteLow = config.GetValue<int>("First5MinuteLow");
+            SetExitPoint();
+            _afterMarketOpen5Minute = _targetFutureConfig.MarketOpenTime.Add(TimeSpan.FromMinutes(5));
             _yuantaService = yuantaService;
             _futureOrderMessageQueue = new BlockingQueue<FutureOrder>(ProcessFutureOrder);
-            if (!_codeCommodityIdDict.TryGetValue(_targetFutureCode, out _targetCommodityId)) throw new Exception($"Can't find commodityId by code {_targetFutureCode}");
-            
+            if (!_codeCommodityIdDict.TryGetValue(_targetFutureConfig.FutureCode, out _targetCommodityId)) throw new Exception($"Can't find commodityId by code {_targetFutureConfig.FutureCode}");
         }
         public async Task Trade()
         {
@@ -141,7 +135,7 @@ namespace Core.Service
                             case "210.10.40.10":    //訂閱個股分時明細
                                 strResult = _yuantaService.FunRealStocktick_Out((byte[])objValue);
                                 TickHandler(strResult, out int tickPrice);
-                                FutureOrder(tickPrice);
+                                //FutureOrder(tickPrice);
                                 break;
                             default:
                                 strResult = $"{strIndex},{objValue}";
@@ -177,18 +171,15 @@ namespace Core.Service
                 return;
             }
             tickPrice = tickPrice / 1000;
-            if (tickTime < _afterMarketOpen5Minute && tickTime >= _marketOpenTime)
+            if (tickTime < _afterMarketOpen5Minute && tickTime >= _targetFutureConfig.MarketOpenTime)
             {
                 _first5MinuteTickBag.Add(tickPrice);
             }
-            if (_first5MinuteHigh == 0 && _first5MinuteLow == 0 && tickTime >= _afterMarketOpen5Minute)
+            if ((_first5MinuteHigh == 0 || _first5MinuteLow == 0) && tickTime >= _afterMarketOpen5Minute)
             {
                 _first5MinuteHigh = _first5MinuteTickBag.Max();
-                _longProfitPoint = _first5MinuteHigh + _profitPoint;
-                _longStopLossPoint = _first5MinuteHigh - _stopLossPoint;
                 _first5MinuteLow = _first5MinuteTickBag.Min();
-                _shortProfitPoint = _first5MinuteLow - _profitPoint;
-                _shortStopLossPoint = _first5MinuteLow + _stopLossPoint;
+                SetExitPoint();
             }
         }
         private FutureOrder SetDefaultFutureOrder()
@@ -284,12 +275,18 @@ namespace Core.Service
             List<StockTick> lstStocktick = new List<StockTick>();
             StockTick stocktick = new StockTick();
             stocktick.MarketNo = Convert.ToByte(enumMarketType.TAIFEX);      //填入查詢市場代碼
-            stocktick.StockCode = _targetFutureCode;
+            stocktick.StockCode = _targetFutureConfig.FutureCode;
             lstStocktick.Add(stocktick);
             objYuantaOneAPI.SubscribeStockTick(lstStocktick);
         }
-        
-        
+        private void SetExitPoint()
+        {
+            if (_first5MinuteHigh == 0 || _first5MinuteLow == 0) return;
+            _longProfitPoint = _first5MinuteHigh + _profitPoint;
+            _longStopLossPoint = _first5MinuteHigh - _stopLossPoint;
+            _shortProfitPoint = _first5MinuteLow - _profitPoint;
+            _shortStopLossPoint = _first5MinuteLow + _stopLossPoint;
+        }
         private DateTime GetThirdWednesday(int year, int month)
         {
             // 取得該月的第一天
