@@ -17,5 +17,6 @@ namespace Core.Model
         public DateTime SelectedDate { get; set; }
         public bool IsDeleted { get; set; }
         public DateTime? DeleteDate { get; set; }
+        public decimal EntryPoint { get; set; }
     }
 }

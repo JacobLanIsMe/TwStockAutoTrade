@@ -16,7 +16,6 @@ namespace Core.Model
         public string StockCode { get; set; }
         public string CompanyName { get; set; }
         public string Last9TechData { get; set; }
-        public decimal EntryPoint { get; set; }
         public decimal StopLossPoint { get; set; }
         public List<decimal> Last9Close
         {

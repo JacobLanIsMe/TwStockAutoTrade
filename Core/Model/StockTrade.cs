@@ -10,7 +10,9 @@ namespace Core.Model
     {
         public int PurchasedLot { get; set; }
         public DateTime PurchaseDate { get; set; }
+        public decimal PurchasePoint { get; set; }
         public DateTime? SaleDate { get; set; }
+        public decimal? SalePoint { get; set; }
 
     }
 }

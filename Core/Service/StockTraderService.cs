@@ -162,8 +162,8 @@ namespace Core.Service
             {
                 StockTrade trade = stockHoldingList.FirstOrDefault(x => x.StockCode == stockCode);
                 if (trade == null || !trade.IsTradingStarted) return;
-                if ((level1AskPrice <= trade.EntryPoint && level1AskPrice <= trade.StopLossPoint) ||
-                    (level1AskPrice > trade.EntryPoint && level1AskPrice < (trade.Last9Close.Sum() + level1AskPrice) / 10))
+                if ((level1AskPrice <= trade.PurchasePoint && level1AskPrice <= trade.StopLossPoint) ||
+                    (level1AskPrice > trade.PurchasePoint && level1AskPrice < (trade.Last9Close.Sum() + level1AskPrice) / 10))
                 {
                     StockOrder stockOrder = SetDefaultStockOrder();
                     stockOrder.StkCode = stockCode;
@@ -264,7 +264,7 @@ namespace Core.Service
                 newTrade.StockCode = stockCode;
                 newTrade.CompanyName = reportArray[5];
                 newTrade.Last9TechData = candidate.Last9TechData;
-                newTrade.EntryPoint = price;
+                newTrade.PurchasePoint = price;
                 newTrade.StopLossPoint = candidate.StopLossPoint;
                 newTrade.IsTradingStarted = true;
                 newTrade.PurchasedLot = purchasedLot;
@@ -274,7 +274,11 @@ namespace Core.Service
             else
             {
                 StockTrade stockTrade = GetStockHoldingList().FirstOrDefault(x => x.StockCode == stockCode);
-                stockTrade.SaleDate = reportDateTime;
+                if (stockTrade != null)
+                {
+                    stockTrade.SaleDate = reportDateTime;
+                    stockTrade.SalePoint = price;
+                }
             }
             _hasStockOrder = false;
         }
