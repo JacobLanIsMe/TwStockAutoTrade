@@ -41,7 +41,7 @@ namespace Core.Service
             DateTime now = dateTimeService.GetTaiwanTime();
             DateTime stopTime = now.Date.AddHours(13).AddMinutes(30);
             TimeSpan delayTime = stopTime - now;
-            _cts = new CancellationTokenSource(delayTime);
+            _cts = delayTime > TimeSpan.Zero ? new CancellationTokenSource(delayTime) : new CancellationTokenSource();
             _todayDate = now.ToString("yyyy/MM/dd");
             _logger = logger;
             objYuantaOneAPI.OnResponse += new OnResponseEventHandler(objApi_OnResponse);
