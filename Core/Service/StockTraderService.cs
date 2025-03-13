@@ -260,7 +260,7 @@ namespace Core.Service
             {
                 _logger.Error("Price error");
             }
-            if (!int.TryParse(reportArray[13], out int purchasedLot))
+            if (!int.TryParse(reportArray[13], out int purchasedShare))
             {
                 _logger.Error("PurchasedLot error");
             }
@@ -277,7 +277,7 @@ namespace Core.Service
                 newTrade.PurchasePoint = price;
                 newTrade.StopLossPoint = candidate.StopLossPoint;
                 newTrade.IsTradingStarted = true;
-                newTrade.PurchasedLot = purchasedLot;
+                newTrade.PurchasedLot = purchasedShare / 1000;
                 newTrade.PurchaseDate = reportDateTime;
                 _stockHoldingList.Add(newTrade);
             }
