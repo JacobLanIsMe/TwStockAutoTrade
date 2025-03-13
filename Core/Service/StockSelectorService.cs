@@ -115,7 +115,6 @@ namespace Core.Service
                         Low = x.L,
                         Volume = x.V
                     }).OrderByDescending(x => x.Date).ToList();
-                    _logger.Information($"Retrieve exchange report of Stock {stock.StockCode} {stock.CompanyName} finished.");
                 }
                 catch (Exception ex)
                 {
