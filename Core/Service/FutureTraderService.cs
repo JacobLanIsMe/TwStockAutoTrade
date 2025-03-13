@@ -156,7 +156,6 @@ namespace Core.Service
                 _logger.Error(strResult);
             }
         }
-        
         private void TickHandler(string strResult, out TimeSpan tickTime, out int tickPrice)
         {
             tickPrice = 0;
@@ -274,9 +273,9 @@ namespace Core.Service
         }
         private void ProcessFutureOrder(FutureOrder futureOrder)
         {
-            if (!string.IsNullOrEmpty(_orderNo)) return;
-            if (_hasLongContract && futureOrder.BuySell1 == EBuySellType.B.ToString()) return;
-            if (_hasShortContract && futureOrder.BuySell1 == EBuySellType.S.ToString()) return;
+            if (!string.IsNullOrEmpty(_orderNo) && futureOrder.FunctionCode != 4) return;
+            if (_hasLongContract && futureOrder.BuySell1 != EBuySellType.S.ToString()) return;
+            if (_hasShortContract && futureOrder.BuySell1 != EBuySellType.B.ToString()) return;
             bool bResult = objYuantaOneAPI.SendFutureOrder(_futureAccount, new List<FutureOrder>() { futureOrder });
             if (bResult)
             {
