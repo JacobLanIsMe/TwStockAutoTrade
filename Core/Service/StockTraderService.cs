@@ -99,6 +99,7 @@ namespace Core.Service
                                 break;
                             case "30.100.10.31"://現貨下單
                                 strResult = _yuantaService.FunStkOrder_Out((byte[])objValue);
+                                StockOrderHandler(strResult);
                                 break;
                             default:           //不在表列中的直接呈現訊息
                                 strResult = $"{strIndex},{objValue}";
@@ -154,7 +155,20 @@ namespace Core.Service
             level1AskPrice = level1AskPrice / 10000;
             _logger.Information($"Stock code: {stockCode}, Level 1 ask price: {level1AskPrice}, Level 1 ask size: {level1AskSize}");
         }
-        
+        private StockOrder SetDefaultStockOrder()
+        {
+            StockOrder stockOrder = new StockOrder();
+            stockOrder.Identify = Convert.ToInt32(001); // 識別碼
+            stockOrder.Account = _stockAccount; // 現貨帳號
+            stockOrder.APCode = Convert.ToInt16(0);    // 交易市場別, 0:一般 2:盤後零股 4:盤中零股 7:盤後
+            stockOrder.TradeKind = Convert.ToInt16(0);  // 交易性質, 0:委託單 3:改量 4:取消 7:改價
+            stockOrder.OrderType = "0";   // 委託種類, 0:現貨 3:融資 4:融券 5借券(賣出) 6:借券(賣出) 9:現股當沖
+            stockOrder.TradeDate = _todayDate;
+            stockOrder.SellerNo = Convert.ToInt16(0); // Convert.ToInt16(this.txtSellerNo.Text.Trim());    // 營業員代碼
+            stockOrder.OrderNo = ""; // this.txtOrderNo.Text.Trim();   // 委託書編號
+            stockOrder.BasketNo = ""; // this.txtBasketNo.Text.Trim(); // BasketNo
+            return stockOrder;
+        }
         private void StockOrder(string stockCode, decimal level1AskPrice, int level1AskSize)
         {
             if (level1AskPrice == 0 || level1AskSize == 0) return;
@@ -198,20 +212,6 @@ namespace Core.Service
                 }
             }
         }
-        private StockOrder SetDefaultStockOrder()
-        {
-            StockOrder stockOrder = new StockOrder();
-            stockOrder.Identify = Convert.ToInt32(001); // 識別碼
-            stockOrder.Account = _stockAccount; // 現貨帳號
-            stockOrder.APCode = Convert.ToInt16(0);    // 交易市場別, 0:一般 2:盤後零股 4:盤中零股 7:盤後
-            stockOrder.TradeKind = Convert.ToInt16(0);  // 交易性質, 0:委託單 3:改量 4:取消 7:改價
-            stockOrder.OrderType = "0";   // 委託種類, 0:現貨 3:融資 4:融券 5借券(賣出) 6:借券(賣出) 9:現股當沖
-            stockOrder.TradeDate = _todayDate;
-            stockOrder.SellerNo = Convert.ToInt16(0); // Convert.ToInt16(this.txtSellerNo.Text.Trim());    // 營業員代碼
-            stockOrder.OrderNo = ""; // this.txtOrderNo.Text.Trim();   // 委託書編號
-            stockOrder.BasketNo = ""; // this.txtBasketNo.Text.Trim(); // BasketNo
-            return stockOrder;
-        }
         private void ProcessStockOrder(StockOrder stockOrder)
         {
             if (_hasStockOrder) return;
@@ -233,6 +233,15 @@ namespace Core.Service
             else
             {
                 _logger.Error($"SendStockOrder error. Stock code: {stockOrder.StkCode}, Buy or Sell: {stockOrder.BuySell}");
+            }
+        }
+        private void StockOrderHandler(string strResult)
+        {
+            string[] resultArray = strResult.Split(',');
+            if (!DateTime.TryParse(resultArray[5], out DateTime orderTime))
+            {
+                _logger.Error($"SendStockOrder error. Error message: {resultArray[resultArray.Length - 2]}, {resultArray[resultArray.Length - 1]}");
+                _hasStockOrder = false;
             }
         }
         private void RealReportHandler(string strResult)
