@@ -238,7 +238,10 @@ namespace Core.Service
         private void StockOrderHandler(string strResult)
         {
             string[] resultArray = strResult.Split(',');
-            if (string.IsNullOrEmpty(resultArray[4].Trim()) || !DateTime.TryParse(resultArray[5], out DateTime orderTime))
+            if (string.IsNullOrEmpty(resultArray[4].Trim()) || 
+                !DateTime.TryParse(resultArray[5], out DateTime orderTime) ||
+                !string.IsNullOrEmpty(resultArray[resultArray.Length - 2].Trim()) ||
+                !string.IsNullOrEmpty(resultArray[resultArray.Length - 1].Trim()))
             {
                 _logger.Error($"SendStockOrder error. Error message: {resultArray[resultArray.Length - 2]}, {resultArray[resultArray.Length - 1]}");
                 _hasStockOrder = false;

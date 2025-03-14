@@ -20,10 +20,10 @@ namespace Core.Service
         YuantaOneAPITrader objYuantaOneAPI = new YuantaOneAPITrader();
         private readonly enumEnvironmentMode _enumEnvironmentMode;
         private CancellationTokenSource _cts = new CancellationTokenSource();
-        private ConcurrentBag<int> _first5MinuteTickBag = new ConcurrentBag<int>();
+        private ConcurrentBag<int> _first15MinuteTickBag = new ConcurrentBag<int>();
         private BlockingQueue<FutureOrder> _futureOrderMessageQueue;
-        private int _first5MinuteHigh = 0;
-        private int _first5MinuteLow = 0;
+        private int _first15MinuteHigh = 0;
+        private int _first15MinuteLow = 0;
         private int _longProfitPoint = 0;
         private int _longStopLossPoint = 0;
         private int _shortProfitPoint = 0;
@@ -31,7 +31,7 @@ namespace Core.Service
         private string _orderNo = "";
         private bool _hasLongContract = false;
         private bool _hasShortContract = false;
-        private readonly TimeSpan _afterMarketOpen5Minute;
+        private readonly TimeSpan _afterMarketOpen15Minute;
         private readonly TimeSpan _beforeMarketClose10Minute;
         private readonly ILogger _logger;
         private readonly string _futureAccount;
@@ -70,10 +70,10 @@ namespace Core.Service
             _maxOrderQuantity = config.GetValue<int>("MaxOrderQuantity");
             _profitPoint = config.GetValue<int>("ProfitPoint");
             _stopLossPoint = config.GetValue<int>("StopLossPoint");
-            _first5MinuteHigh = config.GetValue<int>("First5MinuteHigh");
-            _first5MinuteLow = config.GetValue<int>("First5MinuteLow");
+            _first15MinuteHigh = config.GetValue<int>("First15MinuteHigh");
+            _first15MinuteLow = config.GetValue<int>("First15MinuteLow");
             SetExitPoint();
-            _afterMarketOpen5Minute = _targetFutureConfig.MarketOpenTime.Add(TimeSpan.FromMinutes(5));
+            _afterMarketOpen15Minute = _targetFutureConfig.MarketOpenTime.Add(TimeSpan.FromMinutes(15));
             _beforeMarketClose10Minute = _targetFutureConfig.MarketCloseTime.Subtract(TimeSpan.FromMinutes(10));
             _yuantaService = yuantaService;
             _futureOrderMessageQueue = new BlockingQueue<FutureOrder>(ProcessFutureOrder);
@@ -173,14 +173,14 @@ namespace Core.Service
                 return;
             }
             tickPrice = tickPrice / 1000;
-            if (tickTime < _afterMarketOpen5Minute && tickTime >= _targetFutureConfig.MarketOpenTime)
+            if (tickTime < _afterMarketOpen15Minute && tickTime >= _targetFutureConfig.MarketOpenTime)
             {
-                _first5MinuteTickBag.Add(tickPrice);
+                _first15MinuteTickBag.Add(tickPrice);
             }
-            if ((_first5MinuteHigh == 0 || _first5MinuteLow == 0) && tickTime >= _afterMarketOpen5Minute)
+            if ((_first15MinuteHigh == 0 || _first15MinuteLow == 0) && tickTime >= _afterMarketOpen15Minute)
             {
-                _first5MinuteHigh = _first5MinuteTickBag.Max();
-                _first5MinuteLow = _first5MinuteTickBag.Min();
+                _first15MinuteHigh = _first15MinuteTickBag.Max();
+                _first15MinuteLow = _first15MinuteTickBag.Min();
                 SetExitPoint();
             }
         }
@@ -195,14 +195,6 @@ namespace Core.Service
             futureOrder.SettlementMonth1 = Convert.ToInt32(_settlementMonth);               //商品年月1
             futureOrder.StrikePrice1 = 0;                                                   //屐約價1
             futureOrder.OrderQty1 = Convert.ToInt16(_maxOrderQuantity);                     //委託口數1
-            #region 組合單應填欄位
-            futureOrder.CommodityID2 = "";                                                  //商品名稱2
-            futureOrder.CallPut2 = "";                                                      //買賣權2
-            futureOrder.SettlementMonth2 = 0;                                               //商品年月2
-            futureOrder.StrikePrice2 = 0;                                                   //屐約價2                 
-            futureOrder.OrderQty2 = 0;                                                      //委託口數2
-            futureOrder.BuySell2 = "";                                                      //買賣別2
-            #endregion
             futureOrder.OpenOffsetKind = "2";                                               //新平倉碼, 0:新倉 1:平倉 2:自動                                          
             futureOrder.OrderCond = "";                                                     //委託條件, "":ROD 1:FOK 2:IOC
             futureOrder.DayTradeID = "Y";                                                   //當沖註記, Y:當沖  "":非當沖
@@ -211,12 +203,20 @@ namespace Core.Service
             futureOrder.TradeDate = _tradeDate;                                             //交易日期                            
             futureOrder.BasketNo = "";                                                      //BasketNo
             futureOrder.Session = "";                                                       //通路種類, 1:預約 "":盤中單
+            #region 組合單應填欄位
+            futureOrder.CommodityID2 = "";                                                  //商品名稱2
+            futureOrder.CallPut2 = "";                                                      //買賣權2
+            futureOrder.SettlementMonth2 = 0;                                               //商品年月2
+            futureOrder.StrikePrice2 = 0;                                                   //屐約價2                 
+            futureOrder.OrderQty2 = 0;                                                      //委託口數2
+            futureOrder.BuySell2 = "";                                                      //買賣別2
+            #endregion
             return futureOrder;                                                                             
         }
         private void FutureOrder(TimeSpan tickTime, int tickPrice)
         {
             if (tickTime == TimeSpan.Zero || tickPrice == 0) return;
-            if (_first5MinuteHigh == 0 || _first5MinuteLow == 0 || 
+            if (_first15MinuteHigh == 0 || _first15MinuteLow == 0 || 
                 _longProfitPoint == 0 || _longStopLossPoint == 0 || 
                 _shortProfitPoint == 0 || _shortStopLossPoint == 0) return;
             if (_hasLongContract)
@@ -243,18 +243,18 @@ namespace Core.Service
             }
             else if (string.IsNullOrEmpty(_orderNo) && tickTime < _targetFutureConfig.LastEntryTime)
             {
-                if (tickPrice > _first5MinuteHigh)
+                if (tickPrice > _first15MinuteHigh)
                 {
                     FutureOrder futureOrder = SetDefaultFutureOrder();
-                    futureOrder.Price = _first5MinuteHigh * 10000;                     //委託價格
+                    futureOrder.Price = _first15MinuteHigh * 10000;                     //委託價格
                     futureOrder.BuySell1 = EBuySellType.B.ToString();                 //買賣別, "B":買 "S":賣
                     futureOrder.OrderType = ((int)EFutureOrderType.限價).ToString();   //委託方式, 1:市價 2:限價 3:範圍市價
                     _futureOrderMessageQueue.Add(futureOrder);
                 }
-                else if (tickPrice < _first5MinuteLow)
+                else if (tickPrice < _first15MinuteLow)
                 {
                     FutureOrder futureOrder = SetDefaultFutureOrder();
-                    futureOrder.Price = _first5MinuteLow * 10000;                      //委託價格
+                    futureOrder.Price = _first15MinuteLow * 10000;                      //委託價格
                     futureOrder.BuySell1 = EBuySellType.S.ToString();                 //買賣別, "B":買 "S":賣
                     futureOrder.OrderType = ((int)EFutureOrderType.限價).ToString();   //委託方式, 1:市價 2:限價 3:範圍市價
                     _futureOrderMessageQueue.Add(futureOrder);
@@ -297,11 +297,11 @@ namespace Core.Service
         }
         private void SetExitPoint()
         {
-            if (_first5MinuteHigh == 0 || _first5MinuteLow == 0) return;
-            _longProfitPoint = _first5MinuteHigh + _profitPoint;
-            _longStopLossPoint = _first5MinuteHigh - _stopLossPoint;
-            _shortProfitPoint = _first5MinuteLow - _profitPoint;
-            _shortStopLossPoint = _first5MinuteLow + _stopLossPoint;
+            if (_first15MinuteHigh == 0 || _first15MinuteLow == 0) return;
+            _longProfitPoint = _first15MinuteHigh + _profitPoint;
+            _longStopLossPoint = _first15MinuteHigh - _stopLossPoint;
+            _shortProfitPoint = _first15MinuteLow - _profitPoint;
+            _shortStopLossPoint = _first15MinuteLow + _stopLossPoint;
         }
         private DateTime GetThirdWednesday(int year, int month)
         {
