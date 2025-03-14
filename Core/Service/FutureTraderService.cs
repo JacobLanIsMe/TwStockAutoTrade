@@ -133,7 +133,7 @@ namespace Core.Service
                         {
                             case "200.10.10.26":    //逐筆即時回報
                                 strResult = _yuantaService.FunRealReport_Out((byte[])objValue);
-                                //RealReportHandler(strResult);
+                                RealReportHandler(strResult);
                                 break;
                             case "210.10.40.10":    //訂閱個股分時明細
                                 strResult = _yuantaService.FunRealStocktick_Out((byte[])objValue);
@@ -303,6 +303,16 @@ namespace Core.Service
             {
                 _orderNo = orderNo;
             }
+        }
+        private void RealReportHandler(string strResult)
+        {
+            //string[] reportArray = strResult.Split(',');
+            //if (!int.TryParse(reportArray[1].Split(':')[1], out int reportType))
+            //{
+            //    _logger.Error("Report type error");
+            //}
+            //if (reportType != 51) return;
+
         }
         private void SubscribeFutureTick()
         {
