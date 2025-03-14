@@ -39,7 +39,7 @@ namespace Core.Service
             _tradeRepository = tradeRepository;
             _candidateRepository = candidateRepository;
             DateTime now = dateTimeService.GetTaiwanTime();
-            DateTime stopTime = now.Date.AddHours(13).AddMinutes(30);
+            DateTime stopTime = now.Date.AddHours(13).AddMinutes(25);
             TimeSpan delayTime = stopTime - now;
             _cts = delayTime > TimeSpan.Zero ? new CancellationTokenSource(delayTime) : new CancellationTokenSource();
             _todayDate = now.ToString("yyyy/MM/dd");
