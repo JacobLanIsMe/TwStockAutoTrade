@@ -101,7 +101,7 @@ namespace Core.Service
                 objYuantaOneAPI.Dispose();
             }
         }
-        
+
         void objApi_OnResponse(int intMark, uint dwIndex, string strIndex, object objHandle, object objValue)
         {
             string strResult = "";
@@ -121,6 +121,7 @@ namespace Core.Service
                                 break;
                             case "30.100.20.24"://期貨下單(新)
                                 strResult = _yuantaService.FunFutOrder_Out((byte[])objValue);
+                                FutureOrderHandler(strResult);
                                 break;
                             default:           //不在表列中的直接呈現訊息
                                 strResult = $"{strIndex},{objValue}";
@@ -211,13 +212,13 @@ namespace Core.Service
             futureOrder.OrderQty2 = 0;                                                      //委託口數2
             futureOrder.BuySell2 = "";                                                      //買賣別2
             #endregion
-            return futureOrder;                                                                             
+            return futureOrder;
         }
         private void FutureOrder(TimeSpan tickTime, int tickPrice)
         {
             if (tickTime == TimeSpan.Zero || tickPrice == 0) return;
-            if (_first15MinuteHigh == 0 || _first15MinuteLow == 0 || 
-                _longProfitPoint == 0 || _longStopLossPoint == 0 || 
+            if (_first15MinuteHigh == 0 || _first15MinuteLow == 0 ||
+                _longProfitPoint == 0 || _longStopLossPoint == 0 ||
                 _shortProfitPoint == 0 || _shortStopLossPoint == 0) return;
             if (_hasLongContract)
             {
@@ -284,6 +285,23 @@ namespace Core.Service
             else
             {
                 _logger.Error($"SendFutureOrder error. HasLongContract: {_hasLongContract}, HasShortContract: {_hasShortContract}, Buy or Sell: {futureOrder.BuySell1}");
+            }
+        }
+        private void FutureOrderHandler(string strResult)
+        {
+            string[] resultArray = strResult.Split(',');
+            string orderNo = resultArray[4].Trim();
+            if (string.IsNullOrEmpty(orderNo) ||
+                !DateTime.TryParse(resultArray[5], out DateTime orderTime) ||
+                !string.IsNullOrEmpty(resultArray[resultArray.Length - 2].Trim()) ||
+                !string.IsNullOrEmpty(resultArray[resultArray.Length - 1].Trim()))
+            {
+                _logger.Error($"FutureStockOrder error. Error message: {resultArray[resultArray.Length - 2]}, {resultArray[resultArray.Length - 1]}");
+                _orderNo = "";
+            }
+            else
+            {
+                _orderNo = orderNo;
             }
         }
         private void SubscribeFutureTick()
