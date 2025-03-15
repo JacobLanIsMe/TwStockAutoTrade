@@ -33,6 +33,7 @@ namespace Core.Service
         private bool _hasShortContract = false;
         private readonly TimeSpan _afterMarketOpen15Minute;
         private readonly TimeSpan _beforeMarketClose10Minute;
+        private readonly TimeSpan _eveningMarketCloseTime = TimeSpan.FromHours(5);
         private readonly ILogger _logger;
         private readonly string _futureAccount;
         private readonly string _futurePassword;
@@ -41,9 +42,10 @@ namespace Core.Service
         private readonly int _profitPoint;
         private readonly int _stopLossPoint;
         private readonly IYuantaService _yuantaService;
+        private readonly IDateTimeService _dateTimeService;
         private readonly string _targetCommodityId;
         private readonly string _settlementMonth;
-        private readonly string _tradeDate;
+        private readonly string _defaultOrderNo = "defaultOrderNo";
         private readonly Dictionary<string, string> _codeCommodityIdDict = new Dictionary<string, string>
         {
             { "TXF1", "FITX" },
@@ -56,27 +58,29 @@ namespace Core.Service
         {
             objYuantaOneAPI.OnResponse += new OnResponseEventHandler(objApi_OnResponse);
             string environment = config.GetValue<string>("Environment").ToUpper();
+            _yuantaService = yuantaService;
+            _dateTimeService = dateTimeService;
+            _futureOrderMessageQueue = new BlockingQueue<FutureOrder>(ProcessFutureOrder);
             _enumEnvironmentMode = environment == "PROD" ? enumEnvironmentMode.PROD : enumEnvironmentMode.UAT;
             _logger = logger;
             _futureAccount = _enumEnvironmentMode == enumEnvironmentMode.PROD ? Environment.GetEnvironmentVariable("FutureAccount", EnvironmentVariableTarget.Machine) : "S98875005091";
             _futurePassword = _enumEnvironmentMode == enumEnvironmentMode.PROD ? Environment.GetEnvironmentVariable("StockPassword", EnvironmentVariableTarget.Machine) : "1234";
-            DateTime now = dateTimeService.GetTaiwanTime();
-            DateTime thirdWednesday = GetThirdWednesday(now.Year, now.Month);
-            _settlementMonth = now.Day > thirdWednesday.Day ? now.AddMonths(1).ToString("yyyyMM") : now.ToString("yyyyMM");
-            _tradeDate = now.ToString("yyyy/MM/dd");
-            List<FutureConfig> futureConfigList = config.GetSection("TargetFuture").Get<List<FutureConfig>>();
-            bool isDay = now.Hour < 14 ? true : false;
-            _targetFutureConfig = now.Hour < 14 ? futureConfigList.First(x => x.IsDayMarket) : futureConfigList.First(x => !x.IsDayMarket);
             _maxOrderQuantity = config.GetValue<int>("MaxOrderQuantity");
             _profitPoint = config.GetValue<int>("ProfitPoint");
             _stopLossPoint = config.GetValue<int>("StopLossPoint");
+            _settlementMonth = GetSettlementMonth();
+            _targetFutureConfig = SetFutureConfig(config);
+            _afterMarketOpen15Minute = _targetFutureConfig.MarketOpenTime.Add(TimeSpan.FromMinutes(15));
+            _beforeMarketClose10Minute = _targetFutureConfig.MarketCloseTime.Subtract(TimeSpan.FromMinutes(10));
             _first15MinuteHigh = config.GetValue<int>("First15MinuteHigh");
             _first15MinuteLow = config.GetValue<int>("First15MinuteLow");
             SetExitPoint();
-            _afterMarketOpen15Minute = _targetFutureConfig.MarketOpenTime.Add(TimeSpan.FromMinutes(15));
-            _beforeMarketClose10Minute = _targetFutureConfig.MarketCloseTime.Subtract(TimeSpan.FromMinutes(10));
-            _yuantaService = yuantaService;
-            _futureOrderMessageQueue = new BlockingQueue<FutureOrder>(ProcessFutureOrder);
+            TimeSpan nowTimeSpan = _dateTimeService.GetTaiwanTime().TimeOfDay;
+            if (nowTimeSpan < _eveningMarketCloseTime)
+            {
+                nowTimeSpan = nowTimeSpan.Add(TimeSpan.FromHours(24));
+            }
+            if (nowTimeSpan >= _targetFutureConfig.MarketOpenTime && (_first15MinuteHigh == 0 || _first15MinuteLow == 0)) throw new Exception("The first 15 minute high and low can not be 0");
             if (!_codeCommodityIdDict.TryGetValue(_targetFutureConfig.FutureCode, out _targetCommodityId)) throw new Exception($"Can't find commodityId by code {_targetFutureConfig.FutureCode}");
         }
         public async Task Trade()
@@ -174,6 +178,10 @@ namespace Core.Service
                 return;
             }
             tickPrice = tickPrice / 1000;
+            if (tickTime <= _eveningMarketCloseTime)
+            {
+                tickTime = tickTime.Add(TimeSpan.FromHours(24));
+            }
             if (tickTime < _afterMarketOpen15Minute && tickTime >= _targetFutureConfig.MarketOpenTime)
             {
                 _first15MinuteTickBag.Add(tickPrice);
@@ -188,29 +196,29 @@ namespace Core.Service
         private FutureOrder SetDefaultFutureOrder()
         {
             FutureOrder futureOrder = new FutureOrder();
-            futureOrder.Identify = 001;                                                     //識別碼
-            futureOrder.Account = _futureAccount;                                           //期貨帳號
-            futureOrder.FunctionCode = 0;                                                   //功能別, 0:委託單 4:取消 5:改量 7:改價                     
-            futureOrder.CommodityID1 = _targetCommodityId;                                  //商品名稱1
-            futureOrder.CallPut1 = "";                                                      //買賣權1
-            futureOrder.SettlementMonth1 = Convert.ToInt32(_settlementMonth);               //商品年月1
-            futureOrder.StrikePrice1 = 0;                                                   //屐約價1
-            futureOrder.OrderQty1 = Convert.ToInt16(_maxOrderQuantity);                     //委託口數1
-            futureOrder.OpenOffsetKind = "2";                                               //新平倉碼, 0:新倉 1:平倉 2:自動                                          
-            futureOrder.OrderCond = "";                                                     //委託條件, "":ROD 1:FOK 2:IOC
-            futureOrder.DayTradeID = "Y";                                                   //當沖註記, Y:當沖  "":非當沖
-            futureOrder.SellerNo = 0;                                                       //營業員代碼                                            
-            futureOrder.OrderNo = "";                                                       //委託書編號           
-            futureOrder.TradeDate = _tradeDate;                                             //交易日期                            
-            futureOrder.BasketNo = "";                                                      //BasketNo
-            futureOrder.Session = "";                                                       //通路種類, 1:預約 "":盤中單
+            futureOrder.Identify = 001;                                                      //識別碼
+            futureOrder.Account = _futureAccount;                                            //期貨帳號
+            futureOrder.FunctionCode = 0;                                                    //功能別, 0:委託單 4:取消 5:改量 7:改價                     
+            futureOrder.CommodityID1 = _targetCommodityId;                                   //商品名稱1
+            futureOrder.CallPut1 = "";                                                       //買賣權1
+            futureOrder.SettlementMonth1 = Convert.ToInt32(_settlementMonth);                //商品年月1
+            futureOrder.StrikePrice1 = 0;                                                    //屐約價1
+            futureOrder.OrderQty1 = Convert.ToInt16(_maxOrderQuantity);                      //委託口數1
+            futureOrder.OpenOffsetKind = "2";                                                //新平倉碼, 0:新倉 1:平倉 2:自動                                          
+            futureOrder.OrderCond = "";                                                      //委託條件, "":ROD 1:FOK 2:IOC
+            futureOrder.DayTradeID = "Y";                                                    //當沖註記, Y:當沖  "":非當沖
+            futureOrder.SellerNo = 0;                                                        //營業員代碼                                            
+            futureOrder.OrderNo = "";                                                        //委託書編號           
+            futureOrder.TradeDate = _dateTimeService.GetTaiwanTime().ToString("yyyy/MM/dd"); //交易日期                            
+            futureOrder.BasketNo = "";                                                       //BasketNo
+            futureOrder.Session = "";                                                        //通路種類, 1:預約 "":盤中單
             #region 組合單應填欄位
-            futureOrder.CommodityID2 = "";                                                  //商品名稱2
-            futureOrder.CallPut2 = "";                                                      //買賣權2
-            futureOrder.SettlementMonth2 = 0;                                               //商品年月2
-            futureOrder.StrikePrice2 = 0;                                                   //屐約價2                 
-            futureOrder.OrderQty2 = 0;                                                      //委託口數2
-            futureOrder.BuySell2 = "";                                                      //買賣別2
+            futureOrder.CommodityID2 = "";                                                   //商品名稱2
+            futureOrder.CallPut2 = "";                                                       //買賣權2
+            futureOrder.SettlementMonth2 = 0;                                                //商品年月2
+            futureOrder.StrikePrice2 = 0;                                                    //屐約價2                 
+            futureOrder.OrderQty2 = 0;                                                       //委託口數2
+            futureOrder.BuySell2 = "";                                                       //買賣別2
             #endregion
             return futureOrder;
         }
@@ -261,7 +269,7 @@ namespace Core.Service
                     _futureOrderMessageQueue.Add(futureOrder);
                 }
             }
-            else if (!string.IsNullOrEmpty(_orderNo) && tickTime >= _targetFutureConfig.LastEntryTime)
+            else if (!string.IsNullOrEmpty(_orderNo) && _orderNo != _defaultOrderNo && tickTime >= _targetFutureConfig.LastEntryTime)
             {
                 FutureOrder futureOrder = SetDefaultFutureOrder();
                 futureOrder.Price = 0;
@@ -280,7 +288,7 @@ namespace Core.Service
             bool bResult = objYuantaOneAPI.SendFutureOrder(_futureAccount, new List<FutureOrder>() { futureOrder });
             if (bResult)
             {
-                _orderNo = "ordered";
+                _orderNo = _defaultOrderNo;
             }
             else
             {
@@ -330,6 +338,52 @@ namespace Core.Service
             _longStopLossPoint = _first15MinuteHigh - _stopLossPoint;
             _shortProfitPoint = _first15MinuteLow - _profitPoint;
             _shortStopLossPoint = _first15MinuteLow + _stopLossPoint;
+        }
+        private FutureConfig SetFutureConfig(IConfiguration config)
+        {
+            DateTime now = _dateTimeService.GetTaiwanTime();
+            List<FutureConfig> futureConfigList = config.GetSection("TargetFuture").Get<List<FutureConfig>>();
+            FutureConfig futureConfig = new FutureConfig();
+            if (now.Hour >= 5 && now.Hour < 14)
+            {
+                futureConfig = futureConfigList.First(x => x.MarketOpenTime.Hours >= 5 && x.MarketOpenTime.Hours < 14);
+            }
+            else if (now.Hour >= 14 && now.Hour < 21)
+            {
+                futureConfig = futureConfigList.First(x => x.MarketOpenTime.Hours >= 14 && x.MarketOpenTime.Hours < 21);
+            }
+            else
+            {
+                futureConfig = futureConfigList.First(x => x.MarketOpenTime.Hours >= 21);
+                futureConfig.MarketCloseTime = futureConfig.MarketCloseTime.Add(TimeSpan.FromHours(24));
+                // 取得美東時間（Eastern Time, ET），適用於紐約、華盛頓等
+                TimeZoneInfo easternTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time");
+                // 取得當前美東時間
+                DateTime currentEasternTime = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, easternTimeZone);
+                // 判斷是否為夏令時間
+                bool isDaylightSaving = easternTimeZone.IsDaylightSavingTime(currentEasternTime);
+                if (!isDaylightSaving)
+                {
+                    futureConfig.MarketOpenTime = futureConfig.MarketOpenTime.Add(TimeSpan.FromHours(1));
+                }
+            }
+            return futureConfig;
+        }
+        private string GetSettlementMonth()
+        {
+            DateTime now = _dateTimeService.GetTaiwanTime();
+            DateTime thirdWednesday = GetThirdWednesday(now.Year, now.Month);
+            string settlementMonth = "";
+            if (now.Day <= thirdWednesday.Day ||
+               (now.Day == thirdWednesday.Day + 1 && _targetFutureConfig.Period == EPeriod.Evening))
+            {
+                settlementMonth = now.ToString("yyyyMM");
+            }
+            else
+            {
+                settlementMonth = now.AddMonths(1).ToString("yyyyMM");
+            }
+            return settlementMonth;
         }
         private DateTime GetThirdWednesday(int year, int month)
         {

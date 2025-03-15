@@ -155,6 +155,7 @@
     <Compile Include="DataStructs\YuantaShareStructList.cs" />
     <Compile Include="Enum\EBuySellType.cs" />
     <Compile Include="Enum\EFutureOrderType.cs" />
+    <Compile Include="Enum\EPeriod.cs" />
     <Compile Include="HttpClientFactory\SimpleHttpClientFactory.cs" />
     <Compile Include="Model\BlockingQueue.cs" />
     <Compile Include="Model\FutureConfig.cs" />
