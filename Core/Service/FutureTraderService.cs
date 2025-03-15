@@ -178,7 +178,7 @@ namespace Core.Service
                 return;
             }
             tickPrice = tickPrice / 1000;
-            if (tickTime <= _eveningMarketCloseTime)
+            if (tickTime < _eveningMarketCloseTime)
             {
                 tickTime = tickTime.Add(TimeSpan.FromHours(24));
             }
