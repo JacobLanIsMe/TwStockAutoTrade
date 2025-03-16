@@ -285,7 +285,48 @@ namespace Core.Service
             if (!string.IsNullOrEmpty(_orderNo) && futureOrder.FunctionCode != 4) return;
             if (_hasLongContract && futureOrder.BuySell1 != EBuySellType.S.ToString()) return;
             if (_hasShortContract && futureOrder.BuySell1 != EBuySellType.B.ToString()) return;
-            bool bResult = objYuantaOneAPI.SendFutureOrder(_futureAccount, new List<FutureOrder>() { futureOrder });
+            bool isValidOrder = false;
+            if (string.IsNullOrEmpty(_orderNo))
+            {
+                if (_hasLongContract)
+                {
+                    if (futureOrder.BuySell1 == EBuySellType.S.ToString())
+                    {
+                        isValidOrder = true;
+                    }
+                    else
+                    {
+                        isValidOrder = false;
+                    }
+                }
+                else if (_hasShortContract)
+                {
+                    if (futureOrder.BuySell1 == EBuySellType.B.ToString())
+                    {
+                        isValidOrder = true;
+                    }
+                    else
+                    {
+                        isValidOrder = false;
+                    }
+                }
+                else
+                {
+                    isValidOrder = true;
+                }
+            }
+            else
+            {
+                if (_orderNo != _defaultOrderNo && _orderNo == futureOrder.OrderNo && futureOrder.FunctionCode == 4)
+                {
+                    isValidOrder = true;
+                }
+                else
+                {
+                    isValidOrder = false;
+                }
+            }
+                bool bResult = objYuantaOneAPI.SendFutureOrder(_futureAccount, new List<FutureOrder>() { futureOrder });
             if (bResult)
             {
                 _orderNo = _defaultOrderNo;
