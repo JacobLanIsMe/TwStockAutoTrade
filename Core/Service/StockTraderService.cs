@@ -18,7 +18,6 @@ namespace Core.Service
         YuantaOneAPITrader objYuantaOneAPI = new YuantaOneAPITrader();
         private List<StockTrade> _stockHoldingList = new List<StockTrade>();
         private List<StockCandidate> _stockCandidateList = new List<StockCandidate>();
-        private BlockingQueue<StockOrder> _stockOrderMessageQueue;
         private CancellationTokenSource _cts;
         private bool _hasStockOrder = false;
 
@@ -48,7 +47,6 @@ namespace Core.Service
             _yuantaService = yuantaService;
             _stockAccount = _enumEnvironmentMode == enumEnvironmentMode.PROD ? Environment.GetEnvironmentVariable("StockAccount", EnvironmentVariableTarget.Machine) : "S98875005091";
             _stockPassword = _enumEnvironmentMode == enumEnvironmentMode.PROD ? Environment.GetEnvironmentVariable("StockPassword", EnvironmentVariableTarget.Machine) : "1234";
-            _stockOrderMessageQueue = new BlockingQueue<StockOrder>(ProcessStockOrder);
         }
         public async Task Trade()
         {
@@ -187,7 +185,7 @@ namespace Core.Service
                     stockOrder.Time_in_force = "0";
                     stockOrder.Price = Convert.ToInt64(0);
                     stockOrder.OrderQty = trade.PurchasedLot;
-                    _stockOrderMessageQueue.Add(stockOrder);
+                    ProcessStockOrder(stockOrder);
                 }
             }
             else
@@ -208,23 +206,12 @@ namespace Core.Service
                     stockOrder.Time_in_force = "4";  // 委託效期, 0:ROD 3:IOC  4:FOK
                     stockOrder.Price = Convert.ToInt64(level1AskPrice * 10000);  // 委託價格
                     stockOrder.OrderQty = Convert.ToInt64(orderQty);    // 委託單位數
-                    _stockOrderMessageQueue.Add(stockOrder);
+                    ProcessStockOrder(stockOrder);
                 }
             }
         }
         private void ProcessStockOrder(StockOrder stockOrder)
         {
-            if (_hasStockOrder) return;
-            bool hasStockHolding = GetStockHoldingList().Any();
-            if (hasStockHolding)
-            {
-                if (stockOrder.BuySell != EBuySellType.S.ToString()) return;
-                if (!GetStockHoldingList().Any(x => x.StockCode == stockOrder.StkCode)) return;
-            }
-            else
-            {
-                if (stockOrder.BuySell != EBuySellType.B.ToString()) return;
-            }
             bool bResult = objYuantaOneAPI.SendStockOrder(_stockAccount, new List<StockOrder>() { stockOrder });
             if (bResult)
             {
@@ -358,33 +345,6 @@ namespace Core.Service
             watch.MarketNo = Convert.ToByte(enumMarketNo);      //填入查詢市場代碼
             watch.StockCode = stockCode;                     //填入查詢股票代碼
             objYuantaOneAPI.UnsubscribeWatchlist(new List<Watchlist>() { watch });
-        }
-
-
-
-
-
-        private void OrderTest()
-        {
-            StockOrder stockOrder = SetDefaultStockOrder();
-            stockOrder.StkCode = "2887";   // 股票代號
-            stockOrder.PriceFlag = "";   // 價格種類, H:漲停 -:平盤  L:跌停 " ":限價  M:市價單
-            stockOrder.BuySell = EBuySellType.B.ToString();   // 買賣別, B:買  S:賣
-            stockOrder.Time_in_force = "4";  // 委託效期, 0:ROD 3:IOC  4:FOK
-            stockOrder.Price = Convert.ToInt64(17.6 * 10000);  // 委託價格
-            stockOrder.OrderQty = 1;    // 委託單位數
-            _stockOrderMessageQueue.Add(stockOrder);
-        }
-        private void SellTest()
-        {
-            StockOrder stockOrder = SetDefaultStockOrder();
-            stockOrder.StkCode = "2887";
-            stockOrder.PriceFlag = "M";
-            stockOrder.BuySell = EBuySellType.S.ToString();
-            stockOrder.Time_in_force = "0";
-            stockOrder.Price = Convert.ToInt64(0);
-            stockOrder.OrderQty = 1;
-            _stockOrderMessageQueue.Add(stockOrder);
         }
     }
 }
