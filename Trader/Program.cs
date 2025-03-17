@@ -42,6 +42,7 @@ namespace Trader
             catch (Exception ex)
             {
                 Log.Error(ex.ToString());
+                Environment.Exit(1);
             }
         }
     }
