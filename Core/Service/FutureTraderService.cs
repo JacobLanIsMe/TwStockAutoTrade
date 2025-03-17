@@ -21,6 +21,7 @@ namespace Core.Service
         private readonly enumEnvironmentMode _enumEnvironmentMode;
         private CancellationTokenSource _cts = new CancellationTokenSource();
         private ConcurrentBag<int> _first15MinuteTickBag = new ConcurrentBag<int>();
+        private ConcurrentBag<FutureTrade> tradeList = new ConcurrentBag<FutureTrade>();
         private int _first15MinuteHigh = 0;
         private int _first15MinuteLow = 0;
         private int _longProfitPoint = 0;
