@@ -10,15 +10,9 @@ namespace Core.Model
     public class FutureConfig
     {
         public string FutureCode { get; set; }
+        public string CommodityId { get; set; }
         public EPeriod Period { get; set; }
         public TimeSpan MarketOpenTime { get; set; }
         public TimeSpan MarketCloseTime { get; set; }
-        public TimeSpan LastEntryTime
-        {
-            get
-            {
-                return MarketCloseTime.Subtract(TimeSpan.FromHours(2));
-            }
-        }
     }
 }
