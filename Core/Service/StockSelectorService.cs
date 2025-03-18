@@ -37,17 +37,29 @@ namespace Core.Service
         }
         public async Task SelectStock()
         {
+            List<StockCandidate> allStockInfoList = await GetStockInfoList();
+            if (!doesNeedUpdate(allStockInfoList)) return;
+            List<StockCandidate> candidateList = SelectCandidate(allStockInfoList);
+            Dictionary<string, StockCandidate> allStockInfoDict = allStockInfoList.ToDictionary(x => x.StockCode);
+            await UpdateCandidate(candidateList, allStockInfoDict);
+            await UpdateTrade(allStockInfoDict);
+        }
+
+        public async Task<List<StockCandidate>> SelectCrazyStock()
+        {
+            List<StockCandidate> allStockInfoList = await GetStockInfoList();
+            List<StockCandidate> candidateList = SelectCrazyCandidate(allStockInfoList);
+            return candidateList;
+        }
+        private async Task<List<StockCandidate>> GetStockInfoList()
+        {
             var twseStockListTask = GetTwseStockCode();
             var tpexStockListTask = GetTwotcStockCode();
             var twseStockList = await twseStockListTask;
             var tpexStockList = await tpexStockListTask;
             List<StockCandidate> allStockInfoList = twseStockList.Concat(tpexStockList).ToList();
             await GetDailyExchangeReport(allStockInfoList);
-            if (!doesNeedUpdate(allStockInfoList)) return;
-            List<StockCandidate> candidateList = SelectCandidate(allStockInfoList);
-            Dictionary<string, StockCandidate> allStockInfoDict = allStockInfoList.ToDictionary(x => x.StockCode);
-            await UpdateCandidate(candidateList, allStockInfoDict);
-            await UpdateTrade(allStockInfoDict);
+            return allStockInfoList;
         }
         private async Task<List<StockCandidate>> GetTwseStockCode()
         {
@@ -166,6 +178,36 @@ namespace Core.Service
             bool isPeriodCloseLowerThanGapUpLow = last4Close.Min() < gapUpTechData.Low;
             if (isPeriodCloseHigherThanGapUpHigh || isPeriodCloseLowerThanGapUpLow) return false;
             return true;
+        }
+        private bool IsCrazyCandidate(List<StockTechData> techDataList, out StockTechData stockTechData)
+        {
+            stockTechData = null;
+            if (techDataList.Count < 2) return false;
+            stockTechData = techDataList.First();
+            if (stockTechData.High == stockTechData.Close && 
+                stockTechData.Close / techDataList[1].Close > 1.095m &&
+                stockTechData.Volume >= 10000)
+            {
+                return true;
+            }
+            return false;
+        }
+        private List<StockCandidate> SelectCrazyCandidate(List<StockCandidate> stockList)
+        {
+            List<StockCandidate> candidateList = new List<StockCandidate>();
+            foreach (var i in stockList)
+            {
+                i.IsCandidate = IsCrazyCandidate(i.TechDataList, out StockTechData stockTechData);
+                if (!i.IsCandidate || stockTechData == null) continue;
+                i.GapUpHigh = stockTechData.High;
+                i.GapUpLow = stockTechData.Low;
+                i.SelectedDate = i.TechDataList.First().Date;
+                i.EntryPoint = GetEntryPoint(i.GapUpHigh);
+                i.StopLossPoint = GetStopLossPoint(i.GapUpHigh);
+                i.Last9TechData = JsonConvert.SerializeObject(i.TechDataList.Take(9));
+                candidateList.Add(i);
+            }
+            return candidateList;
         }
         private decimal GetEntryPoint(decimal gapUpHigh)
         {
