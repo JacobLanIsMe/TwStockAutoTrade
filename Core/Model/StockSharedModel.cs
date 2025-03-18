@@ -29,6 +29,18 @@ namespace Core.Model
                 return last9TechDataList.Select(x => x.Close).ToList();
             }
         }
+        public List<decimal> Last4Close
+        {
+            get
+            {
+                if (string.IsNullOrEmpty(Last9TechData))
+                {
+                    return new List<decimal>();
+                }
+                List<StockTechData> last9TechDataList = JsonConvert.DeserializeObject<List<StockTechData>>(Last9TechData);
+                return last9TechDataList.Take(4).Select(x => x.Close).ToList();
+            }
+        }
         public bool IsTradingStarted { get; set; }
     }
 }

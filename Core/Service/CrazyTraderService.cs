@@ -168,7 +168,7 @@ namespace Core.Service
                 StockTrade trade = stockHoldingList.FirstOrDefault(x => x.StockCode == stockCode);
                 if (trade == null || !trade.IsTradingStarted) return;
                 if ((level1AskPrice <= trade.PurchasePoint && level1AskPrice <= trade.StopLossPoint) ||
-                    (level1AskPrice > trade.PurchasePoint && level1AskPrice < (trade.Last9Close.Sum() + level1AskPrice) / 10))
+                    (level1AskPrice > trade.PurchasePoint && level1AskPrice < (trade.Last4Close.Sum() + level1AskPrice) / 5))
                 {
                     StockOrder stockOrder = SetDefaultStockOrder();
                     stockOrder.StkCode = stockCode;
@@ -200,6 +200,18 @@ namespace Core.Service
                     stockOrder.OrderQty = Convert.ToInt64(orderQty);    // 委託單位數
                     ProcessStockOrder(stockOrder);
                 }
+            }
+        }
+        private void ProcessStockOrder(StockOrder stockOrder)
+        {
+            bool bResult = objYuantaOneAPI.SendStockOrder(_stockAccount, new List<StockOrder>() { stockOrder });
+            if (bResult)
+            {
+                _hasStockOrder = true;
+            }
+            else
+            {
+                _logger.Error($"SendStockOrder error. Stock code: {stockOrder.StkCode}, Buy or Sell: {stockOrder.BuySell}");
             }
         }
         private void WatchListHandler(string strResult)
