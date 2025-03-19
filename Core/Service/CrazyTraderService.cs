@@ -24,13 +24,13 @@ namespace Core.Service
         private Dictionary<string, StockCandidate> _stockCandidateDict = new Dictionary<string, StockCandidate>();
         private readonly IYuantaService _yuantaService;
         private readonly ITradeRepository _tradeRepository;
+        private readonly ICandidateRepository _candidateRepository;
         private readonly ILogger _logger;
-        private readonly IStockSelectorService _stockSelectorService;
         private readonly string _stockAccount;
         private readonly string _stockPassword;
         private readonly string _todayDate;
         private readonly int _maxAmountPerStock;
-        public CrazyTraderService(IConfiguration config, IDateTimeService dateTimeService, IYuantaService yuantaService, ILogger logger, IStockSelectorService stockSelectorService, ITradeRepository tradeRepository)
+        public CrazyTraderService(IConfiguration config, IDateTimeService dateTimeService, IYuantaService yuantaService, ILogger logger, ITradeRepository tradeRepository, ICandidateRepository candidateRepository)
         {
             string environment = config.GetValue<string>("Environment").ToUpper();
             _maxAmountPerStock = config.GetValue<int>("MaxAmountPerStock");
@@ -45,14 +45,14 @@ namespace Core.Service
             _stockPassword = _enumEnvironmentMode == enumEnvironmentMode.PROD ? Environment.GetEnvironmentVariable("StockPassword", EnvironmentVariableTarget.Machine) : "1234";
             _yuantaService = yuantaService;
             _logger = logger;
-            _stockSelectorService = stockSelectorService;
             _tradeRepository = tradeRepository;
+            _candidateRepository = candidateRepository;
         }
         public async Task Trade()
         {
             try
             {
-                _stockCandidateDict = (await _stockSelectorService.SelectCrazyStock()).ToDictionary(x => x.StockCode);
+                _stockCandidateDict = (await _candidateRepository.GetActiveCrazyCandidate()).ToDictionary(x => x.StockCode);
                 _stockHoldingList = await _tradeRepository.GetStockHolding();
                 if (!_stockCandidateDict.Any() && !_stockHoldingList.Any()) return;
                 objYuantaOneAPI.Open(_enumEnvironmentMode);

@@ -30,7 +30,6 @@ namespace CrazyTrader
                 .AddSingleton<ILogger>(Log.Logger)
                 .AddSingleton<ICrazyTraderService, CrazyTraderService>()
                 .AddSingleton<IDateTimeService, DateTimeService>()
-                .AddSingleton<IStockSelectorService, StockSelectorService>()
                 .AddSingleton<ICandidateRepository, CandidateRepository>()
                 .AddSingleton<ITradeRepository, TradeRepository>()
                 .AddSingleton<IYuantaService, YuantaService>()

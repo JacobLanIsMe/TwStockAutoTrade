@@ -35,6 +35,18 @@ namespace Core.Repository
             _logger.Information("Get candidate finished.");
             return result.ToList();
         }
+        public async Task<List<StockCandidate>> GetActiveCrazyCandidate()
+        {
+            _logger.Information("Get candidate started.");
+            string sqlCommand = $@"SELECT * FROM [dbo].[CrazyCandidate] WHERE IsDeleted = 0";
+            IEnumerable<StockCandidate> result;
+            using (SqlConnection sqlConnection = new SqlConnection(_dbConnectionString))
+            {
+                result = await sqlConnection.QueryAsync<StockCandidate>(sqlCommand);
+            }
+            _logger.Information("Get candidate finished.");
+            return result.ToList();
+        }
         public async Task Update(List<Guid> candidateToDeleteList, List<StockCandidate> candidateToUpdateList, List<StockCandidate> candidateToInsertList)
         {
             _logger.Information("Update candidate started.");
