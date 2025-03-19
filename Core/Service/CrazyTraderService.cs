@@ -30,7 +30,6 @@ namespace Core.Service
         private readonly string _stockPassword;
         private readonly string _todayDate;
         private readonly int _maxAmountPerStock;
-        private TimeSpan _orderTime = TimeSpan.Zero;
         public CrazyTraderService(IConfiguration config, IDateTimeService dateTimeService, IYuantaService yuantaService, ILogger logger, ITradeRepository tradeRepository, ICandidateRepository candidateRepository)
         {
             string environment = config.GetValue<string>("Environment").ToUpper();
