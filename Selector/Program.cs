@@ -5,6 +5,7 @@ using Core.Service.Interface;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
+using System;
 using System.IO;
 using System.Runtime.Remoting.Messaging;
 using System.Threading.Tasks;
@@ -30,7 +31,14 @@ namespace Selector
                 .AddSingleton<ITradeRepository, TradeRepository>()
                 .BuildServiceProvider();
             var getStockInfoService = serviceProvider.GetRequiredService<IStockSelectorService>();
-            Task.Run(async () => await getStockInfoService.SelectStock()).Wait();
+            try
+            {
+                Task.Run(async () => await getStockInfoService.SelectStock()).Wait();
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex.ToString());
+            }
         }
     }
 }
