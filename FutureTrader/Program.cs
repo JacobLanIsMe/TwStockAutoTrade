@@ -33,12 +33,11 @@ namespace FutureTrader
             var futureTraderService = serviceProvider.GetRequiredService<IFutureTraderService>();
             try
             {
-                Task.Run(async () => await futureTraderService.Trade()).GetAwaiter().GetResult();
+                Task.Run(async () => await futureTraderService.Trade()).Wait();
             }
             catch (Exception ex)
             {
                 Log.Error(ex.ToString());
-                Environment.Exit(1);
             }
         }
     }

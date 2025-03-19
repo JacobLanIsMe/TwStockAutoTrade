@@ -37,12 +37,11 @@ namespace CrazyTrader
             var crazyTraderService = serviceProvider.GetRequiredService<ICrazyTraderService>();
             try
             {
-                Task.Run(async () => await crazyTraderService.Trade()).GetAwaiter().GetResult();
+                Task.Run(async () => await crazyTraderService.Trade()).Wait();
             }
             catch (Exception ex)
             {
                 Log.Error(ex.ToString());
-                Environment.Exit(1);
             }
         }
     }

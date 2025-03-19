@@ -37,12 +37,11 @@ namespace Trader
             var stockTraderService = serviceProvider.GetRequiredService<IStockTraderService>();
             try
             {
-                Task.Run(async () => await stockTraderService.Trade()).GetAwaiter().GetResult();
+                Task.Run(async () => await stockTraderService.Trade()).Wait();
             }
             catch (Exception ex)
             {
                 Log.Error(ex.ToString());
-                Environment.Exit(1);
             }
         }
     }
