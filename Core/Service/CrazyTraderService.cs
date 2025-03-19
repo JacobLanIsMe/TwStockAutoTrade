@@ -30,6 +30,7 @@ namespace Core.Service
         private readonly string _stockPassword;
         private readonly string _todayDate;
         private readonly int _maxAmountPerStock;
+        private TimeSpan _orderTime = TimeSpan.Zero;
         public CrazyTraderService(IConfiguration config, IDateTimeService dateTimeService, IYuantaService yuantaService, ILogger logger, ITradeRepository tradeRepository, ICandidateRepository candidateRepository)
         {
             string environment = config.GetValue<string>("Environment").ToUpper();
@@ -109,6 +110,9 @@ namespace Core.Service
                             case "200.10.10.26":    //逐筆即時回報
                                 strResult = _yuantaService.FunRealReport_Out((byte[])objValue);
                                 RealReportHandler(strResult);
+                                break;
+                            case "200.10.10.27":    //逐筆即時回報彙總
+                                strResult = _yuantaService.FunRealReportMerge_Out((byte[])objValue);
                                 break;
                             case "210.10.70.11":    //Watchlist報價表(指定欄位)
                                 strResult = _yuantaService.FunRealWatchlist_Out((byte[])objValue);

@@ -343,6 +343,100 @@ namespace Core.Service
             return strResult;
         }
         /// <summary>
+        /// 即時回報彙總(訂閱結果)
+        /// </summary>
+        /// <param name="abyData"></param>
+        /// <returns></returns>
+        public string FunRealReportMerge_Out(byte[] abyData)
+        {
+            string strResult = "";
+            try
+            {
+                RR_RealReportMerge.ParentStruct_Out struParentOut = new RR_RealReportMerge.ParentStruct_Out();
+                YuantaDataHelper dataGetter = new YuantaDataHelper(enumLng);
+                dataGetter.OutMsgLoad(abyData);
+
+                strResult += "===============\r\n即時回報彙總(訂閱結果)\r\n===============\r\n";
+
+                strResult += dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyAccount)) + ",";
+
+                strResult += String.Format("{0}", dataGetter.GetByte()) + ",";
+
+                strResult += dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyOrderNo)) + ",";
+
+                strResult += String.Format("{0}", dataGetter.GetByte()) + ",";
+
+                strResult += dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyCompanyNo)) + ",";
+
+                TYuantaDate yuantaDate = dataGetter.GetTYuantaDate();
+                strResult += String.Format("{0}/{1}/{2}", yuantaDate.ushtYear, yuantaDate.bytMon, yuantaDate.bytDay) + ",";
+
+                TYuantaTime yuantaTime = dataGetter.GetTYuantaTime();
+                strResult += String.Format("{0}:{1}:{2}.{3}", yuantaTime.bytHour, yuantaTime.bytMin, yuantaTime.bytSec, yuantaTime.ushtMSec) + ",";
+
+                strResult += dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyOrderType)) + ",";
+
+                strResult += dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyBS)) + ",";
+
+                strResult += dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyOrderPrice)) + ",";
+
+                strResult += dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyTouchPrice)) + ",";
+
+                strResult += dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyLastDealPrice)) + ",";
+
+                strResult += dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyAvgDealPrice)) + ",";
+
+                strResult += String.Format("{0}", dataGetter.GetInt()) + ",";
+
+                strResult += String.Format("{0}", dataGetter.GetInt()) + ",";
+
+                strResult += String.Format("{0}", dataGetter.GetInt()) + ",";
+
+                strResult += dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyOpenOffsetKind)) + ",";
+
+                strResult += dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyDayTrade)) + ",";
+
+                strResult += dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyOrderCond)) + ",";
+
+                strResult += dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyOrderErrorNo)) + ",";
+
+                strResult += String.Format("{0}", dataGetter.GetByte()) + ",";
+
+                strResult += String.Format("{0}", dataGetter.GetShort()) + ",";
+
+                strResult += String.Format("{0}", dataGetter.GetByte()) + ",";
+
+                strResult += dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyCompanyName)) + ",";
+
+                strResult += dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyTradeCode)) + ",";
+
+                strResult += String.Format("{0}", dataGetter.GetUInt()) + ",";
+
+                strResult += dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyBasketNo)) + ",";
+
+                strResult += String.Format("{0}", dataGetter.GetByte()) + ",";
+
+                strResult += String.Format("{0}", dataGetter.GetByte()) + ",";
+
+                strResult += String.Format("{0}", dataGetter.GetByte()) + ",";
+
+                strResult += dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyBelongStkCode)) + ",";
+
+                strResult += dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyPriceType)) + ",";
+
+                strResult += dataGetter.GetStr(Marshal.SizeOf(struParentOut.abyStkErrCode));
+
+                //----------
+                strResult += "\r\n";
+
+            }
+            catch
+            {
+                strResult = "";
+            }
+            return strResult;
+        }
+        /// <summary>
         /// 現貨下單 回應
         /// </summary>
         /// <param name="abyData"></param>
