@@ -68,5 +68,31 @@ namespace Core.Repository
             }
             _logger.Information("Update candidate finished.");
         }
+        public async Task UpdateCrazyCandidate(List<StockCandidate> candidateToInsertList)
+        {
+            _logger.Information("Update crazy candidate started.");
+            DateTime deletedDate = _dateTimeService.GetTaiwanTime();
+            string deleteSqlCommand = @"UPDATE [dbo].[CrazyCandidate] SET [IsDeleted] = 1, [DeletedDate] = @DeletedDate WHERE [IsDeleted] = 0";
+            string insertSqlCommand = @"INSERT INTO [dbo].[CrazyCandidate] 
+                                        ([Market], [StockCode], [CompanyName], [EntryPoint], [StopLossPoint], [SelectedDate], [Last9TechData])
+                                        VALUES
+                                        (@Market, @StockCode, @CompanyName, @EntryPoint, @StopLossPoint, @SelectedDate, @Last9TechData)";
+            using (SqlConnection sqlConnection = new SqlConnection(_dbConnectionString))
+            {
+                await sqlConnection.OpenAsync();
+                using (var transaction = sqlConnection.BeginTransaction())
+                {
+                    // Delete old crazy candidates
+                    await sqlConnection.ExecuteAsync(deleteSqlCommand, new { DeletedDate = deletedDate }, transaction: transaction);
+                    // Insert new crazy candidates
+                    if (candidateToInsertList.Any())
+                    {
+                        await sqlConnection.ExecuteAsync(insertSqlCommand, candidateToInsertList, transaction: transaction);
+                    }
+                    transaction.Commit();
+                }
+            }
+            _logger.Information("Update crazy candidate finished.");
+        } 
     }
 }
