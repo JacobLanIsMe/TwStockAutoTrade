@@ -169,7 +169,7 @@ namespace Core.Service
         }
         private void StockOrder(string stockCode, decimal level1AskPrice, int level1AskSize)
         {
-            if (level1AskPrice == 0 || level1AskSize == 0) return;
+            if (level1AskPrice == 0 || level1AskSize == 0 || _hasStockOrder) return;
             List<StockTrade> stockHoldingList = GetStockHoldingList();
             if (stockHoldingList.Any())
             {
@@ -190,7 +190,6 @@ namespace Core.Service
             }
             else
             {
-                if (_hasStockOrder) return;
                 StockCandidate candidate = _stockCandidateList.FirstOrDefault(x => x.StockCode == stockCode);
                 if (candidate == null || !candidate.IsTradingStarted) return;
                 int orderQty = (int)(tradeConfig.MaxAmountPerStock / (candidate.EntryPoint * 1000));
