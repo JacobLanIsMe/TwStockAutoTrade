@@ -43,9 +43,8 @@ namespace Core.Service
             List<StockCandidate> crazyCandidateList = SelectCrazyCandidate(allStockInfoList);
             Dictionary<string, StockCandidate> allStockInfoDict = allStockInfoList.ToDictionary(x => x.StockCode);
             await UpdateCandidate(candidateList, allStockInfoDict);
-            await _candidateRepository.UpdateCrazyCandidate(crazyCandidateList);
             await UpdateTrade(allStockInfoDict);
-
+            await _candidateRepository.UpdateCrazyCandidate(crazyCandidateList);
         }
 
         public async Task<List<StockCandidate>> SelectCrazyStock()
