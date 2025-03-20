@@ -199,11 +199,12 @@ namespace Core.Service
         private bool IsCrazyCandidate(List<StockTechData> techDataList, out StockTechData stockTechData)
         {
             stockTechData = null;
-            if (techDataList.Count < 2) return false;
+            if (techDataList.Count < 5) return false;
             stockTechData = techDataList.First();
             if (stockTechData.High == stockTechData.Close &&
                 stockTechData.Close / techDataList[1].Close > 1.095m &&
-                stockTechData.Volume >= 10000)
+                stockTechData.Volume >= 5000 &&
+                stockTechData.Close / techDataList.Take(5).Select(x => x.Close).Average() <= 1.1m)
             {
                 return true;
             }
@@ -241,13 +242,13 @@ namespace Core.Service
         private decimal GetStopLossPoint(decimal gapUpHigh)
         {
             decimal tick = 0;
-            if (gapUpHigh <= 10) 
+            if (gapUpHigh <= 10)
             {
                 tick = 0.01m;
             }
             else if (gapUpHigh <= 50)
             {
-               tick = 0.05m;
+                tick = 0.05m;
             }
             else if (gapUpHigh <= 100)
             {
