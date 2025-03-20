@@ -201,10 +201,12 @@ namespace Core.Service
             stockTechData = null;
             if (techDataList.Count < 5) return false;
             stockTechData = techDataList.First();
+            decimal ma5 = techDataList.Take(5).Average(x => x.Close);
             if (stockTechData.High == stockTechData.Close &&
                 stockTechData.Close / techDataList[1].Close > 1.095m &&
                 stockTechData.Volume >= 5000 &&
-                stockTechData.Close / techDataList.Take(5).Select(x => x.Close).Average() <= 1.1m)
+                stockTechData.Close >= ma5 &&
+                stockTechData.Close / ma5 <= 1.1m)
             {
                 return true;
             }
