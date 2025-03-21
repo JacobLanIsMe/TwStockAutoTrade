@@ -250,7 +250,7 @@ namespace Core.Service
                 }
                 else if (tickTime < _lastEntryTime)
                 {
-                    if (tickPrice > _first15MinuteHigh)
+                    if (tickPrice > _first15MinuteHigh + 10)
                     {
                         _orderNo = _defaultOrderNo;
                         FutureOrder futureOrder = SetDefaultFutureOrder();
@@ -259,7 +259,7 @@ namespace Core.Service
                         futureOrder.OrderType = ((int)EFutureOrderType.限價).ToString();   //委託方式, 1:市價 2:限價 3:範圍市價
                         ProcessFutureOrder(futureOrder);
                     }
-                    else if (tickPrice < _first15MinuteLow)
+                    else if (tickPrice < _first15MinuteLow - 10)
                     {
                         _orderNo = _defaultOrderNo;
                         FutureOrder futureOrder = SetDefaultFutureOrder();
