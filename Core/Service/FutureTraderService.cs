@@ -184,7 +184,7 @@ namespace Core.Service
                 _first15MinuteLow = _first15MinuteTickBag.Min();
                 SetExitPoint();
             }
-            if (!_hitProfitPoint && (tickPrice >= _longProfitPoint || tickPrice <= _shortProfitPoint))
+            if (!_hitProfitPoint && (tickPrice > _longProfitPoint || tickPrice < _shortProfitPoint))
             {
                 _hitProfitPoint = true;
             }
@@ -232,7 +232,7 @@ namespace Core.Service
             {
                 if (_hasLongContract)
                 {
-                    if (tickPrice >= _longProfitPoint || tickPrice <= _longStopLossPoint || tickTime >= _beforeMarketClose10Minute)
+                    if (tickPrice > _longProfitPoint || tickPrice < _longStopLossPoint || tickTime >= _beforeMarketClose10Minute)
                     {
                         FutureOrder futureOrder = SetDefaultFutureOrder();
                         futureOrder.Price = tickPrice * 10000;                               //委託價格
@@ -243,7 +243,7 @@ namespace Core.Service
                 }
                 else if (_hasShortContract)
                 {
-                    if (tickPrice <= _shortProfitPoint && tickPrice >= _shortStopLossPoint || tickTime >= _beforeMarketClose10Minute)
+                    if (tickPrice < _shortProfitPoint && tickPrice > _shortStopLossPoint || tickTime >= _beforeMarketClose10Minute)
                     {
                         _orderNo = _defaultOrderNo;
                         FutureOrder futureOrder = SetDefaultFutureOrder();
