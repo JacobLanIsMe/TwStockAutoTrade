@@ -31,6 +31,7 @@ namespace Core.Service
         private string _orderNo = "";
         private bool _hasLongContract = false;
         private bool _hasShortContract = false;
+        private bool _hitProfitPoint = false;
         private readonly TimeSpan _afterMarketOpen15Minute;
         private readonly TimeSpan _beforeMarketClose10Minute;
         private readonly TimeSpan _lastEntryTime;
@@ -183,7 +184,11 @@ namespace Core.Service
                 _first15MinuteLow = _first15MinuteTickBag.Min();
                 SetExitPoint();
             }
-            if (tickTime >= _lastEntryTime && string.IsNullOrEmpty(_orderNo) && !_hasLongContract && !_hasShortContract)
+            if (!_hitProfitPoint && (tickPrice >= _longProfitPoint || tickPrice <= _shortProfitPoint))
+            {
+                _hitProfitPoint = true;
+            }
+            if (string.IsNullOrEmpty(_orderNo) && !_hasLongContract && !_hasShortContract && (tickTime >= _lastEntryTime || _hitProfitPoint))
             {
                 _cts.Cancel();
             }
