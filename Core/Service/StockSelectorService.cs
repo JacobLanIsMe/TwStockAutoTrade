@@ -164,7 +164,8 @@ namespace Core.Service
             gapUpTechData = null;
             if (techDataList.Count < 60) return false;
             gapUpTechData = techDataList[4];
-            if (gapUpTechData.Low <= techDataList[5].High) return false;
+            StockTechData prevGapUpTechData = techDataList[5];
+            if (gapUpTechData.Low < prevGapUpTechData.High) return false;
             decimal ma60 = techDataList.Take(60).Average(x => x.Close);
             if (gapUpTechData.High / ma60 > (decimal)1.1) return false;
             double mv5 = techDataList.Take(5).Average(x => x.Volume);
@@ -177,8 +178,8 @@ namespace Core.Service
             if (gapUpTechData.Close < gapUpMa5 || gapUpTechData.Close < gapUpMa10 || gapUpTechData.Close < gapUpMa20) return false;
             List<decimal> last4Close = techDataList.Take(4).Select(x => x.Close).ToList();
             bool isPeriodCloseHigherThanGapUpHigh = last4Close.Max() > gapUpTechData.High;
-            bool isPeriodCloseLowerThanGapUpLow = last4Close.Min() < gapUpTechData.Low;
-            if (isPeriodCloseHigherThanGapUpHigh || isPeriodCloseLowerThanGapUpLow) return false;
+            bool isPeriodCloseLowerThanPrevGapUpHigh = last4Close.Min() < prevGapUpTechData.High;
+            if (isPeriodCloseHigherThanGapUpHigh || isPeriodCloseLowerThanPrevGapUpHigh) return false;
             return true;
         }
         private List<StockCandidate> SelectCrazyCandidate(List<StockCandidate> stockList)
