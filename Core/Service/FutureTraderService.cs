@@ -184,7 +184,7 @@ namespace Core.Service
                 _first15MinuteLow = _first15MinuteTickBag.Min();
                 SetExitPoint();
             }
-            if (!_hitProfitPoint && (tickPrice > _longProfitPoint || tickPrice < _shortProfitPoint))
+            if (!_hitProfitPoint && ((_longProfitPoint != 0 && tickPrice > _longProfitPoint) || (_shortProfitPoint != 0 && tickPrice < _shortProfitPoint)))
             {
                 _hitProfitPoint = true;
             }
@@ -277,7 +277,7 @@ namespace Core.Service
             }
             else
             {
-                if (_orderNo != _defaultOrderNo && tickTime >= _lastEntryTime)
+                if (_orderNo != _defaultOrderNo && (tickTime >= _lastEntryTime || _hitProfitPoint))
                 {
                     FutureOrder futureOrder = SetDefaultFutureOrder();
                     futureOrder.Price = 0;
