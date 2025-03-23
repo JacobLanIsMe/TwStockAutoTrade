@@ -245,7 +245,6 @@ namespace Core.Service
                 {
                     if (tickPrice < _shortProfitPoint && tickPrice > _shortStopLossPoint || tickTime >= _beforeMarketClose10Minute)
                     {
-                        _orderNo = _defaultOrderNo;
                         FutureOrder futureOrder = SetDefaultFutureOrder();
                         futureOrder.Price = tickPrice * 10000;
                         futureOrder.BuySell1 = EBuySellType.B.ToString();
@@ -257,7 +256,6 @@ namespace Core.Service
                 {
                     if (tickPrice > _first15MinuteHigh + 10)
                     {
-                        _orderNo = _defaultOrderNo;
                         FutureOrder futureOrder = SetDefaultFutureOrder();
                         futureOrder.Price = _first15MinuteHigh * 10000;                     //委託價格
                         futureOrder.BuySell1 = EBuySellType.B.ToString();                 //買賣別, "B":買 "S":賣
@@ -266,7 +264,6 @@ namespace Core.Service
                     }
                     else if (tickPrice < _first15MinuteLow - 10)
                     {
-                        _orderNo = _defaultOrderNo;
                         FutureOrder futureOrder = SetDefaultFutureOrder();
                         futureOrder.Price = _first15MinuteLow * 10000;                      //委託價格
                         futureOrder.BuySell1 = EBuySellType.S.ToString();                 //買賣別, "B":買 "S":賣
