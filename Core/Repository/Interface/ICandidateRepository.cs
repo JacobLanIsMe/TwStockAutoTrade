@@ -9,7 +9,7 @@ namespace Core.Repository.Interface
     {
         Task<List<StockCandidate>> GetActiveCandidate();
         Task<List<StockCandidate>> GetActiveCrazyCandidate();
-        Task Update(List<Guid> candidateToDeleteList, List<StockCandidate> candidateToUpdateList, List<StockCandidate> candidateToInsertList);
-        Task UpdateCrazyCandidate(List<StockCandidate> candidateToInsertList);
+        Task UpdateCandidate(List<Guid> candidateToDeleteList, List<StockCandidate> candidateToUpdateList, List<StockCandidate> candidateToInsertList);
+        Task UpdateCrazyCandidate(List<Guid> candidateToDeleteList, List<StockCandidate> candidateToUpdateList, List<StockCandidate> candidateToInsertList);
     }
 }

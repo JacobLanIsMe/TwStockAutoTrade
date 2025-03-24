@@ -44,7 +44,7 @@ namespace Core.Service
             Dictionary<string, StockCandidate> allStockInfoDict = allStockInfoList.ToDictionary(x => x.StockCode);
             await UpdateCandidate(candidateList, allStockInfoDict);
             await UpdateTrade(allStockInfoDict);
-            await _candidateRepository.UpdateCrazyCandidate(crazyCandidateList);
+            await UpdateCrazyCandidate(crazyCandidateList, allStockInfoDict);
         }
 
         public async Task<List<StockCandidate>> SelectCrazyStock()
@@ -200,12 +200,23 @@ namespace Core.Service
         private bool IsCrazyCandidate(List<StockTechData> techDataList, out StockTechData stockTechData)
         {
             stockTechData = null;
-            if (techDataList.Count < 5) return false;
+            if (techDataList.Count < 20) return false;
             stockTechData = techDataList.First();
             decimal ma5 = techDataList.Take(5).Average(x => x.Close);
-            if (stockTechData.High == stockTechData.Close &&
+            double privMv5 = techDataList.Skip(1).Take(5).Average(x => x.Volume);
+            bool fitVolumeAlready = false;
+            for (int i = 1; i < 6; i++)
+            {
+                if (techDataList[i].Volume >= techDataList.Skip(i + 1).Take(5).Average(x => x.Volume) * 5)
+                {
+                    fitVolumeAlready = true;
+                    break;
+                }
+            }
+            if (!fitVolumeAlready &&
+                stockTechData.Close == stockTechData.High &&
                 stockTechData.Close / techDataList[1].Close > 1.095m &&
-                stockTechData.Volume >= 5000 &&
+                stockTechData.Volume >= privMv5 * 5 &&
                 stockTechData.Close >= ma5 &&
                 stockTechData.Close / ma5 <= 1.1m)
             {
@@ -271,6 +282,40 @@ namespace Core.Service
             }
             return gapUpHigh - tick;
         }
+        private async Task UpdateCrazyCandidate(List<StockCandidate> candidateToInsertList, Dictionary<string, StockCandidate> allStockInfoDict)
+        {
+            List<StockCandidate> activeCrazyCandidateList = await _candidateRepository.GetActiveCrazyCandidate();
+            Dictionary<string, StockCandidate> candidateDict = candidateToInsertList.ToDictionary(x => x.StockCode);
+            List<Guid> candidateToDeleteList = new List<Guid>();
+            List<StockCandidate> candidateToUpdateList = new List<StockCandidate>();
+            foreach (var i in activeCrazyCandidateList)
+            {
+                if (candidateDict.ContainsKey(i.StockCode))
+                {
+                    candidateToDeleteList.Add(i.Id);
+                    continue;
+                }
+                if (!allStockInfoDict.TryGetValue(i.StockCode, out StockCandidate stock))
+                {
+                    candidateToDeleteList.Add(i.Id);
+                    continue;
+                }
+                if (stock.TechDataList.Count < 9)
+                {
+                    candidateToDeleteList.Add(i.Id);
+                    continue;
+                }
+                decimal todayClose = stock.TechDataList.First().Close;
+                if (todayClose < stock.TechDataList.Take(5).Average(x => x.Close))
+                {
+                    candidateToDeleteList.Add(i.Id);
+                    continue;
+                }
+                i.Last9TechData = JsonConvert.SerializeObject(stock.TechDataList.Take(9));
+                candidateToUpdateList.Add(i);
+            }
+            await _candidateRepository.UpdateCrazyCandidate(candidateToDeleteList, candidateToUpdateList, candidateToInsertList);
+        }
         private async Task UpdateCandidate(List<StockCandidate> candidateToInsertList, Dictionary<string, StockCandidate> allStockInfoDict)
         {
             List<StockCandidate> activeCandidateList = await _candidateRepository.GetActiveCandidate();
@@ -317,7 +362,7 @@ namespace Core.Service
                 i.Last9TechData = JsonConvert.SerializeObject(stock.TechDataList.Take(9));
                 candidateToUpdateList.Add(i);
             }
-            await _candidateRepository.Update(candidateToDeleteList, candidateToUpdateList, candidateToInsertList);
+            await _candidateRepository.UpdateCandidate(candidateToDeleteList, candidateToUpdateList, candidateToInsertList);
         }
         private async Task UpdateTrade(Dictionary<string, StockCandidate> allStockInfoDict)
         {

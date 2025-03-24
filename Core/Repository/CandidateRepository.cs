@@ -47,7 +47,7 @@ namespace Core.Repository
             _logger.Information("Get candidate finished.");
             return result.ToList();
         }
-        public async Task Update(List<Guid> candidateToDeleteList, List<StockCandidate> candidateToUpdateList, List<StockCandidate> candidateToInsertList)
+        public async Task UpdateCandidate(List<Guid> candidateToDeleteList, List<StockCandidate> candidateToUpdateList, List<StockCandidate> candidateToInsertList)
         {
             _logger.Information("Update candidate started.");
             DateTime deletedDate = _dateTimeService.GetTaiwanTime();
@@ -80,11 +80,12 @@ namespace Core.Repository
             }
             _logger.Information("Update candidate finished.");
         }
-        public async Task UpdateCrazyCandidate(List<StockCandidate> candidateToInsertList)
+        public async Task UpdateCrazyCandidate(List<Guid> candidateToDeleteList, List<StockCandidate> candidateToUpdateList, List<StockCandidate> candidateToInsertList)
         {
             _logger.Information("Update crazy candidate started.");
             DateTime deletedDate = _dateTimeService.GetTaiwanTime();
-            string deleteSqlCommand = @"UPDATE [dbo].[CrazyCandidate] SET [IsDeleted] = 1, [DeletedDate] = @DeletedDate WHERE [IsDeleted] = 0";
+            string deleteSqlCommand = @"UPDATE [dbo].[CrazyCandidate] SET [IsDeleted] = 1, [DeletedDate] = @DeletedDate WHERE [Id] IN @IdList";
+            string updateSqlCommand = @"UPDATE [dbo].[CrazyCandidate] SET [Last9TechData] = @Last9TechData WHERE [Id] = @Id";
             string insertSqlCommand = @"INSERT INTO [dbo].[CrazyCandidate] 
                                         ([Market], [StockCode], [CompanyName], [EntryPoint], [StopLossPoint], [SelectedDate], [Last9TechData])
                                         VALUES
@@ -94,9 +95,14 @@ namespace Core.Repository
                 await sqlConnection.OpenAsync();
                 using (var transaction = sqlConnection.BeginTransaction())
                 {
-                    // Delete old crazy candidates
-                    await sqlConnection.ExecuteAsync(deleteSqlCommand, new { DeletedDate = deletedDate }, transaction: transaction);
-                    // Insert new crazy candidates
+                    if (candidateToDeleteList.Any())
+                    {
+                        await sqlConnection.ExecuteAsync(deleteSqlCommand, new { DeletedDate = deletedDate, IdList = candidateToDeleteList }, transaction: transaction);
+                    }
+                    if (candidateToUpdateList.Any())
+                    {
+                        await sqlConnection.ExecuteAsync(updateSqlCommand, candidateToUpdateList, transaction: transaction);
+                    }
                     if (candidateToInsertList.Any())
                     {
                         await sqlConnection.ExecuteAsync(insertSqlCommand, candidateToInsertList, transaction: transaction);
