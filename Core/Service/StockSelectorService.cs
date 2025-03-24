@@ -46,13 +46,6 @@ namespace Core.Service
             await UpdateTrade(allStockInfoDict);
             await UpdateCrazyCandidate(crazyCandidateList, allStockInfoDict);
         }
-
-        public async Task<List<StockCandidate>> SelectCrazyStock()
-        {
-            List<StockCandidate> allStockInfoList = await GetStockInfoList();
-            List<StockCandidate> candidateList = SelectCrazyCandidate(allStockInfoList);
-            return candidateList;
-        }
         private async Task<List<StockCandidate>> GetStockInfoList()
         {
             var twseStockListTask = GetTwseStockCode();

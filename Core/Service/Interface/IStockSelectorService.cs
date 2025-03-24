@@ -7,6 +7,5 @@ namespace Core.Service.Interface
     public interface IStockSelectorService
     {
         Task SelectStock();
-        Task<List<StockCandidate>> SelectCrazyStock();
     }
 }
