@@ -176,14 +176,13 @@ namespace Core.Service
             if (stockHoldingList.Any())
             {
                 StockTrade trade = stockHoldingList.FirstOrDefault(x => x.StockCode == stockCode);
-                if (trade == null || !trade.IsTradingStarted) return;
-                if ((level1BidPrice <= trade.PurchasePoint && level1BidPrice <= trade.StopLossPoint) ||
-                    (level1BidPrice > trade.PurchasePoint && level1BidPrice < (trade.Last4Close.Sum() + level1BidPrice) / 5))
+                if (trade == null) return;
+                if (level1BidPrice >= trade.StopLossPoint && trade.PurchasePoint / level1BidPrice > 1.03m)
                 {
                     StockOrder stockOrder = SetDefaultStockOrder();
                     stockOrder.StkCode = stockCode;
                     stockOrder.PriceFlag = "M";
-                    stockOrder.BuySell = EBuySellType.S.ToString();
+                    stockOrder.BuySell = EBuySellType.B.ToString();
                     stockOrder.Time_in_force = "0";
                     stockOrder.Price = Convert.ToInt64(0);
                     stockOrder.OrderQty = trade.PurchasedLot;
@@ -195,14 +194,13 @@ namespace Core.Service
                 if (!_stockCandidateDict.TryGetValue(stockCode, out StockCandidate candidate) || !candidate.IsTradingStarted) return;
                 int orderQty = (int)(_maxAmountPerStock / (candidate.EntryPoint * 1000));
                 if (orderQty <= 0) return;
-                if (level1BidPrice == candidate.EntryPoint &&
-                    level1BidSize >= orderQty &&
-                    candidate.EntryPoint >= (candidate.Last4Close.Sum() + candidate.EntryPoint) / 5)
+                if (level1BidPrice == candidate.StopLossPoint &&
+                    level1BidSize >= orderQty)
                 {
                     StockOrder stockOrder = SetDefaultStockOrder();
                     stockOrder.StkCode = stockCode;   // 股票代號
                     stockOrder.PriceFlag = "";   // 價格種類, H:漲停 -:平盤  L:跌停 " ":限價  M:市價單
-                    stockOrder.BuySell = EBuySellType.B.ToString();   // 買賣別, B:買  S:賣
+                    stockOrder.BuySell = EBuySellType.S.ToString();   // 買賣別, B:買  S:賣
                     stockOrder.Time_in_force = "4";  // 委託效期, 0:ROD 3:IOC  4:FOK
                     stockOrder.Price = Convert.ToInt64(level1BidPrice * 10000);  // 委託價格
                     stockOrder.OrderQty = Convert.ToInt64(orderQty);    // 委託單位數
@@ -242,10 +240,10 @@ namespace Core.Service
                 _logger.Error("Report type error");
             }
             if (reportType != 51) return;
-            if (!DateTime.TryParse(reportArray[6] + " " + reportArray[7], out DateTime reportDateTime))
-            {
-                _logger.Error("DateTime error");
-            }
+            //if (!DateTime.TryParse(reportArray[6] + " " + reportArray[7], out DateTime reportDateTime))
+            //{
+            //    _logger.Error("DateTime error");
+            //}
             if (!decimal.TryParse(reportArray[10], out decimal price))
             {
                 _logger.Error("Price error");
@@ -255,19 +253,19 @@ namespace Core.Service
                 _logger.Error("PurchasedLot error");
             }
             string stockCode = reportArray[4].Trim();
-            if (reportArray[9] == EBuySellType.B.ToString())
+            if (reportArray[9] == EBuySellType.S.ToString())
             {
                 if (!_stockCandidateDict.TryGetValue(stockCode, out StockCandidate candidate)) return;
                 StockTrade newTrade = new StockTrade();
                 newTrade.Market = candidate.Market;
                 newTrade.StockCode = stockCode;
-                newTrade.CompanyName = reportArray[5];
-                newTrade.Last9TechData = candidate.Last9TechData;
                 newTrade.PurchasePoint = price;
-                newTrade.StopLossPoint = candidate.StopLossPoint;
-                newTrade.IsTradingStarted = true;
+                newTrade.StopLossPoint = candidate.EntryPoint;
                 newTrade.PurchasedLot = purchasedShare / 1000;
-                newTrade.PurchaseDate = reportDateTime;
+                //newTrade.PurchaseDate = reportDateTime;
+                //newTrade.CompanyName = reportArray[5];
+                //newTrade.Last9TechData = candidate.Last9TechData;
+                //newTrade.IsTradingStarted = true;
                 _stockHoldingList.Add(newTrade);
             }
             else
@@ -275,7 +273,7 @@ namespace Core.Service
                 StockTrade stockTrade = GetStockHoldingList().FirstOrDefault(x => x.StockCode == stockCode);
                 if (stockTrade != null)
                 {
-                    stockTrade.SaleDate = reportDateTime;
+                    //stockTrade.SaleDate = reportDateTime;
                     stockTrade.SalePoint = price;
                 }
             }
@@ -310,7 +308,7 @@ namespace Core.Service
         }
         private List<StockTrade> GetStockHoldingList()
         {
-            return _stockHoldingList.Where(x => x.SaleDate == null).ToList();
+            return _stockHoldingList.Where(x => x.SalePoint == null).ToList();
         }
         private void Subscribe()
         {
