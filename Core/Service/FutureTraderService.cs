@@ -134,7 +134,7 @@ namespace Core.Service
                             case "210.10.40.10":    //訂閱個股分時明細
                                 strResult = _yuantaService.FunRealStocktick_Out((byte[])objValue);
                                 TickHandler(strResult, out TimeSpan tickTime, out int tickPrice);
-                                FutureOrder(tickTime, tickPrice);
+                                //FutureOrder(tickTime, tickPrice);
                                 break;
                             default:
                                 strResult = $"{strIndex},{objValue}";
@@ -204,9 +204,8 @@ namespace Core.Service
             futureOrder.SettlementMonth1 = Convert.ToInt32(_settlementMonth);                //商品年月1
             futureOrder.StrikePrice1 = 0;                                                    //屐約價1
             futureOrder.OrderQty1 = Convert.ToInt16(_maxOrderQuantity);                      //委託口數1
-            futureOrder.OpenOffsetKind = "2";                                                //新平倉碼, 0:新倉 1:平倉 2:自動                                          
-            futureOrder.OrderCond = "";                                                      //委託條件, "":ROD 1:FOK 2:IOC
-            futureOrder.DayTradeID = "Y";                                                    //當沖註記, Y:當沖  "":非當沖
+            futureOrder.OpenOffsetKind = "2";                                                //新平倉碼, 0:新倉 1:平倉 2:自動       
+            futureOrder.DayTradeID = "";                                                    //當沖註記, Y:當沖  "":非當沖
             futureOrder.SellerNo = 0;                                                        //營業員代碼                                            
             futureOrder.OrderNo = "";                                                        //委託書編號           
             futureOrder.TradeDate = _dateTimeService.GetTaiwanTime().ToString("yyyy/MM/dd"); //交易日期                            
@@ -235,9 +234,10 @@ namespace Core.Service
                     if (tickPrice > _longProfitPoint || tickPrice < _longStopLossPoint || tickTime >= _beforeMarketClose10Minute)
                     {
                         FutureOrder futureOrder = SetDefaultFutureOrder();
-                        futureOrder.Price = tickPrice * 10000;                               //委託價格
+                        futureOrder.Price = 0;                               //委託價格
                         futureOrder.BuySell1 = EBuySellType.S.ToString();                   //買賣別, "B":買 "S":賣
                         futureOrder.OrderType = ((int)EFutureOrderType.市價).ToString();     //委託方式, 1:市價 2:限價 3:範圍市價
+                        futureOrder.OrderCond = "1";                                                      //委託條件, "":ROD 1:FOK 2:IOC
                         ProcessFutureOrder(futureOrder);
                     }
                 }
@@ -246,9 +246,10 @@ namespace Core.Service
                     if (tickPrice < _shortProfitPoint && tickPrice > _shortStopLossPoint || tickTime >= _beforeMarketClose10Minute)
                     {
                         FutureOrder futureOrder = SetDefaultFutureOrder();
-                        futureOrder.Price = tickPrice * 10000;
+                        futureOrder.Price = 0;
                         futureOrder.BuySell1 = EBuySellType.B.ToString();
                         futureOrder.OrderType = ((int)EFutureOrderType.市價).ToString();
+                        futureOrder.OrderCond = "1";                                                      //委託條件, "":ROD 1:FOK 2:IOC
                         ProcessFutureOrder(futureOrder);
                     }
                 }
@@ -260,6 +261,7 @@ namespace Core.Service
                         futureOrder.Price = _first15MinuteHigh * 10000;                     //委託價格
                         futureOrder.BuySell1 = EBuySellType.B.ToString();                 //買賣別, "B":買 "S":賣
                         futureOrder.OrderType = ((int)EFutureOrderType.限價).ToString();   //委託方式, 1:市價 2:限價 3:範圍市價
+                        futureOrder.OrderCond = "";                                                      //委託條件, "":ROD 1:FOK 2:IOC
                         ProcessFutureOrder(futureOrder);
                     }
                     else if (tickPrice < _first15MinuteLow - 10)
@@ -268,6 +270,7 @@ namespace Core.Service
                         futureOrder.Price = _first15MinuteLow * 10000;                      //委託價格
                         futureOrder.BuySell1 = EBuySellType.S.ToString();                 //買賣別, "B":買 "S":賣
                         futureOrder.OrderType = ((int)EFutureOrderType.限價).ToString();   //委託方式, 1:市價 2:限價 3:範圍市價
+                        futureOrder.OrderCond = "";                                                      //委託條件, "":ROD 1:FOK 2:IOC
                         ProcessFutureOrder(futureOrder);
                     }
                 }
@@ -278,10 +281,11 @@ namespace Core.Service
                 {
                     FutureOrder futureOrder = SetDefaultFutureOrder();
                     futureOrder.Price = 0;
-                    futureOrder.BuySell1 = "";
+                    futureOrder.BuySell1 = "";                                            // Same BuySell with the order
                     futureOrder.OrderType = "";
                     futureOrder.FunctionCode = 4;                                         //功能別, 0:委託單 4:取消 5:改量 7:改價
                     futureOrder.OrderNo = _orderNo;                                                       //委託書編號    
+                    futureOrder.OrderCond = "";                                                      //委託條件, "":ROD 1:FOK 2:IOC
                     ProcessFutureOrder(futureOrder);
                 }
             }
@@ -317,12 +321,53 @@ namespace Core.Service
         }
         private void RealReportHandler(string strResult)
         {
-            //string[] reportArray = strResult.Split(',');
-            //if (!int.TryParse(reportArray[1].Split(':')[1], out int reportType))
-            //{
-            //    _logger.Error("Report type error");
-            //}
-            //if (reportType != 51) return;
+            string[] reportArray = strResult.Split(',');
+            if (!int.TryParse(reportArray[1].Split(':')[1], out int reportType))
+            {
+                _logger.Error("Report type error");
+            }
+            if (reportType == 2) // 期貨下單回報
+            {
+
+            }
+            else if (reportType == 3) // 期貨成交回報
+            {
+
+            }
+            else if (reportType == 5) // 期貨下單取消回報
+            {
+
+            }
+
+            string orderNo = reportArray[2].Trim().Substring(4);
+            if (!DateTime.TryParse(reportArray[6] + " " + reportArray[7], out DateTime reportDateTime))
+            {
+                _logger.Error("DateTime error");
+            }
+            EFutureOrderType orderType = default;
+            string reportOrderType = reportArray[8].Trim();
+            if (string.IsNullOrEmpty(reportOrderType))
+            {
+                // 期貨下單取消時的 order type 是 empty
+            }
+            else if (reportOrderType == "L")
+            {
+                orderType = EFutureOrderType.限價;
+            }
+            else if (reportOrderType == "M")
+            {
+                orderType = EFutureOrderType.市價;
+            }
+
+            if (!System.Enum.TryParse<EBuySellType>(reportArray[9], out EBuySellType buySellType))
+            {
+                _logger.Error("BuySellType error");
+            }
+            if (!int.TryParse(reportArray[10], out int point)) // 市價委託時，Point = string.Empty
+            {
+                _logger.Error("Point error");
+            }
+            
 
         }
         private void SubscribeFutureTick()
