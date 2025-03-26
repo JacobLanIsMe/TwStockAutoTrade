@@ -139,21 +139,21 @@ namespace Core.Service
                 _logger.Error(strResult);
             }
         }
-        private void FiveTickHandler(string strResult, out string stockCode, out decimal level1AskPrice, out int level1AskSize)
+        private void FiveTickHandler(string strResult, out string stockCode, out decimal level1BidPrice, out int level1BidSize)
         {
-            stockCode = "";
-            level1AskPrice = 0;
-            level1AskSize = 0;
+            stockCode = string.Empty;
+            level1BidPrice = 0;
+            level1BidSize = 0;
             if (string.IsNullOrEmpty(strResult)) return;
             string[] tickInfo = strResult.Split(',');
             stockCode = tickInfo[1];
-            if (!decimal.TryParse(tickInfo[13], out level1AskPrice) || !int.TryParse(tickInfo[18], out level1AskSize))
+            if (!decimal.TryParse(tickInfo[3], out level1BidPrice) || !int.TryParse(tickInfo[8], out level1BidSize))
             {
-                _logger.Error($"The level1AskPrice or level1AskSize of Stock code {stockCode} is error");
+                _logger.Error($"The level1BidPrice or level1BidSize of Stock code {stockCode} is error");
                 return;
             }
-            level1AskPrice = level1AskPrice / 10000;
-            _logger.Information($"Stock code: {stockCode}, Level 1 ask price: {level1AskPrice}, Level 1 ask size: {level1AskSize}");
+            level1BidPrice = level1BidPrice / 10000;
+            _logger.Information($"Stock code: {stockCode}, Level 1 bid price: {level1BidPrice}, Level 1 bid size: {level1BidSize}");
         }
         private StockOrder SetDefaultStockOrder()
         {
@@ -169,16 +169,16 @@ namespace Core.Service
             stockOrder.BasketNo = ""; // this.txtBasketNo.Text.Trim(); // BasketNo
             return stockOrder;
         }
-        private void StockOrder(string stockCode, decimal level1AskPrice, int level1AskSize)
+        private void StockOrder(string stockCode, decimal level1BidPrice, int level1BidSize)
         {
-            if (level1AskPrice == 0 || level1AskSize == 0 || _hasStockOrder) return;
+            if (string.IsNullOrEmpty(stockCode) || level1BidPrice == 0 || level1BidSize == 0 || _hasStockOrder) return;
             List<StockTrade> stockHoldingList = GetStockHoldingList();
             if (stockHoldingList.Any())
             {
                 StockTrade trade = stockHoldingList.FirstOrDefault(x => x.StockCode == stockCode);
                 if (trade == null || !trade.IsTradingStarted) return;
-                if ((level1AskPrice <= trade.PurchasePoint && level1AskPrice <= trade.StopLossPoint) ||
-                    (level1AskPrice > trade.PurchasePoint && level1AskPrice < (trade.Last4Close.Sum() + level1AskPrice) / 5))
+                if ((level1BidPrice <= trade.PurchasePoint && level1BidPrice <= trade.StopLossPoint) ||
+                    (level1BidPrice > trade.PurchasePoint && level1BidPrice < (trade.Last4Close.Sum() + level1BidPrice) / 5))
                 {
                     StockOrder stockOrder = SetDefaultStockOrder();
                     stockOrder.StkCode = stockCode;
@@ -195,8 +195,8 @@ namespace Core.Service
                 if (!_stockCandidateDict.TryGetValue(stockCode, out StockCandidate candidate) || !candidate.IsTradingStarted) return;
                 int orderQty = (int)(_maxAmountPerStock / (candidate.EntryPoint * 1000));
                 if (orderQty <= 0) return;
-                if (level1AskPrice == candidate.EntryPoint &&
-                    level1AskSize >= orderQty &&
+                if (level1BidPrice == candidate.EntryPoint &&
+                    level1BidSize >= orderQty &&
                     candidate.EntryPoint >= (candidate.Last4Close.Sum() + candidate.EntryPoint) / 5)
                 {
                     StockOrder stockOrder = SetDefaultStockOrder();
@@ -204,7 +204,7 @@ namespace Core.Service
                     stockOrder.PriceFlag = "";   // 價格種類, H:漲停 -:平盤  L:跌停 " ":限價  M:市價單
                     stockOrder.BuySell = EBuySellType.B.ToString();   // 買賣別, B:買  S:賣
                     stockOrder.Time_in_force = "4";  // 委託效期, 0:ROD 3:IOC  4:FOK
-                    stockOrder.Price = Convert.ToInt64(level1AskPrice * 10000);  // 委託價格
+                    stockOrder.Price = Convert.ToInt64(level1BidPrice * 10000);  // 委託價格
                     stockOrder.OrderQty = Convert.ToInt64(orderQty);    // 委託單位數
                     ProcessStockOrder(stockOrder);
                 }
