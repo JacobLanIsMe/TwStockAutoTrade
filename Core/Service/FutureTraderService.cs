@@ -21,14 +21,14 @@ namespace Core.Service
         private readonly enumEnvironmentMode _enumEnvironmentMode;
         private CancellationTokenSource _cts = new CancellationTokenSource();
         private ConcurrentBag<int> _first15MinuteTickBag = new ConcurrentBag<int>();
-        private ConcurrentBag<FutureTrade> tradeList = new ConcurrentBag<FutureTrade>();
         private int _first15MinuteHigh = 0;
         private int _first15MinuteLow = 0;
         private int _longProfitPoint = 0;
         private int _longStopLossPoint = 0;
         private int _shortProfitPoint = 0;
         private int _shortStopLossPoint = 0;
-        private string _orderNo = "";
+        //private string _orderNo = string.Empty;
+        private FutureTrade _trade = new FutureTrade();
         private bool _hasLongContract = false;
         private bool _hasShortContract = false;
         private bool _hitProfitPoint = false;
@@ -134,7 +134,7 @@ namespace Core.Service
                             case "210.10.40.10":    //訂閱個股分時明細
                                 strResult = _yuantaService.FunRealStocktick_Out((byte[])objValue);
                                 TickHandler(strResult, out TimeSpan tickTime, out int tickPrice);
-                                //FutureOrder(tickTime, tickPrice);
+                                FutureOrder(tickTime, tickPrice);
                                 break;
                             default:
                                 strResult = $"{strIndex},{objValue}";
@@ -188,7 +188,7 @@ namespace Core.Service
             {
                 _hitProfitPoint = true;
             }
-            if (string.IsNullOrEmpty(_orderNo) && !_hasLongContract && !_hasShortContract && (tickTime >= _lastEntryTime || _hitProfitPoint))
+            if (string.IsNullOrEmpty(_trade.OrderNo) && !_hasLongContract && !_hasShortContract && (tickTime >= _lastEntryTime || _hitProfitPoint))
             {
                 _cts.Cancel();
             }
@@ -227,7 +227,7 @@ namespace Core.Service
             if (_first15MinuteHigh == 0 || _first15MinuteLow == 0 ||
                 _longProfitPoint == 0 || _longStopLossPoint == 0 ||
                 _shortProfitPoint == 0 || _shortStopLossPoint == 0) return;
-            if (string.IsNullOrEmpty(_orderNo))
+            if (string.IsNullOrEmpty(_trade.OrderNo))
             {
                 if (_hasLongContract)
                 {
@@ -277,14 +277,14 @@ namespace Core.Service
             }
             else
             {
-                if (_orderNo != _defaultOrderNo && (tickTime >= _lastEntryTime || _hitProfitPoint))
+                if (_trade.OrderNo != _defaultOrderNo && _trade.OrderType != EFutureOrderType.市價 && (tickTime >= _lastEntryTime || _hitProfitPoint))
                 {
                     FutureOrder futureOrder = SetDefaultFutureOrder();
                     futureOrder.Price = 0;
-                    futureOrder.BuySell1 = "";                                            // Same BuySell with the order
+                    futureOrder.BuySell1 = _trade.BuySell.ToString();                                            // Same BuySell with the order
                     futureOrder.OrderType = "";
                     futureOrder.FunctionCode = 4;                                         //功能別, 0:委託單 4:取消 5:改量 7:改價
-                    futureOrder.OrderNo = _orderNo;                                                       //委託書編號    
+                    futureOrder.OrderNo = _trade.OrderNo;                                                       //委託書編號    
                     futureOrder.OrderCond = "";                                                      //委託條件, "":ROD 1:FOK 2:IOC
                     ProcessFutureOrder(futureOrder);
                 }
@@ -295,11 +295,11 @@ namespace Core.Service
             bool bResult = objYuantaOneAPI.SendFutureOrder(_futureAccount, new List<FutureOrder>() { futureOrder });
             if (bResult)
             {
-                _orderNo = _defaultOrderNo;
+                _trade.OrderNo = _defaultOrderNo;
             }
             else
             {
-                _logger.Error($"SendFutureOrder error. HasLongContract: {_hasLongContract}, HasShortContract: {_hasShortContract}, Buy or Sell: {futureOrder.BuySell1}");
+                _logger.Error($"SendFutureOrder error. Order No: {futureOrder.OrderNo} Order Type: {futureOrder.OrderType}, Buy or Sell: {futureOrder.BuySell1}");
             }
         }
         private void FutureOrderHandler(string strResult)
@@ -312,11 +312,7 @@ namespace Core.Service
                 !string.IsNullOrEmpty(resultArray[resultArray.Length - 1].Trim()))
             {
                 _logger.Error($"FutureStockOrder error. Error message: {resultArray[resultArray.Length - 2]}, {resultArray[resultArray.Length - 1]}");
-                _orderNo = "";
-            }
-            else
-            {
-                _orderNo = orderNo;
+                _trade.OrderNo = string.Empty;
             }
         }
         private void RealReportHandler(string strResult)
@@ -326,49 +322,58 @@ namespace Core.Service
             {
                 _logger.Error("Report type error");
             }
-            if (reportType == 2) // 期貨下單回報
+            string orderNo = reportArray[2].Trim().Substring(4); // 委託單號
+            if (reportType == 5)
             {
-
+                _trade.OrderNo = string.Empty;
             }
-            else if (reportType == 3) // 期貨成交回報
+            else
             {
-
+                if (!System.Enum.TryParse<EBuySellType>(reportArray[9], out EBuySellType buySellType))
+                {
+                    _logger.Error("BuySellType error");
+                }
+                if (reportType == 2) // 期貨下單回報
+                {
+                    string reportOrderType = reportArray[8].Trim();
+                    if (reportOrderType == "L")
+                    {
+                        _trade.OrderType = EFutureOrderType.限價;
+                    }
+                    else if (reportOrderType == "M")
+                    {
+                        _trade.OrderType = EFutureOrderType.市價;
+                    }
+                    _trade.OrderNo = orderNo;
+                    _trade.BuySell = buySellType;
+                }
+                else if (reportType == 3) // 期貨成交回報
+                {
+                    if (!_hasLongContract && !_hasShortContract)
+                    {
+                        if (buySellType == EBuySellType.B)
+                        {
+                            _hasLongContract = true;
+                        }
+                        else
+                        {
+                            _hasShortContract = true;
+                        }
+                    }
+                    else
+                    {
+                        if (buySellType == EBuySellType.B)
+                        {
+                            _hasShortContract = false;
+                        }
+                        else
+                        {
+                            _hasLongContract = false;
+                        }
+                    }
+                    _trade.OrderNo = string.Empty;
+                }
             }
-            else if (reportType == 5) // 期貨下單取消回報
-            {
-
-            }
-
-            string orderNo = reportArray[2].Trim().Substring(4);
-            if (!DateTime.TryParse(reportArray[6] + " " + reportArray[7], out DateTime reportDateTime))
-            {
-                _logger.Error("DateTime error");
-            }
-            EFutureOrderType orderType = default;
-            string reportOrderType = reportArray[8].Trim();
-            if (string.IsNullOrEmpty(reportOrderType))
-            {
-                // 期貨下單取消時的 order type 是 empty
-            }
-            else if (reportOrderType == "L")
-            {
-                orderType = EFutureOrderType.限價;
-            }
-            else if (reportOrderType == "M")
-            {
-                orderType = EFutureOrderType.市價;
-            }
-
-            if (!System.Enum.TryParse<EBuySellType>(reportArray[9], out EBuySellType buySellType))
-            {
-                _logger.Error("BuySellType error");
-            }
-            if (!int.TryParse(reportArray[10], out int point)) // 市價委託時，Point = string.Empty
-            {
-                _logger.Error("Point error");
-            }
-            
-
         }
         private void SubscribeFutureTick()
         {
