@@ -18,5 +18,7 @@ namespace Core.Model
         public bool IsDeleted { get; set; }
         public DateTime? DeleteDate { get; set; }
         public decimal EntryPoint { get; set; }
+        public bool IsHolding { get; set; }
+        public bool IsHitProfitPoint { get; set; }
     }
 }

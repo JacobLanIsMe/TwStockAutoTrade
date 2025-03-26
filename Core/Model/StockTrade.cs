@@ -8,7 +8,6 @@ namespace Core.Model
 {
     public class StockTrade : StockSharedModel
     {
-        public int PurchasedLot { get; set; }
         public DateTime PurchaseDate { get; set; }
         public decimal PurchasePoint { get; set; }
         public DateTime? SaleDate { get; set; }

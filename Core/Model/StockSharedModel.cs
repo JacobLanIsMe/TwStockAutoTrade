@@ -17,6 +17,7 @@ namespace Core.Model
         public string CompanyName { get; set; }
         public string Last9TechData { get; set; }
         public decimal StopLossPoint { get; set; }
+        public int PurchasedLot { get; set; }
         public List<decimal> Last9Close
         {
             get
