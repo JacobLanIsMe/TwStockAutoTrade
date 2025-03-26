@@ -295,6 +295,7 @@ namespace Core.Service
             bool bResult = objYuantaOneAPI.SendFutureOrder(_futureAccount, new List<FutureOrder>() { futureOrder });
             if (bResult)
             {
+                if (futureOrder.FunctionCode == 4) return;
                 _trade.OrderNo = _defaultOrderNo;
             }
             else
