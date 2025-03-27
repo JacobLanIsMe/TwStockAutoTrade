@@ -37,6 +37,7 @@ namespace Core.Service
         }
         public async Task SelectStock()
         {
+            await UpdateExDevidendDate();
             List<StockCandidate> allStockInfoList = await GetStockInfoList();
             if (!doesNeedUpdate(allStockInfoList)) return;
             List<StockCandidate> candidateList = SelectCandidate(allStockInfoList);
@@ -97,6 +98,22 @@ namespace Core.Service
             }).ToList();
             _logger.Information("Get TWOTC stock code finished.");
             return stockList;
+        }
+        private async Task UpdateExDevidendDate()
+        {
+            List<ExRrightsExDividend> twotcExRrightsExDividendList = await GetTwotcExRightsExDevidendDate();
+        }
+        private async Task<List<ExRrightsExDividend>> GetTwotcExRightsExDevidendDate()
+        {
+            HttpResponseMessage response = await _httpClient.GetAsync("https://www.tpex.org.tw/openapi/v1/tpex_exright_prepost");
+            string responseBody = await response.Content.ReadAsStringAsync();
+            List<TwotcExRrightsExDividend> exRrightsExDividendList = JsonConvert.DeserializeObject<List<TwotcExRrightsExDividend>>(responseBody);
+            List<ExRrightsExDividend> result = exRrightsExDividendList.Select(x => new ExRrightsExDividend
+            {
+                StockCode = x.SecuritiesCompanyCode.ToUpper(),
+                ExRrightsExDividendDateTime = x.ExRrightsExDividendDateTime
+            }).ToList();
+            return result;
         }
         private async Task GetDailyExchangeReport(List<StockCandidate> stockList)
         {

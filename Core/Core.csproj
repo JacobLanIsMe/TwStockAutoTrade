@@ -158,12 +158,14 @@
     <Compile Include="Enum\EPeriod.cs" />
     <Compile Include="HttpClientFactory\SimpleHttpClientFactory.cs" />
     <Compile Include="Model\BlockingQueue.cs" />
+    <Compile Include="Model\ExRrightsExDividend.cs" />
     <Compile Include="Model\FutureConfig.cs" />
     <Compile Include="Model\FutureTrade.cs" />
     <Compile Include="Model\StockSharedModel.cs" />
     <Compile Include="Model\StringListModel.cs" />
     <Compile Include="Model\StockTrade.cs" />
     <Compile Include="Model\StockTradeConfig.cs" />
+    <Compile Include="Model\TwotcExRrightsExDividend.cs" />
     <Compile Include="Model\TwotcIntradayStockInfo.cs" />
     <Compile Include="Model\TwseIntradayStockInfo.cs" />
     <Compile Include="Model\YahooTechData.cs" />
