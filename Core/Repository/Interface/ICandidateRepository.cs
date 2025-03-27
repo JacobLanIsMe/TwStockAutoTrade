@@ -11,5 +11,6 @@ namespace Core.Repository.Interface
         Task<List<StockCandidate>> GetActiveCrazyCandidate();
         Task UpdateCandidate(List<Guid> candidateToDeleteList, List<StockCandidate> candidateToUpdateList, List<StockCandidate> candidateToInsertList);
         Task UpdateCrazyCandidate(List<Guid> candidateToDeleteList, List<StockCandidate> candidateToUpdateList, List<StockCandidate> candidateToInsertList);
+        Task UpdateHoldingStock(List<StockCandidate> candidateToUpdateList);
     }
 }

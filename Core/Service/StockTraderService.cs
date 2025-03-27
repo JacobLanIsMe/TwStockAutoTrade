@@ -6,6 +6,7 @@ using Microsoft.Extensions.Configuration;
 using Serilog;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -16,13 +17,11 @@ namespace Core.Service
     public class StockTraderService : IStockTraderService
     {
         YuantaOneAPITrader objYuantaOneAPI = new YuantaOneAPITrader();
-        private List<StockTrade> _stockHoldingList = new List<StockTrade>();
-        private List<StockCandidate> _stockCandidateList = new List<StockCandidate>();
+        //private List<StockTrade> _stockHoldingList = new List<StockTrade>();
+        private Dictionary<string, StockCandidate> _stockCandidateDict = new Dictionary<string, StockCandidate>(); // Key: StockCode
         private CancellationTokenSource _cts;
         private bool _hasStockOrder = false;
-
         private readonly StockTradeConfig tradeConfig;
-        private readonly ITradeRepository _tradeRepository;
         private readonly ICandidateRepository _candidateRepository;
         private readonly ILogger _logger;
         private readonly enumEnvironmentMode _enumEnvironmentMode;
@@ -30,12 +29,11 @@ namespace Core.Service
         private readonly string _stockAccount;
         private readonly string _stockPassword;
         private readonly string _todayDate;
-        public StockTraderService(IConfiguration config, ITradeRepository tradeRepository, ICandidateRepository candidateRepository, IDateTimeService dateTimeService, ILogger logger, IYuantaService yuantaService)
+        public StockTraderService(IConfiguration config, ICandidateRepository candidateRepository, IDateTimeService dateTimeService, ILogger logger, IYuantaService yuantaService)
         {
             tradeConfig = config.GetSection("TradeConfig").Get<StockTradeConfig>();
             string environment = config.GetValue<string>("Environment").ToUpper();
             _enumEnvironmentMode = environment == "PROD" ? enumEnvironmentMode.PROD : enumEnvironmentMode.UAT;
-            _tradeRepository = tradeRepository;
             _candidateRepository = candidateRepository;
             DateTime now = dateTimeService.GetTaiwanTime();
             DateTime stopTime = now.Date.AddHours(13).AddMinutes(25);
@@ -52,9 +50,8 @@ namespace Core.Service
         {
             try
             {
-                _stockHoldingList = await _tradeRepository.GetStockHolding();
-                _stockCandidateList = await _candidateRepository.GetActiveCandidate();
-                if (!_stockHoldingList.Any() && !_stockCandidateList.Any()) return;
+                _stockCandidateDict = (await _candidateRepository.GetActiveCandidate()).ToDictionary(x => x.StockCode);
+                if (!_stockCandidateDict.Any()) return;
                 objYuantaOneAPI.Open(_enumEnvironmentMode);
                 await Task.Delay(-1, _cts.Token);
             }
@@ -68,10 +65,7 @@ namespace Core.Service
             }
             finally
             {
-                List<StockTrade> tradeToInsertList = _stockHoldingList.Where(x => x.Id == default).ToList();
-                List<StockTrade> tradeToUpdateList = _stockHoldingList.Where(x => x.Id != default).ToList();
-                await _tradeRepository.Insert(tradeToInsertList);
-                await _tradeRepository.UpdateSaleDate(tradeToUpdateList);
+                await _candidateRepository.UpdateHoldingStock(_stockCandidateDict.Values.ToList());
                 objYuantaOneAPI.LogOut();
                 objYuantaOneAPI.Close();
                 objYuantaOneAPI.Dispose();
@@ -169,14 +163,12 @@ namespace Core.Service
         }
         private void StockOrder(string stockCode, decimal level1AskPrice, int level1AskSize)
         {
-            if (level1AskPrice == 0 || level1AskSize == 0 || _hasStockOrder) return;
-            List<StockTrade> stockHoldingList = GetStockHoldingList();
-            if (stockHoldingList.Any())
+            if (string.IsNullOrEmpty(stockCode) || level1AskPrice == 0 || level1AskSize == 0 || _hasStockOrder) return;
+            if (!_stockCandidateDict.TryGetValue(stockCode, out StockCandidate candidate) || !candidate.IsTradingStarted) return;
+            if (candidate.IsHolding)
             {
-                StockTrade trade = stockHoldingList.FirstOrDefault(x => x.StockCode == stockCode);
-                if (trade == null || !trade.IsTradingStarted) return;
-                if ((level1AskPrice <= trade.PurchasePoint && level1AskPrice <= trade.StopLossPoint) ||
-                    (level1AskPrice > trade.PurchasePoint && level1AskPrice < (trade.Last9Close.Sum() + level1AskPrice) / 10))
+                if ((level1AskPrice <= candidate.EntryPoint && level1AskPrice <= candidate.StopLossPoint) ||
+                    (level1AskPrice > candidate.EntryPoint && level1AskPrice < (candidate.Last9Close.Sum() + level1AskPrice) / 10))
                 {
                     StockOrder stockOrder = SetDefaultStockOrder();
                     stockOrder.StkCode = stockCode;
@@ -184,19 +176,18 @@ namespace Core.Service
                     stockOrder.BuySell = EBuySellType.S.ToString();
                     stockOrder.Time_in_force = "0";
                     stockOrder.Price = Convert.ToInt64(0);
-                    stockOrder.OrderQty = trade.PurchasedLot;
+                    stockOrder.OrderQty = candidate.PurchasedLot;
                     ProcessStockOrder(stockOrder);
                 }
             }
             else
             {
-                StockCandidate candidate = _stockCandidateList.FirstOrDefault(x => x.StockCode == stockCode);
-                if (candidate == null || !candidate.IsTradingStarted) return;
                 int orderQty = (int)(tradeConfig.MaxAmountPerStock / (candidate.EntryPoint * 1000));
-                if (orderQty <= 0) return;
                 if (level1AskPrice == candidate.EntryPoint &&
+                    orderQty > 0 &&
                     level1AskSize >= orderQty &&
-                    candidate.EntryPoint >= (candidate.Last9Close.Sum() + candidate.EntryPoint) / 10)
+                    candidate.EntryPoint >= (candidate.Last9Close.Sum() + candidate.EntryPoint) / 10 &&
+                    tradeConfig.MaxStockCount > _stockCandidateDict.Count(x => x.Value.IsHolding))
                 {
                     StockOrder stockOrder = SetDefaultStockOrder();
                     stockOrder.StkCode = stockCode;   // 股票代號
@@ -224,7 +215,7 @@ namespace Core.Service
         private void StockOrderHandler(string strResult)
         {
             string[] resultArray = strResult.Split(',');
-            if (string.IsNullOrEmpty(resultArray[4].Trim()) || 
+            if (string.IsNullOrEmpty(resultArray[4].Trim()) ||
                 !DateTime.TryParse(resultArray[5], out DateTime orderTime) ||
                 !string.IsNullOrEmpty(resultArray[resultArray.Length - 2].Trim()) ||
                 !string.IsNullOrEmpty(resultArray[resultArray.Length - 1].Trim()))
@@ -236,48 +227,26 @@ namespace Core.Service
         private void RealReportHandler(string strResult)
         {
             string[] reportArray = strResult.Split(',');
-            if(!int.TryParse(reportArray[1].Split(':')[1], out int reportType))
+            if (!int.TryParse(reportArray[1].Split(':')[1], out int reportType))
             {
                 _logger.Error("Report type error");
             }
             if (reportType != 51) return;
-            if (!DateTime.TryParse(reportArray[6] + " " + reportArray[7], out DateTime reportDateTime))
-            {
-                _logger.Error("DateTime error");
-            }
-            if (!decimal.TryParse(reportArray[10], out decimal price))
-            {
-                _logger.Error("Price error");
-            }
             if (!int.TryParse(reportArray[13], out int purchasedShare))
             {
                 _logger.Error("PurchasedLot error");
             }
             string stockCode = reportArray[4].Trim();
+            if (!_stockCandidateDict.TryGetValue(stockCode, out StockCandidate candidate)) return;
             if (reportArray[9] == EBuySellType.B.ToString())
             {
-                StockCandidate candidate = _stockCandidateList.FirstOrDefault(x => x.StockCode == stockCode);
-                if (candidate == null) return;
-                StockTrade newTrade = new StockTrade();
-                newTrade.Market = candidate.Market;
-                newTrade.StockCode = stockCode;
-                newTrade.CompanyName = reportArray[5];
-                newTrade.Last9TechData = candidate.Last9TechData;
-                newTrade.PurchasePoint = price;
-                newTrade.StopLossPoint = candidate.StopLossPoint;
-                newTrade.IsTradingStarted = true;
-                newTrade.PurchasedLot = purchasedShare / 1000;
-                newTrade.PurchaseDate = reportDateTime;
-                _stockHoldingList.Add(newTrade);
+                candidate.IsHolding = true;
+                candidate.PurchasedLot = purchasedShare / 1000;
             }
             else
             {
-                StockTrade stockTrade = GetStockHoldingList().FirstOrDefault(x => x.StockCode == stockCode);
-                if (stockTrade != null)
-                {
-                    stockTrade.SaleDate = reportDateTime;
-                    stockTrade.SalePoint = price;
-                }
+                candidate.IsHolding = false;
+                candidate.PurchasedLot = 0;
             }
             _hasStockOrder = false;
         }
@@ -286,54 +255,26 @@ namespace Core.Service
             string[] watchListResult = strResult.Split(',');
             string stockCode = watchListResult[1];
             if (!decimal.TryParse(watchListResult[3], out decimal tradePrice)) return;
-            
-            foreach (var i in _stockHoldingList)
-            {
-                if (i.StockCode != stockCode) continue;
-                i.IsTradingStarted = true;
-                UnsubscribeWatchlist(i.Market, i.StockCode);
-            }
-            foreach (var i in _stockCandidateList)
-            {
-                if (i.StockCode != stockCode) continue;
-                i.IsTradingStarted = true;
-                UnsubscribeWatchlist(i.Market, i.StockCode);
-            }
-        }
-        private List<StockTrade> GetStockHoldingList()
-        {
-            return _stockHoldingList.Where(x => x.SaleDate == null).ToList();
+            if (!_stockCandidateDict.TryGetValue(stockCode, out StockCandidate candidate)) return;
+            candidate.IsTradingStarted = true;
+            UnsubscribeWatchlist(candidate.Market, candidate.StockCode);
         }
         private void Subscribe()
         {
             List<FiveTickA> lstFiveTick = new List<FiveTickA>();
             List<Watchlist> lstWatchlist = new List<Watchlist>();
-            foreach (var i in _stockHoldingList)
+            foreach (var i in _stockCandidateDict)
             {
                 FiveTickA fiveTickA = new FiveTickA();
-                fiveTickA.MarketNo = Convert.ToByte(i.Market);
-                fiveTickA.StockCode = i.StockCode;
+                fiveTickA.MarketNo = Convert.ToByte(i.Value.Market);
+                fiveTickA.StockCode = i.Value.StockCode;
                 lstFiveTick.Add(fiveTickA);
                 Watchlist watch = new Watchlist();
                 watch.IndexFlag = Convert.ToByte(7);    //填入訂閱索引值, 7: 成交價
-                watch.MarketNo = Convert.ToByte(i.Market);      //填入查詢市場代碼
-                watch.StockCode = i.StockCode;
+                watch.MarketNo = Convert.ToByte(i.Value.Market);      //填入查詢市場代碼
+                watch.StockCode = i.Value.StockCode;
                 lstWatchlist.Add(watch);
             }
-            foreach (var i in _stockCandidateList)
-            {
-                FiveTickA fiveTickA = new FiveTickA();
-                fiveTickA.MarketNo = Convert.ToByte(i.Market);
-                fiveTickA.StockCode = i.StockCode;
-                lstFiveTick.Add(fiveTickA);
-                Watchlist watch = new Watchlist();
-                watch.IndexFlag = Convert.ToByte(7);    //填入訂閱索引值, 7: 成交價
-                watch.MarketNo = Convert.ToByte(i.Market);      //填入查詢市場代碼
-                watch.StockCode = i.StockCode;
-                lstWatchlist.Add(watch);
-            }
-            lstFiveTick = lstFiveTick.GroupBy(x => x.StockCode).Select(g => g.First()).ToList();
-            lstWatchlist = lstWatchlist.GroupBy(x => x.StockCode).Select(g => g.First()).ToList();
             objYuantaOneAPI.SubscribeFiveTickA(lstFiveTick);
             objYuantaOneAPI.SubscribeWatchlist(lstWatchlist);
         }

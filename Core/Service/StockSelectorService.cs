@@ -312,48 +312,41 @@ namespace Core.Service
         private async Task UpdateCandidate(List<StockCandidate> candidateToInsertList, Dictionary<string, StockCandidate> allStockInfoDict)
         {
             List<StockCandidate> activeCandidateList = await _candidateRepository.GetActiveCandidate();
-            Dictionary<string, StockCandidate> candidateDict = candidateToInsertList.ToDictionary(x => x.StockCode);
+            Dictionary<string, StockCandidate> candidateToInsertDict = candidateToInsertList.ToDictionary(x => x.StockCode);
             List<Guid> candidateToDeleteList = new List<Guid>();
             List<StockCandidate> candidateToUpdateList = new List<StockCandidate>();
             foreach (var i in activeCandidateList)
             {
-                if (candidateDict.ContainsKey(i.StockCode))
+                bool isDuplicateCandidate = candidateToInsertDict.ContainsKey(i.StockCode);
+                bool hasLatestStockInfo = allStockInfoDict.TryGetValue(i.StockCode, out StockCandidate stock);
+                if (i.IsHolding)
                 {
-                    candidateToDeleteList.Add(i.Id);
-                    continue;
+                    if (isDuplicateCandidate)
+                    {
+                        candidateToInsertList.Remove(candidateToInsertDict[i.StockCode]);
+                    }
+                    if (hasLatestStockInfo && stock.TechDataList.Count >= 9)
+                    {
+                        i.Last9TechData = JsonConvert.SerializeObject(stock.TechDataList.Take(9));
+                        candidateToUpdateList.Add(i);
+                    }
                 }
-                if (!allStockInfoDict.TryGetValue(i.StockCode, out StockCandidate stock))
+                else
                 {
-                    candidateToDeleteList.Add(i.Id);
-                    continue;
-                }
-                if (stock.TechDataList.Count <= 0)
-                {
-                    candidateToDeleteList.Add(i.Id);
-                    continue;
-                }
-                decimal todayClose = stock.TechDataList.First().Close;
-                if (todayClose < i.GapUpLow)
-                {
-                    candidateToDeleteList.Add(i.Id);
-                    continue;
-                }
-                if (todayClose > i.EntryPoint)
-                {
-                    if (stock.TechDataList.Count < 10)
+                    if (isDuplicateCandidate || !hasLatestStockInfo || stock.TechDataList.Count < 10)
                     {
                         candidateToDeleteList.Add(i.Id);
                         continue;
                     }
-                    decimal ma10 = stock.TechDataList.Take(10).Average(x => x.Close);
-                    if (todayClose < ma10)
+                    decimal todayClose = stock.TechDataList.First().Close;
+                    if (todayClose < i.GapUpLow || (todayClose > i.EntryPoint && todayClose < stock.TechDataList.Take(10).Average(x => x.Close)))
                     {
                         candidateToDeleteList.Add(i.Id);
                         continue;
                     }
+                    i.Last9TechData = JsonConvert.SerializeObject(stock.TechDataList.Take(9));
+                    candidateToUpdateList.Add(i);
                 }
-                i.Last9TechData = JsonConvert.SerializeObject(stock.TechDataList.Take(9));
-                candidateToUpdateList.Add(i);
             }
             await _candidateRepository.UpdateCandidate(candidateToDeleteList, candidateToUpdateList, candidateToInsertList);
         }

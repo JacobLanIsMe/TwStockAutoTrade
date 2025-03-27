@@ -111,6 +111,15 @@ namespace Core.Repository
                 }
             }
             _logger.Information("Update crazy candidate finished.");
-        } 
+        }
+        public async Task UpdateHoldingStock(List<StockCandidate> candidateToUpdateList)
+        {
+            if (!candidateToUpdateList.Any()) return;
+            string updateSqlCommand = @"UPDATE [dbo].[Candidate] SET [IsHolding] = @IsHolding, [PurchasedLot] = @PurchasedLot WHERE [Id] = @Id";
+            using (SqlConnection sqlConnection = new SqlConnection(_dbConnectionString))
+            {
+                await sqlConnection.ExecuteAsync(updateSqlCommand, candidateToUpdateList);
+            }
+        }
     }
 }
