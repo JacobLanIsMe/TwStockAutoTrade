@@ -18,30 +18,7 @@ namespace Core.Model
         public string Last9TechData { get; set; }
         public decimal StopLossPoint { get; set; }
         public int PurchasedLot { get; set; }
-        public List<decimal> Last9Close
-        {
-            get
-            {
-                if (string.IsNullOrEmpty(Last9TechData))
-                {
-                    return new List<decimal>();
-                }
-                List<StockTechData> last9TechDataList = JsonConvert.DeserializeObject<List<StockTechData>>(Last9TechData);
-                return last9TechDataList.Select(x => x.Close).ToList();
-            }
-        }
-        public List<decimal> Last4Close
-        {
-            get
-            {
-                if (string.IsNullOrEmpty(Last9TechData))
-                {
-                    return new List<decimal>();
-                }
-                List<StockTechData> last9TechDataList = JsonConvert.DeserializeObject<List<StockTechData>>(Last9TechData);
-                return last9TechDataList.Take(4).Select(x => x.Close).ToList();
-            }
-        }
+        public decimal SumOfLast9Close { get; set; }
         public bool IsTradingStarted { get; set; }
     }
 }

@@ -3,10 +3,10 @@ using Core.Model;
 using Core.Repository.Interface;
 using Core.Service.Interface;
 using Microsoft.Extensions.Configuration;
+using Newtonsoft.Json;
 using Serilog;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -50,8 +50,10 @@ namespace Core.Service
         {
             try
             {
-                _stockCandidateDict = (await _candidateRepository.GetActiveCandidate()).ToDictionary(x => x.StockCode);
-                if (!_stockCandidateDict.Any()) return;
+                List<StockCandidate> stockCandidateList = await _candidateRepository.GetActiveCandidate();
+                if (!stockCandidateList.Any()) return;
+                SetLast9Close(stockCandidateList);
+                _stockCandidateDict = stockCandidateList.ToDictionary(x => x.StockCode);
                 objYuantaOneAPI.Open(_enumEnvironmentMode);
                 await Task.Delay(-1, _cts.Token);
             }
@@ -71,7 +73,6 @@ namespace Core.Service
                 objYuantaOneAPI.Dispose();
             }
         }
-
         void objApi_OnResponse(int intMark, uint dwIndex, string strIndex, object objHandle, object objValue)
         {
             string strResult = "";
@@ -168,7 +169,7 @@ namespace Core.Service
             if (candidate.IsHolding)
             {
                 if ((level1AskPrice <= candidate.EntryPoint && level1AskPrice <= candidate.StopLossPoint) ||
-                    (level1AskPrice > candidate.EntryPoint && level1AskPrice < (candidate.Last9Close.Sum() + level1AskPrice) / 10))
+                    (level1AskPrice > candidate.EntryPoint && level1AskPrice < (candidate.SumOfLast9Close + level1AskPrice) / 10))
                 {
                     StockOrder stockOrder = SetDefaultStockOrder();
                     stockOrder.StkCode = stockCode;
@@ -186,7 +187,7 @@ namespace Core.Service
                 if (level1AskPrice == candidate.EntryPoint &&
                     orderQty > 0 &&
                     level1AskSize >= orderQty &&
-                    candidate.EntryPoint >= (candidate.Last9Close.Sum() + candidate.EntryPoint) / 10 &&
+                    candidate.EntryPoint >= (candidate.SumOfLast9Close + candidate.EntryPoint) / 10 &&
                     tradeConfig.MaxStockCount > _stockCandidateDict.Count(x => x.Value.IsHolding))
                 {
                     StockOrder stockOrder = SetDefaultStockOrder();
@@ -285,6 +286,16 @@ namespace Core.Service
             watch.MarketNo = Convert.ToByte(enumMarketNo);      //填入查詢市場代碼
             watch.StockCode = stockCode;                     //填入查詢股票代碼
             objYuantaOneAPI.UnsubscribeWatchlist(new List<Watchlist>() { watch });
+        }
+        private void SetLast9Close(List<StockCandidate> stockCandidateList)
+        {
+            foreach (var i in stockCandidateList)
+            {
+                if (string.IsNullOrEmpty(i.Last9TechData)) throw new Exception($"The Last9TechData of Stock {i.StockCode} is null.");
+                List<StockTechData> last9TechDataList = JsonConvert.DeserializeObject<List<StockTechData>>(i.Last9TechData);
+                if (last9TechDataList.Count != 9) throw new Exception($"The count of Last9TechData of Stock {i.StockCode} is not 9.");
+                i.SumOfLast9Close = last9TechDataList.Sum(x => x.Close);
+            }
         }
     }
 }
