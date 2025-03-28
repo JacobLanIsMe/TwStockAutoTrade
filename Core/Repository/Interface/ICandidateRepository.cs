@@ -12,5 +12,6 @@ namespace Core.Repository.Interface
         Task UpdateCandidate(List<Guid> candidateToDeleteList, List<StockCandidate> candidateToUpdateList, List<StockCandidate> candidateToInsertList);
         Task UpdateCrazyCandidate(List<Guid> candidateToDeleteList, List<StockCandidate> candidateToUpdateList, List<StockCandidate> candidateToInsertList);
         Task UpdateHoldingStock(List<StockCandidate> candidateToUpdateList);
+        Task UpdateExRrightsExDividendDate(List<StockCandidate> candidateToUpdateList);
     }
 }

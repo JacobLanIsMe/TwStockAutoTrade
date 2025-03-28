@@ -121,5 +121,14 @@ namespace Core.Repository
                 await sqlConnection.ExecuteAsync(updateSqlCommand, candidateToUpdateList);
             }
         }
+        public async Task UpdateExRrightsExDividendDate(List<StockCandidate> candidateToUpdateList)
+        {
+            if (!candidateToUpdateList.Any()) return;
+            string updateSqlCommand = @"UPDATE [dbo].[Candidate] SET [ExRrightsExDividendDateTime] = @ExRrightsExDividendDateTime WHERE [Id] = @Id";
+            using (SqlConnection sqlConnection = new SqlConnection(_dbConnectionString))
+            {
+                await sqlConnection.ExecuteAsync(updateSqlCommand, candidateToUpdateList);
+            }
+        }
     }
 }

@@ -20,5 +20,6 @@ namespace Core.Model
         public decimal EntryPoint { get; set; }
         public bool IsHolding { get; set; }
         public bool IsHitProfitPoint { get; set; }
+        public DateTime? ExRrightsExDividendDateTime { get; set; }
     }
 }

@@ -9,5 +9,6 @@ namespace Core.Service.Interface
     public interface IDateTimeService
     {
         DateTime GetTaiwanTime();
+        DateTime ConvertTaiwaneseCalendarToGregorianCalendar(string taiwanDate);
     }
 }

@@ -37,13 +37,13 @@ namespace Core.Service
         }
         public async Task SelectStock()
         {
-            await UpdateExDevidendDate();
             List<StockCandidate> allStockInfoList = await GetStockInfoList();
             if (!doesNeedUpdate(allStockInfoList)) return;
             List<StockCandidate> candidateList = SelectCandidate(allStockInfoList);
             List<StockCandidate> crazyCandidateList = SelectCrazyCandidate(allStockInfoList);
             Dictionary<string, StockCandidate> allStockInfoDict = allStockInfoList.ToDictionary(x => x.StockCode);
             await UpdateCandidate(candidateList, allStockInfoDict);
+            await UpdateExRightsExDevidendDate();
             await UpdateTrade(allStockInfoDict);
             await UpdateCrazyCandidate(crazyCandidateList, allStockInfoDict);
         }
@@ -98,22 +98,6 @@ namespace Core.Service
             }).ToList();
             _logger.Information("Get TWOTC stock code finished.");
             return stockList;
-        }
-        private async Task UpdateExDevidendDate()
-        {
-            List<ExRrightsExDividend> twotcExRrightsExDividendList = await GetTwotcExRightsExDevidendDate();
-        }
-        private async Task<List<ExRrightsExDividend>> GetTwotcExRightsExDevidendDate()
-        {
-            HttpResponseMessage response = await _httpClient.GetAsync("https://www.tpex.org.tw/openapi/v1/tpex_exright_prepost");
-            string responseBody = await response.Content.ReadAsStringAsync();
-            List<TwotcExRrightsExDividend> exRrightsExDividendList = JsonConvert.DeserializeObject<List<TwotcExRrightsExDividend>>(responseBody);
-            List<ExRrightsExDividend> result = exRrightsExDividendList.Select(x => new ExRrightsExDividend
-            {
-                StockCode = x.SecuritiesCompanyCode.ToUpper(),
-                ExRrightsExDividendDateTime = x.ExRrightsExDividendDateTime
-            }).ToList();
-            return result;
         }
         private async Task GetDailyExchangeReport(List<StockCandidate> stockList)
         {
@@ -380,6 +364,61 @@ namespace Core.Service
                 i.Last9TechData = JsonConvert.SerializeObject(stock.TechDataList.Take(9));
             }
             await _tradeRepository.UpdateLast9TechData(stockHoldingList);
+        }
+        private async Task UpdateExRightsExDevidendDate()
+        {
+            List<ExRrightsExDividend> twseExRrightsExDividendList = await GetTwseExRightsExDevidendDate();
+            List<ExRrightsExDividend> twotcExRrightsExDividendList = await GetTwotcExRightsExDevidendDate();
+            List<ExRrightsExDividend> allExRrightsExDividendList = twseExRrightsExDividendList.Concat(twotcExRrightsExDividendList).ToList();
+            Dictionary<string, ExRrightsExDividend> allExRrightsExDividendDict = new Dictionary<string, ExRrightsExDividend>();
+            foreach (var i in allExRrightsExDividendList)
+            {
+                if (i.ExRrightsExDividendDateTime.Date <= _dateTimeService.GetTaiwanTime().Date) continue;
+                if (allExRrightsExDividendDict.TryGetValue(i.StockCode, out ExRrightsExDividend exRrightsExDividend))
+                {
+                    if (i.ExRrightsExDividendDateTime < exRrightsExDividend.ExRrightsExDividendDateTime)
+                    {
+                        allExRrightsExDividendDict[i.StockCode] = i;
+                    }
+                }
+                else
+                {
+                    allExRrightsExDividendDict.Add(i.StockCode, i);
+                }
+            }
+            List<StockCandidate> candidateList = await _candidateRepository.GetActiveCandidate();
+            foreach (var i in candidateList)
+            {
+                if (allExRrightsExDividendDict.TryGetValue(i.StockCode, out ExRrightsExDividend exRrightsExDividend))
+                {
+                    i.ExRrightsExDividendDateTime = exRrightsExDividend.ExRrightsExDividendDateTime;
+                }
+            }
+            await _candidateRepository.UpdateExRrightsExDividendDate(candidateList);
+        }
+        private async Task<List<ExRrightsExDividend>> GetTwseExRightsExDevidendDate()
+        {
+            HttpResponseMessage response = await _httpClient.GetAsync("https://openapi.twse.com.tw/v1/exchangeReport/TWT48U_ALL");
+            string responseBody = await response.Content.ReadAsStringAsync();
+            List<TwseExRrightsExDividend> exRrightsExDividendList = JsonConvert.DeserializeObject<List<TwseExRrightsExDividend>>(responseBody);
+            List<ExRrightsExDividend> result = exRrightsExDividendList.Select(x => new ExRrightsExDividend
+            {
+                StockCode = x.Code.ToUpper(),
+                ExRrightsExDividendDateTime = _dateTimeService.ConvertTaiwaneseCalendarToGregorianCalendar(x.Date)
+            }).ToList();
+            return result;
+        }
+        private async Task<List<ExRrightsExDividend>> GetTwotcExRightsExDevidendDate()
+        {
+            HttpResponseMessage response = await _httpClient.GetAsync("https://www.tpex.org.tw/openapi/v1/tpex_exright_prepost");
+            string responseBody = await response.Content.ReadAsStringAsync();
+            List<TwotcExRrightsExDividend> exRrightsExDividendList = JsonConvert.DeserializeObject<List<TwotcExRrightsExDividend>>(responseBody);
+            List<ExRrightsExDividend> result = exRrightsExDividendList.Select(x => new ExRrightsExDividend
+            {
+                StockCode = x.SecuritiesCompanyCode.ToUpper(),
+                ExRrightsExDividendDateTime = _dateTimeService.ConvertTaiwaneseCalendarToGregorianCalendar(x.ExRrightsExDividendDate)
+            }).ToList();
+            return result;
         }
         private bool doesNeedUpdate(List<StockCandidate> stockList)
         {
