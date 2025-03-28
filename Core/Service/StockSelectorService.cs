@@ -141,10 +141,10 @@ namespace Core.Service
             List<StockCandidate> candidateList = new List<StockCandidate>();
             foreach (var i in stockList)
             {
-                i.IsCandidate = IsCandidate(i.TechDataList, out StockTechData gapUpTechData);
-                if (!i.IsCandidate || gapUpTechData == null) continue;
-                i.GapUpHigh = gapUpTechData.High;
-                i.GapUpLow = gapUpTechData.Low;
+                i.IsCandidate = IsCandidate(i.TechDataList, out decimal gapUpHigh, out decimal gapUpLow);
+                if (!i.IsCandidate || gapUpHigh == 0 || gapUpLow == 0) continue;
+                i.GapUpHigh = gapUpHigh;
+                i.GapUpLow = gapUpLow;
                 i.SelectedDate = i.TechDataList.First().Date;
                 i.EntryPoint = GetEntryPoint(i.GapUpHigh);
                 i.StopLossPoint = GetStopLossPoint(i.GapUpHigh);
@@ -153,11 +153,12 @@ namespace Core.Service
             }
             return candidateList;
         }
-        private bool IsCandidate(List<StockTechData> techDataList, out StockTechData gapUpTechData)
+        private bool IsCandidate(List<StockTechData> techDataList, out decimal gapUpHigh, out decimal gapUpLow)
         {
-            gapUpTechData = null;
+            gapUpHigh = 0;
+            gapUpLow = 0;
             if (techDataList.Count < 60) return false;
-            gapUpTechData = techDataList[4];
+            StockTechData gapUpTechData = techDataList[4];
             StockTechData prevGapUpTechData = techDataList[5];
             if (gapUpTechData.Low < prevGapUpTechData.High) return false;
             decimal ma60 = techDataList.Take(60).Average(x => x.Close);
@@ -174,6 +175,8 @@ namespace Core.Service
             bool isPeriodCloseHigherThanGapUpHigh = last4Close.Max() > gapUpTechData.High;
             bool isPeriodCloseLowerThanPrevGapUpHigh = last4Close.Min() < prevGapUpTechData.High;
             if (isPeriodCloseHigherThanGapUpHigh || isPeriodCloseLowerThanPrevGapUpHigh) return false;
+            gapUpHigh = gapUpTechData.High;
+            gapUpLow = prevGapUpTechData.High;
             return true;
         }
         private List<StockCandidate> SelectCrazyCandidate(List<StockCandidate> stockList)
