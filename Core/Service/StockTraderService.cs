@@ -18,7 +18,6 @@ namespace Core.Service
     public class StockTraderService : IStockTraderService
     {
         YuantaOneAPITrader objYuantaOneAPI = new YuantaOneAPITrader();
-        //private List<StockTrade> _stockHoldingList = new List<StockTrade>();
         private Dictionary<string, StockCandidate> _stockCandidateDict = new Dictionary<string, StockCandidate>(); // Key: StockCode
         private CancellationTokenSource _cts;
         private bool _hasStockOrder = false;
@@ -210,7 +209,6 @@ namespace Core.Service
             if (bResult)
             {
                 _hasStockOrder = true;
-                Task.Run(() => MonitorStockOrder());
             }
             else
             {
@@ -236,24 +234,38 @@ namespace Core.Service
             {
                 _logger.Error("Report type error");
             }
-            if (reportType != 51) return;
-            if (!int.TryParse(reportArray[13], out int purchasedShare))
+            if (reportType == 50)
             {
-                _logger.Error("PurchasedLot error");
+                string errorCode = reportArray[reportArray.Length - 1];
+                if (errorCode == "13048" || errorCode == "19348")
+                {
+                    _hasStockOrder = false;
+                }
             }
-            string stockCode = reportArray[4].Trim();
-            if (!_stockCandidateDict.TryGetValue(stockCode, out StockCandidate candidate)) return;
-            if (reportArray[9] == EBuySellType.B.ToString())
+            else if (reportType == 51)
             {
-                candidate.IsHolding = true;
-                candidate.PurchasedLot = purchasedShare / 1000;
+                if (!int.TryParse(reportArray[13], out int purchasedShare))
+                {
+                    _logger.Error("PurchasedLot error");
+                }
+                string stockCode = reportArray[4].Trim();
+                if (!_stockCandidateDict.TryGetValue(stockCode, out StockCandidate candidate)) return;
+                if (reportArray[9] == EBuySellType.B.ToString())
+                {
+                    candidate.IsHolding = true;
+                    candidate.PurchasedLot = purchasedShare / 1000;
+                    _hasStockOrder = false;
+                }
+                else
+                {
+                    candidate.PurchasedLot = candidate.PurchasedLot - (purchasedShare / 1000);
+                    if (candidate.PurchasedLot == 0)
+                    {
+                        candidate.IsHolding = false;
+                        _hasStockOrder = false;
+                    }
+                }
             }
-            else
-            {
-                candidate.IsHolding = false;
-                candidate.PurchasedLot = 0;
-            }
-            _hasStockOrder = false;
         }
         private void WatchListHandler(string strResult)
         {
@@ -299,41 +311,6 @@ namespace Core.Service
                 List<StockTechData> last9TechDataList = JsonConvert.DeserializeObject<List<StockTechData>>(i.Last9TechData);
                 if (last9TechDataList.Count != 9) throw new Exception($"The count of Last9TechData of Stock {i.StockCode} is not 9.");
                 i.SumOfLast9Close = last9TechDataList.Sum(x => x.Close);
-            }
-        }
-        private async Task MonitorStockOrder()
-        {
-            CancellationTokenSource cts = new CancellationTokenSource();
-            CancellationToken token = cts.Token;
-            try
-            {
-                var timeoutTask = Task.Delay(2000, token); // 設定 2 秒超時
-                var monitoringTask = Task.Run(async () =>
-                {
-                    while (_hasStockOrder)
-                    {
-                        await Task.Delay(1, token);
-                        if (token.IsCancellationRequested) return;
-                    }
-                }, token);
-                var completedTask = await Task.WhenAny(timeoutTask, monitoringTask);
-                if (completedTask == timeoutTask)
-                {
-                    _logger.Information("2 秒過去了，_hasStockOrder 仍為 true，停止監聽！");
-                    _hasStockOrder = false;
-                }
-            }
-            catch (TaskCanceledException)
-            {
-                _logger.Information("監聽被取消！");
-            }
-            catch (Exception ex)
-            {
-                _logger.Error($"Exception occurred: {ex.Message}");
-            }
-            finally
-            {
-                cts.Cancel();
             }
         }
     }
