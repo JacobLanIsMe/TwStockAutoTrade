@@ -4,6 +4,7 @@ using Core.Repository.Interface;
 using Core.Service.Interface;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Serilog;
 using System;
 using System.Collections.Generic;
@@ -111,8 +112,8 @@ namespace Core.Service
                                 WatchListHandler(strResult);
                                 break;
                             case "210.10.60.10":    //訂閱五檔報價
-                                strResult = _yuantaService.FunRealFivetick_Out((byte[])objValue);
-                                FiveTickHandler(strResult, out string stockCode, out decimal level1AskPrice, out int level1AskSize);
+                                string fivetickResult = _yuantaService.FunRealFivetick_Out((byte[])objValue);
+                                FiveTickHandler(fivetickResult, out string stockCode, out decimal level1AskPrice, out int level1AskSize);
                                 StockOrder(stockCode, level1AskPrice, level1AskSize);
                                 break;
                             default:
@@ -124,7 +125,10 @@ namespace Core.Service
                         strResult = Convert.ToString(objValue);
                         break;
                 }
-                _logger.Information(strResult);
+                if (!string.IsNullOrEmpty(strResult))
+                {
+                    _logger.Information(strResult);
+                }
             }
             catch (Exception ex)
             {
@@ -146,7 +150,6 @@ namespace Core.Service
                 return;
             }
             level1AskPrice = level1AskPrice / 10000;
-            _logger.Information($"Stock code: {stockCode}, Level 1 ask price: {level1AskPrice}, Level 1 ask size: {level1AskSize}");
         }
         private StockOrder SetDefaultStockOrder()
         {
@@ -207,6 +210,7 @@ namespace Core.Service
             if (bResult)
             {
                 _hasStockOrder = true;
+                Task.Run(() => MonitorStockOrder());
             }
             else
             {
@@ -295,6 +299,41 @@ namespace Core.Service
                 List<StockTechData> last9TechDataList = JsonConvert.DeserializeObject<List<StockTechData>>(i.Last9TechData);
                 if (last9TechDataList.Count != 9) throw new Exception($"The count of Last9TechData of Stock {i.StockCode} is not 9.");
                 i.SumOfLast9Close = last9TechDataList.Sum(x => x.Close);
+            }
+        }
+        private async Task MonitorStockOrder()
+        {
+            CancellationTokenSource cts = new CancellationTokenSource();
+            CancellationToken token = cts.Token;
+            try
+            {
+                var timeoutTask = Task.Delay(2000, token); // 設定 2 秒超時
+                var monitoringTask = Task.Run(async () =>
+                {
+                    while (_hasStockOrder)
+                    {
+                        await Task.Delay(1, token);
+                        if (token.IsCancellationRequested) return;
+                    }
+                }, token);
+                var completedTask = await Task.WhenAny(timeoutTask, monitoringTask);
+                if (completedTask == timeoutTask)
+                {
+                    _logger.Information("2 秒過去了，_hasStockOrder 仍為 true，停止監聽！");
+                    _hasStockOrder = false;
+                }
+            }
+            catch (TaskCanceledException)
+            {
+                _logger.Information("監聽被取消！");
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Exception occurred: {ex.Message}");
+            }
+            finally
+            {
+                cts.Cancel();
             }
         }
     }
