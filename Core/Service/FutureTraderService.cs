@@ -20,9 +20,11 @@ namespace Core.Service
         YuantaOneAPITrader objYuantaOneAPI = new YuantaOneAPITrader();
         private readonly enumEnvironmentMode _enumEnvironmentMode;
         private CancellationTokenSource _cts = new CancellationTokenSource();
-        private ConcurrentBag<int> _first15MinuteTickBag = new ConcurrentBag<int>();
-        private int _first15MinuteHigh = 0;
-        private int _first15MinuteLow = 0;
+        private Dictionary<int, KBarRecord> _kBarRecordDict = new Dictionary<int, KBarRecord>();
+        private KBarRecord _keyBar;
+        //private ConcurrentBag<int> _first15MinuteTickBag = new ConcurrentBag<int>();
+        private int _keyBarHigh = 0;
+        private int _keyBarLow = 0;
         private int _longProfitPoint = 0;
         private int _longStopLossPoint = 0;
         private int _shortProfitPoint = 0;
@@ -32,8 +34,7 @@ namespace Core.Service
         private bool _hasLongContract = false;
         private bool _hasShortContract = false;
         private bool _hitProfitPoint = false;
-        private readonly TimeSpan _afterMarketOpen15Minute;
-        private readonly TimeSpan _beforeMarketClose10Minute;
+        private readonly TimeSpan _beforeMarketClose5Minute;
         private readonly TimeSpan _lastEntryTime;
         private readonly TimeSpan _eveningMarketCloseTime = TimeSpan.FromHours(5);
         private readonly ILogger _logger;
@@ -41,7 +42,6 @@ namespace Core.Service
         private readonly string _futurePassword;
         private readonly FutureConfig _targetFutureConfig;
         private readonly int _maxOrderQuantity;
-        private readonly int _profitPoint;
         private readonly int _stopLossPoint;
         private readonly IYuantaService _yuantaService;
         private readonly IDateTimeService _dateTimeService;
@@ -58,22 +58,18 @@ namespace Core.Service
             _futureAccount = _enumEnvironmentMode == enumEnvironmentMode.PROD ? Environment.GetEnvironmentVariable("FutureAccount", EnvironmentVariableTarget.Machine) : "S98875005091";
             _futurePassword = _enumEnvironmentMode == enumEnvironmentMode.PROD ? Environment.GetEnvironmentVariable("StockPassword", EnvironmentVariableTarget.Machine) : "1234";
             _maxOrderQuantity = config.GetValue<int>("MaxOrderQuantity");
-            _profitPoint = config.GetValue<int>("ProfitPoint");
             _stopLossPoint = config.GetValue<int>("StopLossPoint");
             _settlementMonth = GetSettlementMonth();
             _targetFutureConfig = SetFutureConfig(config);
-            _afterMarketOpen15Minute = _targetFutureConfig.MarketOpenTime.Add(TimeSpan.FromMinutes(15));
-            _beforeMarketClose10Minute = _targetFutureConfig.MarketCloseTime.Subtract(TimeSpan.FromMinutes(10));
-            _lastEntryTime = _targetFutureConfig.MarketCloseTime.Subtract(TimeSpan.FromHours(1)).Subtract(TimeSpan.FromMinutes(30));
-            _first15MinuteHigh = config.GetValue<int>("First15MinuteHigh");
-            _first15MinuteLow = config.GetValue<int>("First15MinuteLow");
-            SetExitPoint();
+            _beforeMarketClose5Minute = _targetFutureConfig.MarketCloseTime.Subtract(TimeSpan.FromMinutes(5));
+            _lastEntryTime = _targetFutureConfig.MarketCloseTime.Subtract(TimeSpan.FromHours(1));
+            _keyBar = config.GetSection("KeyBar").Get<KBarRecord>();
             TimeSpan nowTimeSpan = _dateTimeService.GetTaiwanTime().TimeOfDay;
             if (nowTimeSpan < _eveningMarketCloseTime)
             {
                 nowTimeSpan = nowTimeSpan.Add(TimeSpan.FromHours(24));
             }
-            if (nowTimeSpan >= _targetFutureConfig.MarketOpenTime && (_first15MinuteHigh == 0 || _first15MinuteLow == 0)) throw new Exception("The first 15 minute high and low can not be 0");
+            if (nowTimeSpan >= _targetFutureConfig.MarketOpenTime && (_keyBar.High == 0 || _keyBar.Low == 0)) throw new Exception("The first 15 minute high and low can not be 0");
         }
         public async Task Trade()
         {
@@ -174,19 +170,31 @@ namespace Core.Service
             {
                 tickTime = tickTime.Add(TimeSpan.FromHours(24));
             }
-            if (tickTime < _afterMarketOpen15Minute && tickTime >= _targetFutureConfig.MarketOpenTime)
+
+            int kBarRecordDictKey = (int)((tickTime - _targetFutureConfig.MarketOpenTime).TotalMinutes / 30);
+            if (_kBarRecordDict.TryGetValue(kBarRecordDictKey, out KBarRecord record))
             {
-                _first15MinuteTickBag.Add(tickPrice);
+                if (tickPrice > record.High)
+                {
+                    record.High = tickPrice;
+                }
+                if (tickPrice < record.Low)
+                {
+                    record.Low = tickPrice;
+                }
             }
-            if ((_first15MinuteHigh == 0 || _first15MinuteLow == 0) && tickTime >= _afterMarketOpen15Minute)
+            else
             {
-                _first15MinuteHigh = _first15MinuteTickBag.Max();
-                _first15MinuteLow = _first15MinuteTickBag.Min();
-                SetExitPoint();
-            }
-            if (!_hitProfitPoint && ((_longProfitPoint != 0 && tickPrice > _longProfitPoint) || (_shortProfitPoint != 0 && tickPrice < _shortProfitPoint)))
-            {
-                _hitProfitPoint = true;
+                KBarRecord kBarRecord = new KBarRecord
+                {
+                    High = tickPrice,
+                    Low = tickPrice,
+                };
+                _kBarRecordDict.Add(kBarRecordDictKey, kBarRecord);
+                if (kBarRecordDictKey == 1 && (_keyBar.High == 0 || _keyBar.Low == 0))
+                {
+                    _keyBar = _kBarRecordDict[0]; // 取得第一個 KBar 的 High 和 Low
+                }
             }
             if (string.IsNullOrEmpty(_trade.OrderNo) && !_hasLongContract && !_hasShortContract && (tickTime >= _lastEntryTime || _hitProfitPoint))
             {
@@ -224,14 +232,14 @@ namespace Core.Service
         private void FutureOrder(TimeSpan tickTime, int tickPrice)
         {
             if (tickTime == TimeSpan.Zero || tickPrice == 0) return;
-            if (_first15MinuteHigh == 0 || _first15MinuteLow == 0 ||
+            if (_keyBar.High == 0 || _keyBar.Low == 0 ||
                 _longProfitPoint == 0 || _longStopLossPoint == 0 ||
                 _shortProfitPoint == 0 || _shortStopLossPoint == 0) return;
             if (string.IsNullOrEmpty(_trade.OrderNo))
             {
                 if (_hasLongContract)
                 {
-                    if (tickPrice > _longProfitPoint || tickPrice < _longStopLossPoint || tickTime >= _beforeMarketClose10Minute)
+                    if (tickPrice > _longProfitPoint || tickPrice < _longStopLossPoint || tickTime >= _beforeMarketClose5Minute)
                     {
                         FutureOrder futureOrder = SetDefaultFutureOrder();
                         futureOrder.Price = 0;                               //委託價格
@@ -243,7 +251,7 @@ namespace Core.Service
                 }
                 else if (_hasShortContract)
                 {
-                    if (tickPrice < _shortProfitPoint && tickPrice > _shortStopLossPoint || tickTime >= _beforeMarketClose10Minute)
+                    if (tickPrice < _shortProfitPoint && tickPrice > _shortStopLossPoint || tickTime >= _beforeMarketClose5Minute)
                     {
                         FutureOrder futureOrder = SetDefaultFutureOrder();
                         futureOrder.Price = 0;
@@ -255,19 +263,19 @@ namespace Core.Service
                 }
                 else if (tickTime < _lastEntryTime)
                 {
-                    if (tickPrice > _first15MinuteHigh + 10)
+                    if (tickPrice > _keyBarHigh + 10)
                     {
                         FutureOrder futureOrder = SetDefaultFutureOrder();
-                        futureOrder.Price = _first15MinuteHigh * 10000;                     //委託價格
+                        futureOrder.Price = _keyBarHigh * 10000;                     //委託價格
                         futureOrder.BuySell1 = EBuySellType.B.ToString();                 //買賣別, "B":買 "S":賣
                         futureOrder.OrderType = ((int)EFutureOrderType.限價).ToString();   //委託方式, 1:市價 2:限價 3:範圍市價
                         futureOrder.OrderCond = "";                                                      //委託條件, "":ROD 1:FOK 2:IOC
                         ProcessFutureOrder(futureOrder);
                     }
-                    else if (tickPrice < _first15MinuteLow - 10)
+                    else if (tickPrice < _keyBarLow - 10)
                     {
                         FutureOrder futureOrder = SetDefaultFutureOrder();
-                        futureOrder.Price = _first15MinuteLow * 10000;                      //委託價格
+                        futureOrder.Price = _keyBarLow * 10000;                      //委託價格
                         futureOrder.BuySell1 = EBuySellType.S.ToString();                 //買賣別, "B":買 "S":賣
                         futureOrder.OrderType = ((int)EFutureOrderType.限價).ToString();   //委託方式, 1:市價 2:限價 3:範圍市價
                         futureOrder.OrderCond = "";                                                      //委託條件, "":ROD 1:FOK 2:IOC
@@ -387,11 +395,11 @@ namespace Core.Service
         }
         private void SetExitPoint()
         {
-            if (_first15MinuteHigh == 0 || _first15MinuteLow == 0) return;
-            _longProfitPoint = _first15MinuteHigh + _profitPoint;
-            _longStopLossPoint = _first15MinuteHigh - _stopLossPoint;
-            _shortProfitPoint = _first15MinuteLow - _profitPoint;
-            _shortStopLossPoint = _first15MinuteLow + _stopLossPoint;
+            if (_keyBarHigh == 0 || _keyBarLow == 0) return;
+            //_longProfitPoint = _first15MinuteHigh + _profitPoint;
+            _longStopLossPoint = _keyBarHigh - _stopLossPoint;
+            //_shortProfitPoint = _first15MinuteLow - _profitPoint;
+            _shortStopLossPoint = _keyBarLow + _stopLossPoint;
         }
         private FutureConfig SetFutureConfig(IConfiguration config)
         {
