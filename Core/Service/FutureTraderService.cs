@@ -29,11 +29,11 @@ namespace Core.Service
         private int _longStopLossPoint = 0;
         private int _shortProfitPoint = 0;
         private int _shortStopLossPoint = 0;
-        //private string _orderNo = string.Empty;
         private FutureTrade _trade = new FutureTrade();
+        private bool _hasFutureOrder = false;
         private bool _hasLongContract = false;
         private bool _hasShortContract = false;
-        private bool _hitProfitPoint = false;
+        //private bool _hitProfitPoint = false;
         private readonly TimeSpan _beforeMarketClose5Minute;
         private readonly TimeSpan _lastEntryTime;
         private readonly TimeSpan _eveningMarketCloseTime = TimeSpan.FromHours(5);
@@ -171,7 +171,7 @@ namespace Core.Service
                 tickTime = tickTime.Add(TimeSpan.FromHours(24));
             }
 
-            int kBarRecordDictKey = (int)((tickTime - _targetFutureConfig.MarketOpenTime).TotalMinutes / 30);
+            int kBarRecordDictKey = GetKBarRecordDictKey(tickTime);
             if (_kBarRecordDict.TryGetValue(kBarRecordDictKey, out KBarRecord record))
             {
                 if (tickPrice > record.High)
@@ -201,7 +201,7 @@ namespace Core.Service
             //    _cts.Cancel();
             //}
         }
-        private FutureOrder SetDefaultFutureOrder()
+        private FutureOrder SetDefaultFutureOrder(EBuySellType eBuySellType)
         {
             FutureOrder futureOrder = new FutureOrder();
             futureOrder.Identify = 001;                                                      //識別碼
@@ -211,8 +211,12 @@ namespace Core.Service
             futureOrder.CallPut1 = "";                                                       //買賣權1
             futureOrder.SettlementMonth1 = Convert.ToInt32(_settlementMonth);                //商品年月1
             futureOrder.StrikePrice1 = 0;                                                    //屐約價1
+            futureOrder.Price = 0;                                                          //委託價格
             futureOrder.OrderQty1 = Convert.ToInt16(_maxOrderQuantity);                      //委託口數1
+            futureOrder.OrderType = ((int)EFutureOrderType.市價).ToString();     //委託方式, 1:市價 2:限價 3:範圍市價
+            futureOrder.OrderCond = "1";                                                      //委託條件, "":ROD 1:FOK 2:IOC
             futureOrder.OpenOffsetKind = "2";                                                //新平倉碼, 0:新倉 1:平倉 2:自動       
+            futureOrder.BuySell1 = eBuySellType.ToString();                                   //買賣別1, "B":買 "S":賣
             futureOrder.DayTradeID = "";                                                    //當沖註記, Y:當沖  "":非當沖
             futureOrder.SellerNo = 0;                                                        //營業員代碼                                            
             futureOrder.OrderNo = "";                                                        //委託書編號           
@@ -231,66 +235,40 @@ namespace Core.Service
         }
         private void FutureOrder(TimeSpan tickTime, int tickPrice)
         {
-            if (tickTime == TimeSpan.Zero || tickPrice == 0 || _keyBar.High == 0 || _keyBar.Low == 0) return;
-            if (string.IsNullOrEmpty(_trade.OrderNo))
+            if (tickTime == TimeSpan.Zero || tickPrice == 0 || _hasFutureOrder || _keyBar.High == 0 || _keyBar.Low == 0) return;
+
+            if (_hasLongContract)
             {
-                if (_hasLongContract)
+                if ((_trade.Point - _keyBar.High >= 10 && tickPrice < _keyBar.High) || 
+                    (_trade.Point - _keyBar.High < 10 && tickPrice < _trade.Point - 10) ||
+                    tickPrice < _kBarRecordDict[GetKBarRecordDictKey(tickTime) - 1].Low ||
+                    tickTime >= _beforeMarketClose5Minute)
                 {
-                    if (tickPrice > _longProfitPoint || tickPrice < _longStopLossPoint || tickTime >= _beforeMarketClose5Minute)
-                    {
-                        FutureOrder futureOrder = SetDefaultFutureOrder();
-                        futureOrder.Price = 0;                               //委託價格
-                        futureOrder.BuySell1 = EBuySellType.S.ToString();                   //買賣別, "B":買 "S":賣
-                        futureOrder.OrderType = ((int)EFutureOrderType.市價).ToString();     //委託方式, 1:市價 2:限價 3:範圍市價
-                        futureOrder.OrderCond = "1";                                                      //委託條件, "":ROD 1:FOK 2:IOC
-                        ProcessFutureOrder(futureOrder);
-                    }
-                }
-                else if (_hasShortContract)
-                {
-                    if (tickPrice < _shortProfitPoint && tickPrice > _shortStopLossPoint || tickTime >= _beforeMarketClose5Minute)
-                    {
-                        FutureOrder futureOrder = SetDefaultFutureOrder();
-                        futureOrder.Price = 0;
-                        futureOrder.BuySell1 = EBuySellType.B.ToString();
-                        futureOrder.OrderType = ((int)EFutureOrderType.市價).ToString();
-                        futureOrder.OrderCond = "1";                                                      //委託條件, "":ROD 1:FOK 2:IOC
-                        ProcessFutureOrder(futureOrder);
-                    }
-                }
-                else if (tickTime < _lastEntryTime)
-                {
-                    if (tickPrice > _keyBarHigh + 10)
-                    {
-                        FutureOrder futureOrder = SetDefaultFutureOrder();
-                        futureOrder.Price = _keyBarHigh * 10000;                     //委託價格
-                        futureOrder.BuySell1 = EBuySellType.B.ToString();                 //買賣別, "B":買 "S":賣
-                        futureOrder.OrderType = ((int)EFutureOrderType.限價).ToString();   //委託方式, 1:市價 2:限價 3:範圍市價
-                        futureOrder.OrderCond = "";                                                      //委託條件, "":ROD 1:FOK 2:IOC
-                        ProcessFutureOrder(futureOrder);
-                    }
-                    else if (tickPrice < _keyBarLow - 10)
-                    {
-                        FutureOrder futureOrder = SetDefaultFutureOrder();
-                        futureOrder.Price = _keyBarLow * 10000;                      //委託價格
-                        futureOrder.BuySell1 = EBuySellType.S.ToString();                 //買賣別, "B":買 "S":賣
-                        futureOrder.OrderType = ((int)EFutureOrderType.限價).ToString();   //委託方式, 1:市價 2:限價 3:範圍市價
-                        futureOrder.OrderCond = "";                                                      //委託條件, "":ROD 1:FOK 2:IOC
-                        ProcessFutureOrder(futureOrder);
-                    }
+                    FutureOrder futureOrder = SetDefaultFutureOrder(EBuySellType.S);
+                    ProcessFutureOrder(futureOrder);
                 }
             }
-            else
+            else if (_hasShortContract)
             {
-                if (_trade.OrderNo != _defaultOrderNo && _trade.OrderType != EFutureOrderType.市價 && (tickTime >= _lastEntryTime || _hitProfitPoint))
+                if ((_keyBar.Low - _trade.Point >= 10 && tickPrice > _keyBar.Low) ||
+                    (_keyBar.Low - _trade.Point < 10 && tickPrice > _trade.Point + 10) ||
+                    tickPrice > _kBarRecordDict[GetKBarRecordDictKey(tickTime) - 1].High ||
+                    tickTime >= _beforeMarketClose5Minute)
                 {
-                    FutureOrder futureOrder = SetDefaultFutureOrder();
-                    futureOrder.Price = 0;
-                    futureOrder.BuySell1 = _trade.BuySell.ToString();                                            // Same BuySell with the order
-                    futureOrder.OrderType = "";
-                    futureOrder.FunctionCode = 4;                                         //功能別, 0:委託單 4:取消 5:改量 7:改價
-                    futureOrder.OrderNo = _trade.OrderNo;                                                       //委託書編號    
-                    futureOrder.OrderCond = "";                                                      //委託條件, "":ROD 1:FOK 2:IOC
+                    FutureOrder futureOrder = SetDefaultFutureOrder(EBuySellType.B);
+                    ProcessFutureOrder(futureOrder);
+                }
+            }
+            else if (tickTime < _lastEntryTime)
+            {
+                if (tickPrice > _keyBar.High && tickPrice <= _keyBar.High + 5)
+                {
+                    FutureOrder futureOrder = SetDefaultFutureOrder(EBuySellType.B);
+                    ProcessFutureOrder(futureOrder);
+                }
+                else if (tickPrice < _keyBar.Low && tickPrice >= _keyBar.Low - 5)
+                {
+                    FutureOrder futureOrder = SetDefaultFutureOrder(EBuySellType.S);
                     ProcessFutureOrder(futureOrder);
                 }
             }
@@ -300,8 +278,7 @@ namespace Core.Service
             bool bResult = objYuantaOneAPI.SendFutureOrder(_futureAccount, new List<FutureOrder>() { futureOrder });
             if (bResult)
             {
-                if (futureOrder.FunctionCode == 4) return;
-                _trade.OrderNo = _defaultOrderNo;
+                _hasFutureOrder = true;
             }
             else
             {
@@ -318,7 +295,7 @@ namespace Core.Service
                 !string.IsNullOrEmpty(resultArray[resultArray.Length - 1].Trim()))
             {
                 _logger.Error($"FutureStockOrder error. Error message: {resultArray[resultArray.Length - 2]}, {resultArray[resultArray.Length - 1]}");
-                _trade.OrderNo = string.Empty;
+                _hasFutureOrder = false;
             }
         }
         private void RealReportHandler(string strResult)
@@ -397,6 +374,10 @@ namespace Core.Service
             _longStopLossPoint = _keyBarHigh - _stopLossPoint;
             //_shortProfitPoint = _first15MinuteLow - _profitPoint;
             _shortStopLossPoint = _keyBarLow + _stopLossPoint;
+        }
+        private int GetKBarRecordDictKey(TimeSpan tickTime)
+        {
+            return (int)((tickTime - _targetFutureConfig.MarketOpenTime).TotalMinutes / 30);
         }
         private FutureConfig SetFutureConfig(IConfiguration config)
         {
