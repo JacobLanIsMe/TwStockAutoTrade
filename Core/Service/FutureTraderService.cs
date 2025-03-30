@@ -160,18 +160,19 @@ namespace Core.Service
                 _logger.Error("Tick time failed in TickHandler");
                 return;
             }
+            if (tickTime < _eveningMarketCloseTime)
+            {
+                tickTime = tickTime.Add(TimeSpan.FromHours(24));
+            }
+            if (tickTime < _targetFutureConfig.MarketOpenTime) return;
+            int kBarRecordDictKey = GetKBarRecordDictKey(tickTime);
+
             if (!int.TryParse(tickInfo[6], out tickPrice))
             {
                 _logger.Error("Tick price failed in TickHandler");
                 return;
             }
             tickPrice = tickPrice / 1000;
-            if (tickTime < _eveningMarketCloseTime)
-            {
-                tickTime = tickTime.Add(TimeSpan.FromHours(24));
-            }
-
-            int kBarRecordDictKey = GetKBarRecordDictKey(tickTime);
             if (_kBarRecordDict.TryGetValue(kBarRecordDictKey, out KBarRecord record))
             {
                 if (tickPrice > record.High)
@@ -191,7 +192,7 @@ namespace Core.Service
                     Low = tickPrice,
                 };
                 _kBarRecordDict.Add(kBarRecordDictKey, kBarRecord);
-                if (kBarRecordDictKey == 1 && (_keyBar.High == 0 || _keyBar.Low == 0))
+                if (kBarRecordDictKey == 1 && _keyBar.High == 0 && _keyBar.Low == 0)
                 {
                     _keyBar = _kBarRecordDict[0]; // 取得第一個 KBar 的 High 和 Low
                 }
@@ -201,7 +202,7 @@ namespace Core.Service
             //    _cts.Cancel();
             //}
         }
-        private FutureOrder SetDefaultFutureOrder(EBuySellType eBuySellType)
+        private FutureOrder SetFutureOrder(EBuySellType eBuySellType)
         {
             FutureOrder futureOrder = new FutureOrder();
             futureOrder.Identify = 001;                                                      //識別碼
@@ -239,37 +240,43 @@ namespace Core.Service
 
             if (_hasLongContract)
             {
-                if ((_trade.Point - _keyBar.High >= 10 && tickPrice < _keyBar.High) || 
-                    (_trade.Point - _keyBar.High < 10 && tickPrice < _trade.Point - 10) ||
-                    tickPrice < _kBarRecordDict[GetKBarRecordDictKey(tickTime) - 1].Low ||
+                if ((_trade.Point - _keyBar.High >= _stopLossPoint && tickPrice < _keyBar.High) || 
+                    (_trade.Point - _keyBar.High < _stopLossPoint && tickPrice < _trade.Point - _stopLossPoint) ||
                     tickTime >= _beforeMarketClose5Minute)
                 {
-                    FutureOrder futureOrder = SetDefaultFutureOrder(EBuySellType.S);
-                    ProcessFutureOrder(futureOrder);
+                    ProcessFutureOrder(SetFutureOrder(EBuySellType.S));
+                }
+                else if (tickPrice < _kBarRecordDict[GetKBarRecordDictKey(tickTime) - 1].Low)
+                {
+                    _keyBar.High = _kBarRecordDict[GetKBarRecordDictKey(tickTime) - 1].High;
+                    _keyBar.Low = 0;
+                    ProcessFutureOrder(SetFutureOrder(EBuySellType.S));
                 }
             }
             else if (_hasShortContract)
             {
-                if ((_keyBar.Low - _trade.Point >= 10 && tickPrice > _keyBar.Low) ||
-                    (_keyBar.Low - _trade.Point < 10 && tickPrice > _trade.Point + 10) ||
-                    tickPrice > _kBarRecordDict[GetKBarRecordDictKey(tickTime) - 1].High ||
+                if ((_keyBar.Low - _trade.Point >= _stopLossPoint && tickPrice > _keyBar.Low) ||
+                    (_keyBar.Low - _trade.Point < _stopLossPoint && tickPrice > _trade.Point + _stopLossPoint) ||
                     tickTime >= _beforeMarketClose5Minute)
                 {
-                    FutureOrder futureOrder = SetDefaultFutureOrder(EBuySellType.B);
-                    ProcessFutureOrder(futureOrder);
+                    ProcessFutureOrder(SetFutureOrder(EBuySellType.B));
+                }
+                else if (tickPrice > _kBarRecordDict[GetKBarRecordDictKey(tickTime) - 1].High)
+                {
+                    _keyBar.High = 0;
+                    _keyBar.Low = _kBarRecordDict[GetKBarRecordDictKey(tickTime) - 1].Low;
+                    ProcessFutureOrder(SetFutureOrder(EBuySellType.B));
                 }
             }
             else if (tickTime < _lastEntryTime)
             {
-                if (tickPrice > _keyBar.High && tickPrice <= _keyBar.High + 5)
+                if (_keyBar.High != 0 && tickPrice > _keyBar.High && tickPrice <= _keyBar.High + 5)
                 {
-                    FutureOrder futureOrder = SetDefaultFutureOrder(EBuySellType.B);
-                    ProcessFutureOrder(futureOrder);
+                    ProcessFutureOrder(SetFutureOrder(EBuySellType.B));
                 }
-                else if (tickPrice < _keyBar.Low && tickPrice >= _keyBar.Low - 5)
+                else if (_keyBar.Low != 0 && tickPrice < _keyBar.Low && tickPrice >= _keyBar.Low - 5)
                 {
-                    FutureOrder futureOrder = SetDefaultFutureOrder(EBuySellType.S);
-                    ProcessFutureOrder(futureOrder);
+                    ProcessFutureOrder(SetFutureOrder(EBuySellType.S));
                 }
             }
         }
