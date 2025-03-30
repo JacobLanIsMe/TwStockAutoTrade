@@ -196,10 +196,10 @@ namespace Core.Service
                     _keyBar = _kBarRecordDict[0]; // 取得第一個 KBar 的 High 和 Low
                 }
             }
-            if (string.IsNullOrEmpty(_trade.OrderNo) && !_hasLongContract && !_hasShortContract && (tickTime >= _lastEntryTime || _hitProfitPoint))
-            {
-                _cts.Cancel();
-            }
+            //if (string.IsNullOrEmpty(_trade.OrderNo) && !_hasLongContract && !_hasShortContract && (tickTime >= _lastEntryTime || _hitProfitPoint))
+            //{
+            //    _cts.Cancel();
+            //}
         }
         private FutureOrder SetDefaultFutureOrder()
         {
@@ -231,10 +231,7 @@ namespace Core.Service
         }
         private void FutureOrder(TimeSpan tickTime, int tickPrice)
         {
-            if (tickTime == TimeSpan.Zero || tickPrice == 0) return;
-            if (_keyBar.High == 0 || _keyBar.Low == 0 ||
-                _longProfitPoint == 0 || _longStopLossPoint == 0 ||
-                _shortProfitPoint == 0 || _shortStopLossPoint == 0) return;
+            if (tickTime == TimeSpan.Zero || tickPrice == 0 || _keyBar.High == 0 || _keyBar.Low == 0) return;
             if (string.IsNullOrEmpty(_trade.OrderNo))
             {
                 if (_hasLongContract)
