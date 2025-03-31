@@ -22,18 +22,8 @@ namespace Core.Service
         private CancellationTokenSource _cts = new CancellationTokenSource();
         private Dictionary<int, KBarRecord> _kBarRecordDict = new Dictionary<int, KBarRecord>();
         private KBarRecord _keyBar;
-        //private ConcurrentBag<int> _first15MinuteTickBag = new ConcurrentBag<int>();
-        private int _keyBarHigh = 0;
-        private int _keyBarLow = 0;
-        private int _longProfitPoint = 0;
-        private int _longStopLossPoint = 0;
-        private int _shortProfitPoint = 0;
-        private int _shortStopLossPoint = 0;
         private Trade _trade = new Trade();
         private bool _hasFutureOrder = false;
-        private bool _hasLongContract = false;
-        private bool _hasShortContract = false;
-        //private bool _hitProfitPoint = false;
         private readonly TimeSpan _beforeMarketClose5Minute;
         private readonly TimeSpan _lastEntryTime;
         private readonly TimeSpan _eveningMarketCloseTime = TimeSpan.FromHours(5);
@@ -46,7 +36,6 @@ namespace Core.Service
         private readonly IYuantaService _yuantaService;
         private readonly IDateTimeService _dateTimeService;
         private readonly string _settlementMonth;
-        private readonly string _defaultOrderNo = "defaultOrderNo";
         public FutureTraderService(IConfiguration config, ILogger logger, IDateTimeService dateTimeService, IYuantaService yuantaService)
         {
             objYuantaOneAPI.OnResponse += new OnResponseEventHandler(objApi_OnResponse);
@@ -200,10 +189,10 @@ namespace Core.Service
                     _keyBar = _kBarRecordDict[0]; // 取得第一個 KBar 的 High 和 Low
                 }
             }
-            //if (string.IsNullOrEmpty(_trade.OrderNo) && !_hasLongContract && !_hasShortContract && (tickTime >= _lastEntryTime || _hitProfitPoint))
-            //{
-            //    _cts.Cancel();
-            //}
+            if (tickTime >= _lastEntryTime && _trade.OpenOffsetKind == EOpenOffsetKind.平倉 && !_hasFutureOrder)
+            {
+                _cts.Cancel();
+            }
         }
         private FutureOrder SetFutureOrder(EBuySellType eBuySellType)
         {
@@ -239,47 +228,52 @@ namespace Core.Service
         }
         private void FutureOrder(TimeSpan tickTime, int tickPrice)
         {
-            if (tickTime == TimeSpan.Zero || tickPrice == 0 || _hasFutureOrder || _keyBar.High == 0 || _keyBar.Low == 0) return;
-
-            if (_hasLongContract)
+            if (tickTime == TimeSpan.Zero || tickPrice == 0 || _hasFutureOrder || (_keyBar.High == 0 && _keyBar.Low == 0)) return;
+            if (_trade.OpenOffsetKind == EOpenOffsetKind.新倉)
             {
-                if ((_trade.Point - _keyBar.High >= _stopLossPoint && tickPrice < _keyBar.High) ||
-                    (_trade.Point - _keyBar.High < _stopLossPoint && tickPrice < _trade.Point - _stopLossPoint) ||
-                    tickTime >= _beforeMarketClose5Minute)
+                if (_trade.BuySell == EBuySellType.B)
                 {
-                    ProcessFutureOrder(SetFutureOrder(EBuySellType.S));
+                    if ((_trade.Point - _keyBar.High >= _stopLossPoint && tickPrice < _keyBar.High) ||
+                        (_trade.Point - _keyBar.High < _stopLossPoint && tickPrice < _trade.Point - _stopLossPoint) ||
+                        tickTime >= _beforeMarketClose5Minute)
+                    {
+                        ProcessFutureOrder(SetFutureOrder(EBuySellType.S));
+                    }
+                    else if (tickPrice < _kBarRecordDict[GetKBarRecordDictKey(tickTime) - 1].Low)
+                    {
+                        _keyBar.High = _kBarRecordDict[GetKBarRecordDictKey(tickTime) - 1].High;
+                        _keyBar.Low = 0;
+                        ProcessFutureOrder(SetFutureOrder(EBuySellType.S));
+                    }
                 }
-                else if (tickPrice < _kBarRecordDict[GetKBarRecordDictKey(tickTime) - 1].Low)
+                else if (_trade.BuySell == EBuySellType.S)
                 {
-                    _keyBar.High = _kBarRecordDict[GetKBarRecordDictKey(tickTime) - 1].High;
-                    _keyBar.Low = 0;
-                    ProcessFutureOrder(SetFutureOrder(EBuySellType.S));
+                    if ((_keyBar.Low - _trade.Point >= _stopLossPoint && tickPrice > _keyBar.Low) ||
+                        (_keyBar.Low - _trade.Point < _stopLossPoint && tickPrice > _trade.Point + _stopLossPoint) ||
+                        tickTime >= _beforeMarketClose5Minute)
+                    {
+                        ProcessFutureOrder(SetFutureOrder(EBuySellType.B));
+                    }
+                    else if (tickPrice > _kBarRecordDict[GetKBarRecordDictKey(tickTime) - 1].High)
+                    {
+                        _keyBar.High = 0;
+                        _keyBar.Low = _kBarRecordDict[GetKBarRecordDictKey(tickTime) - 1].Low;
+                        ProcessFutureOrder(SetFutureOrder(EBuySellType.B));
+                    }
                 }
             }
-            else if (_hasShortContract)
+            else
             {
-                if ((_keyBar.Low - _trade.Point >= _stopLossPoint && tickPrice > _keyBar.Low) ||
-                    (_keyBar.Low - _trade.Point < _stopLossPoint && tickPrice > _trade.Point + _stopLossPoint) ||
-                    tickTime >= _beforeMarketClose5Minute)
+                if (tickTime < _lastEntryTime)
                 {
-                    ProcessFutureOrder(SetFutureOrder(EBuySellType.B));
-                }
-                else if (tickPrice > _kBarRecordDict[GetKBarRecordDictKey(tickTime) - 1].High)
-                {
-                    _keyBar.High = 0;
-                    _keyBar.Low = _kBarRecordDict[GetKBarRecordDictKey(tickTime) - 1].Low;
-                    ProcessFutureOrder(SetFutureOrder(EBuySellType.B));
-                }
-            }
-            else if (tickTime < _lastEntryTime)
-            {
-                if (_keyBar.High != 0 && tickPrice > _keyBar.High && tickPrice <= _keyBar.High + 5)
-                {
-                    ProcessFutureOrder(SetFutureOrder(EBuySellType.B));
-                }
-                else if (_keyBar.Low != 0 && tickPrice < _keyBar.Low && tickPrice >= _keyBar.Low - 5)
-                {
-                    ProcessFutureOrder(SetFutureOrder(EBuySellType.S));
+                    if (_keyBar.High != 0 && tickPrice > _keyBar.High && tickPrice <= _keyBar.High + 5)
+                    {
+                        ProcessFutureOrder(SetFutureOrder(EBuySellType.B));
+                    }
+                    else if (_keyBar.Low != 0 && tickPrice < _keyBar.Low && tickPrice >= _keyBar.Low - 5)
+                    {
+                        ProcessFutureOrder(SetFutureOrder(EBuySellType.S));
+                    }
                 }
             }
         }
@@ -343,28 +337,26 @@ namespace Core.Service
             }
             else if (reportType == 3)
             {
-                if (orderNo == _trade.OrderNo)
+                if (orderNo != _trade.OrderNo) return;
+                _trade.PurchasedLot = _trade.PurchasedLot + lot;
+                if (_trade.Point == 0)
                 {
-                    _trade.PurchasedLot = _trade.PurchasedLot + lot;
-                    if (_trade.Point == 0)
+                    _trade.Point = point;
+                }
+                else
+                {
+                    if (buySell == EBuySellType.B)
                     {
-                        _trade.Point = point;
+                        _trade.Point = Math.Max(_trade.Point, point);
                     }
                     else
                     {
-                        if (buySell == EBuySellType.B)
-                        {
-                            _trade.Point = Math.Max(_trade.Point, point);
-                        }
-                        else
-                        {
-                            _trade.Point = Math.Min(_trade.Point, point);
-                        }
+                        _trade.Point = Math.Min(_trade.Point, point);
                     }
-                    if (_trade.OrderedLot == _trade.PurchasedLot)
-                    {
-                        _hasFutureOrder = false;
-                    }
+                }
+                if (_trade.PurchasedLot == _trade.OrderedLot)
+                {
+                    _hasFutureOrder = false;
                 }
             }
         }
@@ -376,14 +368,6 @@ namespace Core.Service
             stocktick.StockCode = _targetFutureConfig.FutureCode;
             lstStocktick.Add(stocktick);
             objYuantaOneAPI.SubscribeStockTick(lstStocktick);
-        }
-        private void SetExitPoint()
-        {
-            if (_keyBarHigh == 0 || _keyBarLow == 0) return;
-            //_longProfitPoint = _first15MinuteHigh + _profitPoint;
-            _longStopLossPoint = _keyBarHigh - _stopLossPoint;
-            //_shortProfitPoint = _first15MinuteLow - _profitPoint;
-            _shortStopLossPoint = _keyBarLow + _stopLossPoint;
         }
         private int GetKBarRecordDictKey(TimeSpan tickTime)
         {

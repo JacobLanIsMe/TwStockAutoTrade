@@ -14,6 +14,6 @@ namespace Core.Model
         public int OrderedLot { get; set; }
         public int PurchasedLot { get; set; }
         public int Point { get; set; }
-        public EOpenOffsetKind OpenOffsetKind { get; set; }
+        public EOpenOffsetKind OpenOffsetKind { get; set; } = EOpenOffsetKind.平倉;
     }
 }
