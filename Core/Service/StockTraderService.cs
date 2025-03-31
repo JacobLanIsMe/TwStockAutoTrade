@@ -19,7 +19,6 @@ namespace Core.Service
         YuantaOneAPITrader objYuantaOneAPI = new YuantaOneAPITrader();
         private Dictionary<string, StockCandidate> _stockCandidateDict = new Dictionary<string, StockCandidate>(); // Key: StockCode
         private CancellationTokenSource _cts;
-        //private bool _hasStockOrder = false;
         private Trade _trade = null;
         private readonly StockTradeConfig tradeConfig;
         private readonly ICandidateRepository _candidateRepository;
