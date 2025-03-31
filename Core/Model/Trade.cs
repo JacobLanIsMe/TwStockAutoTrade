@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace Core.Model
 {
-    public class FutureTrade
+    public class Trade
     {
         public string OrderNo { get; set; } = string.Empty;
         public EBuySellType BuySell { get; set; }

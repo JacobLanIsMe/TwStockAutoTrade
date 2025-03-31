@@ -4,7 +4,6 @@ using Core.Repository.Interface;
 using Core.Service.Interface;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using Serilog;
 using System;
 using System.Collections.Generic;
@@ -20,7 +19,8 @@ namespace Core.Service
         YuantaOneAPITrader objYuantaOneAPI = new YuantaOneAPITrader();
         private Dictionary<string, StockCandidate> _stockCandidateDict = new Dictionary<string, StockCandidate>(); // Key: StockCode
         private CancellationTokenSource _cts;
-        private bool _hasStockOrder = false;
+        //private bool _hasStockOrder = false;
+        private Trade _trade = null;
         private readonly StockTradeConfig tradeConfig;
         private readonly ICandidateRepository _candidateRepository;
         private readonly ILogger _logger;
@@ -166,7 +166,7 @@ namespace Core.Service
         }
         private void StockOrder(string stockCode, decimal level1AskPrice, int level1AskSize)
         {
-            if (string.IsNullOrEmpty(stockCode) || level1AskPrice == 0 || level1AskSize == 0 || _hasStockOrder) return;
+            if (string.IsNullOrEmpty(stockCode) || level1AskPrice == 0 || level1AskSize == 0 || _trade != null) return;
             if (!_stockCandidateDict.TryGetValue(stockCode, out StockCandidate candidate) || !candidate.IsTradingStarted) return;
             if (candidate.IsHolding)
             {
@@ -208,7 +208,7 @@ namespace Core.Service
             bool bResult = objYuantaOneAPI.SendStockOrder(_stockAccount, new List<StockOrder>() { stockOrder });
             if (bResult)
             {
-                _hasStockOrder = true;
+                _trade = new Trade();
             }
             else
             {
@@ -224,7 +224,7 @@ namespace Core.Service
                 !string.IsNullOrEmpty(resultArray[resultArray.Length - 1].Trim()))
             {
                 _logger.Error($"SendStockOrder error. Error message: {resultArray[resultArray.Length - 2]}, {resultArray[resultArray.Length - 1]}");
-                _hasStockOrder = false;
+                _trade = null;
             }
         }
         private void RealReportHandler(string strResult)
@@ -234,35 +234,46 @@ namespace Core.Service
             {
                 _logger.Error("Report type error");
             }
+            if (!int.TryParse(reportArray[13], out int purchasedShare))
+            {
+                _logger.Error("PurchasedLot error");
+            }
+            purchasedShare = purchasedShare / 1000;
+            string orderNo = reportArray[2].Trim().Substring(4); // 委託單號
             if (reportType == 50)
             {
                 string errorCode = reportArray[reportArray.Length - 1];
                 if (errorCode == "13048" || errorCode == "19348")
                 {
-                    _hasStockOrder = false;
+                    _trade = null;
+                }
+                else
+                {
+                    _trade.OrderNo = orderNo;
+                    _trade.OrderedLot = purchasedShare;
                 }
             }
             else if (reportType == 51)
             {
-                if (!int.TryParse(reportArray[13], out int purchasedShare))
-                {
-                    _logger.Error("PurchasedLot error");
-                }
                 string stockCode = reportArray[4].Trim();
                 if (!_stockCandidateDict.TryGetValue(stockCode, out StockCandidate candidate)) return;
+                if (orderNo != _trade.OrderNo) return;
                 if (reportArray[9] == EBuySellType.B.ToString())
                 {
                     candidate.IsHolding = true;
-                    candidate.PurchasedLot = purchasedShare / 1000;
-                    _hasStockOrder = false;
+                    candidate.PurchasedLot = candidate.PurchasedLot + purchasedShare;
+                    if (candidate.PurchasedLot == _trade.OrderedLot)
+                    {
+                        _trade = null;
+                    }
                 }
                 else
                 {
-                    candidate.PurchasedLot = candidate.PurchasedLot - (purchasedShare / 1000);
+                    candidate.PurchasedLot = candidate.PurchasedLot - purchasedShare;
                     if (candidate.PurchasedLot == 0)
                     {
                         candidate.IsHolding = false;
-                        _hasStockOrder = false;
+                        _trade = null;
                     }
                 }
             }

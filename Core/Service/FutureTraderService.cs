@@ -29,7 +29,7 @@ namespace Core.Service
         private int _longStopLossPoint = 0;
         private int _shortProfitPoint = 0;
         private int _shortStopLossPoint = 0;
-        private FutureTrade _trade = new FutureTrade();
+        private Trade _trade = new Trade();
         private bool _hasFutureOrder = false;
         private bool _hasLongContract = false;
         private bool _hasShortContract = false;

@@ -161,7 +161,7 @@
     <Compile Include="Model\BlockingQueue.cs" />
     <Compile Include="Model\ExRrightsExDividend.cs" />
     <Compile Include="Model\FutureConfig.cs" />
-    <Compile Include="Model\FutureTrade.cs" />
+    <Compile Include="Model\Trade.cs" />
     <Compile Include="Model\KBarRecord.cs" />
     <Compile Include="Model\StockSharedModel.cs" />
     <Compile Include="Model\StringListModel.cs" />
