@@ -58,7 +58,7 @@ namespace Core.Service
             {
                 nowTimeSpan = nowTimeSpan.Add(TimeSpan.FromHours(24));
             }
-            if (nowTimeSpan >= _targetFutureConfig.MarketOpenTime && (_keyBar.High == 0 || _keyBar.Low == 0)) throw new Exception("The first 15 minute high and low can not be 0");
+            if (nowTimeSpan >= _targetFutureConfig.MarketOpenTime && _keyBar.High == 0 && _keyBar.Low == 0) throw new Exception("The key bar high and low can not be 0");
         }
         public async Task Trade()
         {
