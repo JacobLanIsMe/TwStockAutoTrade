@@ -128,8 +128,8 @@ namespace Core.Service
                                 RealReportHandler(strResult);
                                 break;
                             case "210.10.40.10":    //訂閱個股分時明細
-                                strResult = _yuantaService.FunRealStocktick_Out((byte[])objValue);
-                                TickHandler(strResult, out TimeSpan tickTime, out int tickPrice);
+                                string tickResult = _yuantaService.FunRealStocktick_Out((byte[])objValue);
+                                TickHandler(tickResult, out TimeSpan tickTime, out int tickPrice);
                                 FutureOrder(tickTime, tickPrice);
                                 break;
                             default:
@@ -141,7 +141,10 @@ namespace Core.Service
                         strResult = Convert.ToString(objValue);
                         break;
                 }
-                _logger.Information(strResult);
+                if (!string.IsNullOrEmpty(strResult))
+                {
+                    _logger.Information(strResult);
+                }
             }
             catch (Exception ex)
             {
@@ -240,7 +243,7 @@ namespace Core.Service
 
             if (_hasLongContract)
             {
-                if ((_trade.Point - _keyBar.High >= _stopLossPoint && tickPrice < _keyBar.High) || 
+                if ((_trade.Point - _keyBar.High >= _stopLossPoint && tickPrice < _keyBar.High) ||
                     (_trade.Point - _keyBar.High < _stopLossPoint && tickPrice < _trade.Point - _stopLossPoint) ||
                     tickTime >= _beforeMarketClose5Minute)
                 {
@@ -308,60 +311,60 @@ namespace Core.Service
         private void RealReportHandler(string strResult)
         {
             string[] reportArray = strResult.Split(',');
-            if (!int.TryParse(reportArray[1].Split(':')[1], out int reportType))
+            if (!int.TryParse(reportArray[1].Split(':')[1], out int reportType))    // 回報類別
             {
                 _logger.Error("Report type error");
             }
-            string orderNo = reportArray[2].Trim().Substring(4); // 委託單號
-            if (reportType == 5)
+            if (!System.Enum.TryParse<EBuySellType>(reportArray[9], out EBuySellType buySell))  // 買賣別
             {
-                _trade.OrderNo = string.Empty;
+                _logger.Error("BuySellType error");
             }
-            else
+            if (!int.TryParse(reportArray[10], out int point))
             {
-                if (!System.Enum.TryParse<EBuySellType>(reportArray[9], out EBuySellType buySellType))
+                _logger.Error("Point error");
+            }
+            if (!int.TryParse(reportArray[13], out int lot))    // 委託口數
+            {
+                _logger.Error("Lot error");
+            }
+            if (!int.TryParse(reportArray[14], out int openOffsetKind))     // 新平倉碼, 0:新倉 1:平倉
+            {
+                _logger.Error("OpenOffsetKind error");
+            }
+            string orderNo = reportArray[2].Trim().Substring(4); // 委託單號
+            if (reportType == 2)
+            {
+                _trade.OrderNo = orderNo;
+                _trade.BuySell = buySell;
+                _trade.OrderedLot = lot;
+                _trade.PurchasedLot = 0;
+                _trade.Point = 0;
+                _trade.OpenOffsetKind = openOffsetKind == 0 ? EOpenOffsetKind.新倉 : EOpenOffsetKind.平倉;
+            }
+            else if (reportType == 3)
+            {
+                if (orderNo == _trade.OrderNo)
                 {
-                    _logger.Error("BuySellType error");
-                }
-                if (reportType == 2) // 期貨下單回報
-                {
-                    string reportOrderType = reportArray[8].Trim();
-                    if (reportOrderType == "L")
+                    _trade.PurchasedLot = _trade.PurchasedLot + lot;
+                    if (_trade.Point == 0)
                     {
-                        _trade.OrderType = EFutureOrderType.限價;
-                    }
-                    else if (reportOrderType == "M")
-                    {
-                        _trade.OrderType = EFutureOrderType.市價;
-                    }
-                    _trade.OrderNo = orderNo;
-                    _trade.BuySell = buySellType;
-                }
-                else if (reportType == 3) // 期貨成交回報
-                {
-                    if (!_hasLongContract && !_hasShortContract)
-                    {
-                        if (buySellType == EBuySellType.B)
-                        {
-                            _hasLongContract = true;
-                        }
-                        else
-                        {
-                            _hasShortContract = true;
-                        }
+                        _trade.Point = point;
                     }
                     else
                     {
-                        if (buySellType == EBuySellType.B)
+                        if (buySell == EBuySellType.B)
                         {
-                            _hasShortContract = false;
+                            _trade.Point = Math.Max(_trade.Point, point);
                         }
                         else
                         {
-                            _hasLongContract = false;
+                            _trade.Point = Math.Min(_trade.Point, point);
                         }
                     }
-                    _trade.OrderNo = string.Empty;
+                    if (_trade.OrderedLot == _trade.PurchasedLot)
+                    {
+                        _hasFutureOrder = false;
+                    }
                 }
             }
         }

@@ -10,10 +10,10 @@ namespace Core.Model
     public class FutureTrade
     {
         public string OrderNo { get; set; } = string.Empty;
-        public EFutureOrderType OrderType { get; set; }
         public EBuySellType BuySell { get; set; }
+        public int OrderedLot { get; set; }
+        public int PurchasedLot { get; set; }
         public int Point { get; set; }
-        //public DateTime? TradeDateTime { get; set; }
-        //public bool IsCancelled { get; set; }
+        public EOpenOffsetKind OpenOffsetKind { get; set; }
     }
 }
