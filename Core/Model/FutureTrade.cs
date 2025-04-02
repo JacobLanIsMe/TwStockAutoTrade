@@ -9,7 +9,6 @@ namespace Core.Model
 {
     public class FutureTrade
     {
-        public string OrderNo { get; set; } = string.Empty;
         public EBuySellType BuySell { get; set; }
         public int PurchasedLot { get; set; }
         public int Point { get; set; }
