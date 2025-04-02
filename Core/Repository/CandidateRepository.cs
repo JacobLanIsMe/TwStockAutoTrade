@@ -115,7 +115,7 @@ namespace Core.Repository
         public async Task UpdateHoldingStock(List<StockCandidate> candidateToUpdateList)
         {
             if (!candidateToUpdateList.Any()) return;
-            string updateSqlCommand = @"UPDATE [dbo].[Candidate] SET [IsHolding] = @IsHolding, [PurchasedLot] = @PurchasedLot WHERE [Id] = @Id";
+            string updateSqlCommand = @"UPDATE [dbo].[Candidate] SET [PurchasedLot] = @PurchasedLot WHERE [Id] = @Id";
             using (SqlConnection sqlConnection = new SqlConnection(_dbConnectionString))
             {
                 await sqlConnection.ExecuteAsync(updateSqlCommand, candidateToUpdateList);

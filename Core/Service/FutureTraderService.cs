@@ -22,7 +22,7 @@ namespace Core.Service
         private CancellationTokenSource _cts = new CancellationTokenSource();
         private Dictionary<int, KBarRecord> _kBarRecordDict = new Dictionary<int, KBarRecord>();
         private KBarRecord _keyBar;
-        private Trade _trade = new Trade();
+        private FutureTrade _trade = new FutureTrade();
         private bool _hasFutureOrder = false;
         private readonly TimeSpan _beforeMarketClose5Minute;
         private readonly TimeSpan _lastEntryTime;
@@ -325,38 +325,42 @@ namespace Core.Service
             {
                 _logger.Error("OpenOffsetKind error");
             }
-            string orderNo = reportArray[2].Trim().Substring(4); // 委託單號
-            if (reportType == 2)
+            if (reportType == 3)
             {
-                _trade.OrderNo = orderNo;
                 _trade.BuySell = buySell;
-                _trade.OrderedLot = lot;
-                _trade.PurchasedLot = 0;
-                _trade.Point = 0;
-                _trade.OpenOffsetKind = openOffsetKind == 0 ? EOpenOffsetKind.新倉 : EOpenOffsetKind.平倉;
-            }
-            else if (reportType == 3)
-            {
-                if (orderNo != _trade.OrderNo) return;
-                _trade.PurchasedLot = _trade.PurchasedLot + lot;
-                if (_trade.Point == 0)
+                if (openOffsetKind == 0)
                 {
-                    _trade.Point = point;
-                }
-                else
-                {
-                    if (buySell == EBuySellType.B)
+                    _trade.OpenOffsetKind = EOpenOffsetKind.新倉;
+                    if (_trade.Point == 0)
                     {
-                        _trade.Point = Math.Max(_trade.Point, point);
+                        _trade.Point = point;
                     }
                     else
                     {
-                        _trade.Point = Math.Min(_trade.Point, point);
+                        if (buySell == EBuySellType.B)
+                        {
+                            _trade.Point = Math.Max(_trade.Point, point);
+                        }
+                        else
+                        {
+                            _trade.Point = Math.Min(_trade.Point, point);
+                        }
+                    }
+                    _trade.PurchasedLot = _trade.PurchasedLot + lot;
+                    if (_trade.PurchasedLot == _maxOrderQuantity)
+                    {
+                        _hasFutureOrder = false;
                     }
                 }
-                if (_trade.PurchasedLot == _trade.OrderedLot)
+                else
                 {
-                    _hasFutureOrder = false;
+                    _trade.OpenOffsetKind = EOpenOffsetKind.平倉;
+                    _trade.Point = 0;
+                    _trade.PurchasedLot = _trade.PurchasedLot - lot;
+                    if (_trade.PurchasedLot == 0)
+                    {
+                        _hasFutureOrder = false;
+                    }
                 }
             }
         }

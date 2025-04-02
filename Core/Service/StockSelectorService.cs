@@ -40,12 +40,12 @@ namespace Core.Service
             List<StockCandidate> allStockInfoList = await GetStockInfoList();
             if (!doesNeedUpdate(allStockInfoList)) return;
             List<StockCandidate> candidateList = SelectCandidate(allStockInfoList);
-            List<StockCandidate> crazyCandidateList = SelectCrazyCandidate(allStockInfoList);
+            //List<StockCandidate> crazyCandidateList = SelectCrazyCandidate(allStockInfoList);
             Dictionary<string, StockCandidate> allStockInfoDict = allStockInfoList.ToDictionary(x => x.StockCode);
             await UpdateCandidate(candidateList, allStockInfoDict);
             await UpdateExRightsExDevidendDate();
-            await UpdateTrade(allStockInfoDict);
-            await UpdateCrazyCandidate(crazyCandidateList, allStockInfoDict);
+            //await UpdateTrade(allStockInfoDict);
+            //await UpdateCrazyCandidate(crazyCandidateList, allStockInfoDict);
         }
         private async Task<List<StockCandidate>> GetStockInfoList()
         {
@@ -323,7 +323,7 @@ namespace Core.Service
             {
                 bool isDuplicateCandidate = candidateToInsertDict.ContainsKey(i.StockCode);
                 bool hasLatestStockInfo = allStockInfoDict.TryGetValue(i.StockCode, out StockCandidate stock);
-                if (i.IsHolding)
+                if (i.PurchasedLot > 0)
                 {
                     if (isDuplicateCandidate)
                     {
@@ -354,20 +354,20 @@ namespace Core.Service
             }
             await _candidateRepository.UpdateCandidate(candidateToDeleteList, candidateToUpdateList, candidateToInsertList);
         }
-        private async Task UpdateTrade(Dictionary<string, StockCandidate> allStockInfoDict)
-        {
-            List<StockTrade> stockHoldingList = await _tradeRepository.GetStockHolding();
-            foreach (var i in stockHoldingList)
-            {
-                if (!allStockInfoDict.TryGetValue(i.StockCode, out StockCandidate stock) || stock.TechDataList.Count < 9)
-                {
-                    _logger.Error($"Can not retrieve last 9 tech data of stock code {i.StockCode}.");
-                    continue;
-                }
-                i.Last9TechData = JsonConvert.SerializeObject(stock.TechDataList.Take(9));
-            }
-            await _tradeRepository.UpdateLast9TechData(stockHoldingList);
-        }
+        //private async Task UpdateTrade(Dictionary<string, StockCandidate> allStockInfoDict)
+        //{
+        //    List<StockTrade> stockHoldingList = await _tradeRepository.GetStockHolding();
+        //    foreach (var i in stockHoldingList)
+        //    {
+        //        if (!allStockInfoDict.TryGetValue(i.StockCode, out StockCandidate stock) || stock.TechDataList.Count < 9)
+        //        {
+        //            _logger.Error($"Can not retrieve last 9 tech data of stock code {i.StockCode}.");
+        //            continue;
+        //        }
+        //        i.Last9TechData = JsonConvert.SerializeObject(stock.TechDataList.Take(9));
+        //    }
+        //    await _tradeRepository.UpdateLast9TechData(stockHoldingList);
+        //}
         private async Task UpdateExRightsExDevidendDate()
         {
             List<ExRrightsExDividend> twseExRrightsExDividendList = await GetTwseExRightsExDevidendDate();

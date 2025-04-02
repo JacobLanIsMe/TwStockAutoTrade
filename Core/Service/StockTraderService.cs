@@ -19,7 +19,7 @@ namespace Core.Service
         YuantaOneAPITrader objYuantaOneAPI = new YuantaOneAPITrader();
         private Dictionary<string, StockCandidate> _stockCandidateDict = new Dictionary<string, StockCandidate>(); // Key: StockCode
         private CancellationTokenSource _cts;
-        private Trade _trade = null;
+        private StockTrade _trade = null;
         private readonly StockTradeConfig tradeConfig;
         private readonly ICandidateRepository _candidateRepository;
         private readonly ILogger _logger;
@@ -167,7 +167,7 @@ namespace Core.Service
         {
             if (string.IsNullOrEmpty(stockCode) || level1AskPrice == 0 || level1AskSize == 0 || _trade != null) return;
             if (!_stockCandidateDict.TryGetValue(stockCode, out StockCandidate candidate) || !candidate.IsTradingStarted) return;
-            if (candidate.IsHolding)
+            if (candidate.PurchasedLot > 0)
             {
                 if ((level1AskPrice <= candidate.EntryPoint && level1AskPrice <= candidate.StopLossPoint) ||
                     (level1AskPrice > candidate.EntryPoint && level1AskPrice < (candidate.SumOfLast9Close + level1AskPrice) / 10))
@@ -189,7 +189,7 @@ namespace Core.Service
                     orderQty > 0 &&
                     level1AskSize >= orderQty &&
                     candidate.EntryPoint >= (candidate.SumOfLast9Close + candidate.EntryPoint) / 10 &&
-                    tradeConfig.MaxStockCount > _stockCandidateDict.Count(x => x.Value.IsHolding))
+                    tradeConfig.MaxStockCount > _stockCandidateDict.Count(x => x.Value.PurchasedLot > 0))
                 {
                     StockOrder stockOrder = SetDefaultStockOrder();
                     stockOrder.StkCode = stockCode;   // 股票代號
@@ -207,7 +207,9 @@ namespace Core.Service
             bool bResult = objYuantaOneAPI.SendStockOrder(_stockAccount, new List<StockOrder>() { stockOrder });
             if (bResult)
             {
-                _trade = new Trade();
+                _trade = new StockTrade();
+                _trade.StockCode = stockOrder.StkCode;
+                _trade.OrderedLot = (int)stockOrder.OrderQty;
             }
             else
             {
@@ -246,20 +248,14 @@ namespace Core.Service
                 {
                     _trade = null;
                 }
-                else
-                {
-                    _trade.OrderNo = orderNo;
-                    _trade.OrderedLot = purchasedShare;
-                }
             }
             else if (reportType == 51)
             {
                 string stockCode = reportArray[4].Trim();
+                if (stockCode != _trade.StockCode) return;
                 if (!_stockCandidateDict.TryGetValue(stockCode, out StockCandidate candidate)) return;
-                if (orderNo != _trade.OrderNo) return;
                 if (reportArray[9] == EBuySellType.B.ToString())
                 {
-                    candidate.IsHolding = true;
                     candidate.PurchasedLot = candidate.PurchasedLot + purchasedShare;
                     if (candidate.PurchasedLot == _trade.OrderedLot)
                     {
@@ -271,7 +267,6 @@ namespace Core.Service
                     candidate.PurchasedLot = candidate.PurchasedLot - purchasedShare;
                     if (candidate.PurchasedLot == 0)
                     {
-                        candidate.IsHolding = false;
                         _trade = null;
                     }
                 }

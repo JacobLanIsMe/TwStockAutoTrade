@@ -8,6 +8,6 @@ namespace Core.Service.Interface
 {
     public interface ICrazyTraderService
     {
-        Task Trade();
+        //Task Trade();
     }
 }

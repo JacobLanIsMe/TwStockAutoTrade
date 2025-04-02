@@ -6,12 +6,9 @@ using System.Threading.Tasks;
 
 namespace Core.Model
 {
-    public class StockTrade : StockSharedModel
+    public class StockTrade
     {
-        public DateTime PurchaseDate { get; set; }
-        public decimal PurchasePoint { get; set; }
-        public DateTime? SaleDate { get; set; }
-        public decimal? SalePoint { get; set; }
-
+        public string StockCode { get; set; }
+        public int OrderedLot { get; set; }
     }
 }
