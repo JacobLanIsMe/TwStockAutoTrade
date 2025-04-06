@@ -286,7 +286,7 @@ namespace Core.Service
             }
             else
             {
-                _logger.Error($"SendFutureOrder error. Order No: {futureOrder.OrderNo} Order Type: {futureOrder.OrderType}, Buy or Sell: {futureOrder.BuySell1}");
+                _logger.Error($"SendFutureOrder error. Buy or Sell: {futureOrder.BuySell1}");
             }
         }
         private void FutureOrderHandler(string strResult)
