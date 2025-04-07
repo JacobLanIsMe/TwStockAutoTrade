@@ -1,12 +1,15 @@
 ﻿using Core.Enum;
+using Core.HttpClientFactory;
 using Core.Model;
 using Core.Service.Interface;
 using Microsoft.Extensions.Configuration;
+using Newtonsoft.Json;
 using Serilog;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
@@ -36,6 +39,9 @@ namespace Core.Service
         private readonly IYuantaService _yuantaService;
         private readonly IDateTimeService _dateTimeService;
         private readonly string _settlementMonth;
+        private int _longLimitPoint;
+        private int _shortLimitPoint;
+
         public FutureTraderService(IConfiguration config, ILogger logger, IDateTimeService dateTimeService, IYuantaService yuantaService)
         {
             objYuantaOneAPI.OnResponse += new OnResponseEventHandler(objApi_OnResponse);
@@ -48,12 +54,13 @@ namespace Core.Service
             _futurePassword = _enumEnvironmentMode == enumEnvironmentMode.PROD ? Environment.GetEnvironmentVariable("StockPassword", EnvironmentVariableTarget.Machine) : "1234";
             _maxOrderQuantity = config.GetValue<int>("MaxOrderQuantity");
             _stopLossPoint = config.GetValue<int>("StopLossPoint");
-            _settlementMonth = GetSettlementMonth();
+            DateTime now = _dateTimeService.GetTaiwanTime();
+            _settlementMonth = GetSettlementMonth(now);
             _targetFutureConfig = SetFutureConfig(config);
             _beforeMarketClose5Minute = _targetFutureConfig.MarketCloseTime.Subtract(TimeSpan.FromMinutes(5));
             _lastEntryTime = _targetFutureConfig.MarketCloseTime.Subtract(TimeSpan.FromHours(1));
             _keyBar = config.GetSection("KeyBar").Get<KBarRecord>();
-            TimeSpan nowTimeSpan = _dateTimeService.GetTaiwanTime().TimeOfDay;
+            TimeSpan nowTimeSpan = now.TimeOfDay;
             if (nowTimeSpan < _eveningMarketCloseTime)
             {
                 nowTimeSpan = nowTimeSpan.Add(TimeSpan.FromHours(24));
@@ -64,6 +71,9 @@ namespace Core.Service
         {
             try
             {
+                int lastClose = await GetLastClose();
+                _longLimitPoint = (int)(lastClose - ((double)lastClose * 0.09));
+                _shortLimitPoint = (int)(lastClose + ((double)lastClose * 0.09));
                 objYuantaOneAPI.Open(_enumEnvironmentMode);
                 await Task.Delay(-1, _cts.Token);
             }
@@ -266,11 +276,11 @@ namespace Core.Service
             {
                 if (tickTime < _lastEntryTime)
                 {
-                    if (_keyBar.High != 0 && tickPrice > _keyBar.High && tickPrice <= _keyBar.High + 5)
+                    if (_keyBar.High != 0 && tickPrice > _keyBar.High && tickPrice <= _keyBar.High + 5 && tickPrice > _longLimitPoint)
                     {
                         ProcessFutureOrder(SetFutureOrder(EBuySellType.B));
                     }
-                    else if (_keyBar.Low != 0 && tickPrice < _keyBar.Low && tickPrice >= _keyBar.Low - 5)
+                    else if (_keyBar.Low != 0 && tickPrice < _keyBar.Low && tickPrice >= _keyBar.Low - 5 && tickPrice < _shortLimitPoint)
                     {
                         ProcessFutureOrder(SetFutureOrder(EBuySellType.S));
                     }
@@ -407,19 +417,18 @@ namespace Core.Service
             }
             return futureConfig;
         }
-        private string GetSettlementMonth()
+        private string GetSettlementMonth(DateTime dateTime)
         {
-            DateTime now = _dateTimeService.GetTaiwanTime();
-            DateTime thirdWednesday = GetThirdWednesday(now.Year, now.Month);
+            DateTime thirdWednesday = GetThirdWednesday(dateTime.Year, dateTime.Month);
             string settlementMonth = "";
-            if (now.Day <= thirdWednesday.Day ||
-               (now.Day == thirdWednesday.Day + 1 && _targetFutureConfig.Period == EPeriod.Evening))
+            if (dateTime.Day <= thirdWednesday.Day ||
+               (dateTime.Day == thirdWednesday.Day + 1 && _targetFutureConfig.Period == EPeriod.Evening))
             {
-                settlementMonth = now.ToString("yyyyMM");
+                settlementMonth = dateTime.ToString("yyyyMM");
             }
             else
             {
-                settlementMonth = now.AddMonths(1).ToString("yyyyMM");
+                settlementMonth = dateTime.AddMonths(1).ToString("yyyyMM");
             }
             return settlementMonth;
         }
@@ -436,6 +445,20 @@ namespace Core.Service
             DateTime thirdWednesday = firstWednesday.AddDays(14);
 
             return thirdWednesday;
+        }
+        private async Task<int> GetLastClose()
+        {
+            SimpleHttpClientFactory httpClientFactory = new SimpleHttpClientFactory();
+            HttpClient httpClient = httpClientFactory.CreateClient();
+            HttpResponseMessage response = await httpClient.GetAsync("https://openapi.taifex.com.tw/v1/DailyMarketReportFut");
+            string responseBody = await response.Content.ReadAsStringAsync();
+            List<FutureTechData> futureInfoList = JsonConvert.DeserializeObject<List<FutureTechData>>(responseBody);
+            FutureTechData futureTech = futureInfoList.FirstOrDefault(x => x.Contract == _targetFutureConfig.TaifexCode && GetSettlementMonth(x.DateTime) == x.ContractMonth && x.TradingSession == "一般");
+            if (!int.TryParse(futureTech.Last, out int lastClose))
+            {
+                throw new Exception("Can not get last close");
+            }
+            return lastClose;
         }
     }
 }

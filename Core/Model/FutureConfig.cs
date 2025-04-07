@@ -11,6 +11,7 @@ namespace Core.Model
     {
         public string FutureCode { get; set; }
         public string CommodityId { get; set; }
+        public string TaifexCode { get; set; }
         public EPeriod Period { get; set; }
         public TimeSpan MarketOpenTime { get; set; }
         public TimeSpan MarketCloseTime { get; set; }
