@@ -60,29 +60,12 @@ namespace Core.Service
             _beforeMarketClose5Minute = _targetFutureConfig.MarketCloseTime.Subtract(TimeSpan.FromMinutes(5));
             _lastEntryTime = _targetFutureConfig.MarketCloseTime.Subtract(TimeSpan.FromHours(1));
             _keyBar = config.GetSection("KeyBar").Get<KBarRecord>();
-            SetPrevKBar(config);
             TimeSpan nowTimeSpan = now.TimeOfDay;
             if (nowTimeSpan < _eveningMarketCloseTime)
             {
                 nowTimeSpan = nowTimeSpan.Add(TimeSpan.FromHours(24));
             }
             if (nowTimeSpan >= _targetFutureConfig.MarketOpenTime && _keyBar.High == 0 && _keyBar.Low == 0) throw new Exception("The key bar high and low can not be 0");
-        }
-        private void SetPrevKBar(IConfiguration config)
-        {
-            string sectionKey = "PrevKBar";
-            int.TryParse(config.GetSection(sectionKey)["Key"], out int key);
-            int.TryParse(config.GetSection(sectionKey)["High"], out int high);
-            int.TryParse(config.GetSection(sectionKey)["Low"], out int low);
-            if (high != 0 && low != 0)
-            {
-                KBarRecord kBarRecord = new KBarRecord
-                {
-                    High = high,
-                    Low = low,
-                };
-                _kBarRecordDict.Add(key, kBarRecord);
-            }
         }
         public async Task Trade()
         {
