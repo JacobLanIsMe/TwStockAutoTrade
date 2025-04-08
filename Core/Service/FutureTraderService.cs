@@ -291,6 +291,7 @@ namespace Core.Service
             if (bResult)
             {
                 _hasFutureOrder = true;
+                _logger.Information($"SendFutureOrder success. Buy or Sell: {futureOrder.BuySell1}");
             }
             else
             {
@@ -459,6 +460,9 @@ namespace Core.Service
             }
             _longLimitPoint = (int)(lastClose - ((double)lastClose * 0.09));
             _shortLimitPoint = (int)(lastClose + ((double)lastClose * 0.09));
+            _logger.Information($"前一日收盤價: {lastClose}");
+            _logger.Information($"多單限價: {_longLimitPoint} 以上才可做多");
+            _logger.Information($"空單限價: {_shortLimitPoint} 以下才可做空");
         }
     }
 }
