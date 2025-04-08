@@ -450,6 +450,7 @@ namespace Core.Service
         {
             SimpleHttpClientFactory httpClientFactory = new SimpleHttpClientFactory();
             HttpClient httpClient = httpClientFactory.CreateClient();
+            httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
             HttpResponseMessage response = await httpClient.GetAsync("https://openapi.taifex.com.tw/v1/DailyMarketReportFut");
             string responseBody = await response.Content.ReadAsStringAsync();
             List<FutureTechData> futureInfoList = JsonConvert.DeserializeObject<List<FutureTechData>>(responseBody);
