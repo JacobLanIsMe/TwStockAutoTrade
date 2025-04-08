@@ -420,8 +420,7 @@ namespace Core.Service
         {
             DateTime thirdWednesday = GetThirdWednesday(dateTime.Year, dateTime.Month);
             string settlementMonth = "";
-            if (dateTime.Day <= thirdWednesday.Day ||
-               (dateTime.Day == thirdWednesday.Day + 1 && _targetFutureConfig.Period == EPeriod.Evening))
+            if (dateTime.Day < thirdWednesday.Day || (dateTime.Day == thirdWednesday.Day && dateTime.TimeOfDay < new TimeSpan(14, 0, 0)))
             {
                 settlementMonth = dateTime.ToString("yyyyMM");
             }
