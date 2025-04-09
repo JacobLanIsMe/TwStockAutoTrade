@@ -10,18 +10,12 @@ namespace Core.Model
 {
     public class FutureTechData
     {
-        public string Date { get; set; }
-        public string Contract { get; set; }
-        [JsonProperty("ContractMonth(Week)")]
-        public string ContractMonth { get; set; }
-        public string SettlementPrice { get; set; }
-        public string TradingSession { get; set; }
-        public DateTime DateTime
-        {
-            get
-            {
-                return DateTime.ParseExact(Date, "yyyyMMdd", null);
-            }
-        }
+        [JsonProperty("mem")]
+        public Mem Mem { get; set; }
+    }
+    public class Mem
+    {
+        [JsonProperty("129")]
+        public decimal SettlementPrice { get; set; }
     }
 }

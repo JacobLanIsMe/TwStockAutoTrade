@@ -448,15 +448,12 @@ namespace Core.Service
         {
             SimpleHttpClientFactory httpClientFactory = new SimpleHttpClientFactory();
             HttpClient httpClient = httpClientFactory.CreateClient();
-            httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
-            HttpResponseMessage response = await httpClient.GetAsync("https://openapi.taifex.com.tw/v1/DailyMarketReportFut");
+            //httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
+            HttpResponseMessage response = await httpClient.GetAsync("https://tw.screener.finance.yahoo.net/future/q?type=tick&perd=1m&mkt=01&sym=WTX%26&callback=jQuery111304508811793071039_1744181429926&_=1744181429927");
             string responseBody = await response.Content.ReadAsStringAsync();
-            List<FutureTechData> futureInfoList = JsonConvert.DeserializeObject<List<FutureTechData>>(responseBody);
-            FutureTechData futureTech = futureInfoList.FirstOrDefault(x => x.Contract == _targetFutureConfig.TaifexCode && GetSettlementMonth(x.DateTime) == x.ContractMonth && x.TradingSession == "一般");
-            if (!int.TryParse(futureTech.SettlementPrice, out int settlementPrice))
-            {
-                throw new Exception("Can not get last close");
-            }
+            responseBody = responseBody.Split('(')[1].Split(')')[0];
+            FutureTechData futureTechData = JsonConvert.DeserializeObject<FutureTechData>(responseBody);
+            int settlementPrice = (int)futureTechData.Mem.SettlementPrice;
             _longLimitPoint = (int)(settlementPrice - ((double)settlementPrice * 0.09));
             _shortLimitPoint = (int)(settlementPrice + ((double)settlementPrice * 0.09));
             _logger.Information($"前一個交易日結算價: {settlementPrice}");
