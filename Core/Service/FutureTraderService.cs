@@ -453,13 +453,13 @@ namespace Core.Service
             string responseBody = await response.Content.ReadAsStringAsync();
             List<FutureTechData> futureInfoList = JsonConvert.DeserializeObject<List<FutureTechData>>(responseBody);
             FutureTechData futureTech = futureInfoList.FirstOrDefault(x => x.Contract == _targetFutureConfig.TaifexCode && GetSettlementMonth(x.DateTime) == x.ContractMonth && x.TradingSession == "一般");
-            if (!int.TryParse(futureTech.Last, out int lastClose))
+            if (!int.TryParse(futureTech.SettlementPrice, out int settlementPrice))
             {
                 throw new Exception("Can not get last close");
             }
-            _longLimitPoint = (int)(lastClose - ((double)lastClose * 0.09));
-            _shortLimitPoint = (int)(lastClose + ((double)lastClose * 0.09));
-            _logger.Information($"前一日收盤價: {lastClose}");
+            _longLimitPoint = (int)(settlementPrice - ((double)settlementPrice * 0.09));
+            _shortLimitPoint = (int)(settlementPrice + ((double)settlementPrice * 0.09));
+            _logger.Information($"前一個交易日結算價: {settlementPrice}");
             _logger.Information($"多單限價: {_longLimitPoint} 以上才可做多");
             _logger.Information($"空單限價: {_shortLimitPoint} 以下才可做空");
         }
