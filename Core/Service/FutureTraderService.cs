@@ -318,24 +318,24 @@ namespace Core.Service
             {
                 _logger.Error("Report type error");
             }
-            if (!System.Enum.TryParse<EBuySellType>(reportArray[9], out EBuySellType buySell))  // 買賣別
-            {
-                _logger.Error("BuySellType error");
-            }
-            if (!int.TryParse(reportArray[10], out int point))
-            {
-                _logger.Error("Point error");
-            }
-            if (!int.TryParse(reportArray[13], out int lot))    // 委託口數
-            {
-                _logger.Error("Lot error");
-            }
-            if (!int.TryParse(reportArray[14], out int openOffsetKind))     // 新平倉碼, 0:新倉 1:平倉
-            {
-                _logger.Error("OpenOffsetKind error");
-            }
             if (reportType == 3)
             {
+                if (!System.Enum.TryParse<EBuySellType>(reportArray[9], out EBuySellType buySell))  // 買賣別
+                {
+                    _logger.Error("BuySellType error");
+                }
+                if (!int.TryParse(reportArray[10], out int point))
+                {
+                    _logger.Error("Point error");
+                }
+                if (!int.TryParse(reportArray[13], out int lot))    // 委託口數
+                {
+                    _logger.Error("Lot error");
+                }
+                if (!int.TryParse(reportArray[14], out int openOffsetKind))     // 新平倉碼, 0:新倉 1:平倉
+                {
+                    _logger.Error("OpenOffsetKind error");
+                }
                 _trade.BuySell = buySell;
                 if (openOffsetKind == 0)
                 {
