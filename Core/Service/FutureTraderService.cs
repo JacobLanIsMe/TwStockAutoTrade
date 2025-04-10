@@ -67,6 +67,7 @@ namespace Core.Service
                 nowTimeSpan = nowTimeSpan.Add(TimeSpan.FromHours(24));
             }
             if (nowTimeSpan >= _targetFutureConfig.MarketOpenTime && _keyBar.High == 0 && _keyBar.Low == 0) throw new Exception("The key bar high and low can not be 0");
+            PrintConfig();
         }
         public async Task Trade()
         {
@@ -470,6 +471,15 @@ namespace Core.Service
             {
                 throw new Exception("Can not find sellement price from Yahoo url");
             }
+        }
+        private void PrintConfig()
+        {
+            _logger.Information($"開盤時間: {_targetFutureConfig.MarketOpenTime}");
+            _logger.Information($"收盤時間: {_targetFutureConfig.MarketCloseTime}");
+            _logger.Information($"收盤前五分鐘時間: {_beforeMarketClose5Minute}");
+            _logger.Information($"最後進場時間: {_lastEntryTime}");
+            _logger.Information($"商品名稱: {_targetFutureConfig.CommodityId}");
+            _logger.Information($"商品年月: {_settlementMonth}");
         }
     }
 }
