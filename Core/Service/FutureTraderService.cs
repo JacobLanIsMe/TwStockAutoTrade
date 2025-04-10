@@ -4,6 +4,7 @@ using Core.Model;
 using Core.Service.Interface;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Serilog;
 using System;
 using System.Collections.Concurrent;
@@ -448,17 +449,27 @@ namespace Core.Service
         {
             SimpleHttpClientFactory httpClientFactory = new SimpleHttpClientFactory();
             HttpClient httpClient = httpClientFactory.CreateClient();
-            //httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
             HttpResponseMessage response = await httpClient.GetAsync("https://tw.screener.finance.yahoo.net/future/q?type=tick&perd=1m&mkt=01&sym=WTX%26&callback=jQuery111304508811793071039_1744181429926&_=1744181429927");
             string responseBody = await response.Content.ReadAsStringAsync();
-            responseBody = responseBody.Split('(')[1].Split(')')[0];
-            FutureTechData futureTechData = JsonConvert.DeserializeObject<FutureTechData>(responseBody);
-            int settlementPrice = (int)futureTechData.Mem.SettlementPrice;
-            _longLimitPoint = (int)(settlementPrice - ((double)settlementPrice * 0.09));
-            _shortLimitPoint = (int)(settlementPrice + ((double)settlementPrice * 0.09));
-            _logger.Information($"前一個交易日結算價: {settlementPrice}");
-            _logger.Information($"多單限價: {_longLimitPoint} 以上才可做多");
-            _logger.Information($"空單限價: {_shortLimitPoint} 以下才可做空");
+            string key = "\"129\":";
+            int startIndex = responseBody.IndexOf(key);
+            if (startIndex != -1)
+            {
+                startIndex += key.Length;
+                int endIndex = responseBody.IndexOf(",", startIndex);
+                string settlementPriceStr = responseBody.Substring(startIndex, endIndex - startIndex).Trim();
+                if (!decimal.TryParse(settlementPriceStr, out decimal value)) throw new Exception("Settlement price parse error");
+                int settlementPrice = (int)value;
+                _longLimitPoint = (int)(settlementPrice - ((double)settlementPrice * 0.09));
+                _shortLimitPoint = (int)(settlementPrice + ((double)settlementPrice * 0.09));
+                _logger.Information($"前一個交易日結算價: {settlementPrice}");
+                _logger.Information($"多單限價: {_longLimitPoint} 以上才可做多");
+                _logger.Information($"空單限價: {_shortLimitPoint} 以下才可做空");
+            }
+            else
+            {
+                throw new Exception("Can not find sellement price from Yahoo url");
+            }
         }
     }
 }
