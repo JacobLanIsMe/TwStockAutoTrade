@@ -73,6 +73,7 @@ namespace Core.Service
         {
             try
             {
+                _cts.CancelAfter(TimeSpan.FromHours(8));
                 await SetLimitPoint();
                 objYuantaOneAPI.Open(_enumEnvironmentMode);
                 await Task.Delay(-1, _cts.Token);
