@@ -249,11 +249,18 @@ namespace Core.Service
                     {
                         ProcessFutureOrder(SetFutureOrder(EBuySellType.S));
                     }
-                    else if (tickPrice < _kBarRecordDict[GetKBarRecordDictKey(tickTime) - 1].Low)
+                    else 
                     {
-                        _keyBar.High = _kBarRecordDict[GetKBarRecordDictKey(tickTime) - 1].High;
-                        _keyBar.Low = 0;
-                        ProcessFutureOrder(SetFutureOrder(EBuySellType.S));
+                        var prevKBar = _kBarRecordDict[GetKBarRecordDictKey(tickTime) - 1];
+                        if (tickPrice < prevKBar.Low)
+                        {
+                            if (prevKBar.Low > _keyBar.High)
+                            {
+                                _keyBar.High = prevKBar.High;
+                                _keyBar.Low = 0;
+                            }
+                            ProcessFutureOrder(SetFutureOrder(EBuySellType.S));
+                        }
                     }
                 }
                 else if (_trade.BuySell == EBuySellType.S)
@@ -264,11 +271,18 @@ namespace Core.Service
                     {
                         ProcessFutureOrder(SetFutureOrder(EBuySellType.B));
                     }
-                    else if (tickPrice > _kBarRecordDict[GetKBarRecordDictKey(tickTime) - 1].High)
+                    else 
                     {
-                        _keyBar.High = 0;
-                        _keyBar.Low = _kBarRecordDict[GetKBarRecordDictKey(tickTime) - 1].Low;
-                        ProcessFutureOrder(SetFutureOrder(EBuySellType.B));
+                        var prevKBar = _kBarRecordDict[GetKBarRecordDictKey(tickTime) - 1];
+                        if (tickPrice > prevKBar.High)
+                        {
+                            if (prevKBar.High < _keyBar.Low)
+                            {
+                                _keyBar.High = 0;
+                                _keyBar.Low = prevKBar.Low;
+                            }
+                            ProcessFutureOrder(SetFutureOrder(EBuySellType.B));
+                        }
                     }
                 }
             }
@@ -276,11 +290,11 @@ namespace Core.Service
             {
                 if (tickTime < _lastEntryTime)
                 {
-                    if (_keyBar.High != 0 && tickPrice > _keyBar.High && tickPrice <= _keyBar.High + 5 && tickPrice > _longLimitPoint)
+                    if (_keyBar.High != 0 && tickPrice > _keyBar.High && tickPrice <= _keyBar.High + _stopLossPoint && tickPrice > _longLimitPoint)
                     {
                         ProcessFutureOrder(SetFutureOrder(EBuySellType.B));
                     }
-                    else if (_keyBar.Low != 0 && tickPrice < _keyBar.Low && tickPrice >= _keyBar.Low - 5 && tickPrice < _shortLimitPoint)
+                    else if (_keyBar.Low != 0 && tickPrice < _keyBar.Low && tickPrice >= _keyBar.Low - _stopLossPoint && tickPrice < _shortLimitPoint)
                     {
                         ProcessFutureOrder(SetFutureOrder(EBuySellType.S));
                     }
