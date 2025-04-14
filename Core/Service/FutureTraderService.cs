@@ -62,7 +62,6 @@ namespace Core.Service
             _targetFutureConfig = SetFutureConfig(config);
             _beforeMarketClose5Minute = _targetFutureConfig.MarketCloseTime.Subtract(TimeSpan.FromMinutes(5));
             _lastEntryTime = _targetFutureConfig.MarketCloseTime.Subtract(TimeSpan.FromHours(1));
-            _keyBar = config.GetSection("KeyBar").Get<KBarRecord>();
             TimeSpan nowTimeSpan = now.TimeOfDay;
             if (nowTimeSpan < _eveningMarketCloseTime)
             {
@@ -383,6 +382,7 @@ namespace Core.Service
         }
         private void SetKeyBar(int kBarRecordDictKey)
         {
+            if (_doesProgramStartAfterMarketOpenTime && !_kBarRecordDict.TryGetValue(kBarRecordDictKey - 3, out KBarRecord prev3KBar)) return;
             if (_kBarRecordDict.TryGetValue(kBarRecordDictKey - 1, out KBarRecord prev1KBar) &&
                 _kBarRecordDict.TryGetValue(kBarRecordDictKey - 2, out KBarRecord prev2KBar))
             {
