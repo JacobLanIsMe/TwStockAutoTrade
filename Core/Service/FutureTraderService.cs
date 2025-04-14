@@ -25,7 +25,9 @@ namespace Core.Service
         private readonly enumEnvironmentMode _enumEnvironmentMode;
         private CancellationTokenSource _cts = new CancellationTokenSource();
         private Dictionary<int, KBarRecord> _kBarRecordDict = new Dictionary<int, KBarRecord>();
-        private KBarRecord _keyBar;
+        private int _kBarRecordDictMaxKey = 0;
+        private bool _doesProgramStartAfterMarketOpenTime = false;
+        private KBarRecord _keyBar = new KBarRecord();
         private FutureTrade _trade = new FutureTrade();
         private bool _hasFutureOrder = false;
         private readonly TimeSpan _beforeMarketClose5Minute;
@@ -66,7 +68,10 @@ namespace Core.Service
             {
                 nowTimeSpan = nowTimeSpan.Add(TimeSpan.FromHours(24));
             }
-            if (nowTimeSpan >= _targetFutureConfig.MarketOpenTime && _keyBar.High == 0 && _keyBar.Low == 0) throw new Exception("The key bar high and low can not be 0");
+            if (nowTimeSpan >= _targetFutureConfig.MarketOpenTime)
+            {
+                _doesProgramStartAfterMarketOpenTime = true;
+            }
             PrintConfig();
         }
         public async Task Trade()
@@ -195,14 +200,15 @@ namespace Core.Service
                     Low = tickPrice,
                 };
                 _kBarRecordDict.Add(kBarRecordDictKey, kBarRecord);
-                if (kBarRecordDictKey == 1 && _keyBar.High == 0 && _keyBar.Low == 0)
-                {
-                    _keyBar = _kBarRecordDict[0]; // 取得第一個 KBar 的 High 和 Low
-                }
+                _kBarRecordDictMaxKey = kBarRecordDictKey;
             }
-            if (tickTime >= _lastEntryTime && _trade.OpenOffsetKind == EOpenOffsetKind.平倉 && !_hasFutureOrder)
+            if (_trade.OpenOffsetKind == EOpenOffsetKind.平倉 && !_hasFutureOrder)
             {
-                _cts.Cancel();
+                SetKeyBar(kBarRecordDictKey);
+                if (tickTime >= _lastEntryTime)
+                {
+                    _cts.Cancel();
+                }
             }
         }
         private FutureOrder SetFutureOrder(EBuySellType eBuySellType)
@@ -246,44 +252,20 @@ namespace Core.Service
                 {
                     if ((_trade.Point - _keyBar.High >= _stopLossPoint && tickPrice < _keyBar.High) ||
                         (_trade.Point - _keyBar.High < _stopLossPoint && tickPrice < _trade.Point - _stopLossPoint) ||
+                        tickPrice < _kBarRecordDict[_kBarRecordDictMaxKey - 1].Low ||
                         tickTime >= _beforeMarketClose5Minute)
                     {
                         ProcessFutureOrder(SetFutureOrder(EBuySellType.S));
-                    }
-                    else 
-                    {
-                        var prevKBar = _kBarRecordDict[GetKBarRecordDictKey(tickTime) - 1];
-                        if (tickPrice < prevKBar.Low)
-                        {
-                            if (prevKBar.Low > _keyBar.High)
-                            {
-                                _keyBar.High = prevKBar.High;
-                                _keyBar.Low = 0;
-                            }
-                            ProcessFutureOrder(SetFutureOrder(EBuySellType.S));
-                        }
                     }
                 }
                 else if (_trade.BuySell == EBuySellType.S)
                 {
                     if ((_keyBar.Low - _trade.Point >= _stopLossPoint && tickPrice > _keyBar.Low) ||
                         (_keyBar.Low - _trade.Point < _stopLossPoint && tickPrice > _trade.Point + _stopLossPoint) ||
+                        tickPrice > _kBarRecordDict[_kBarRecordDictMaxKey - 1].High ||
                         tickTime >= _beforeMarketClose5Minute)
                     {
                         ProcessFutureOrder(SetFutureOrder(EBuySellType.B));
-                    }
-                    else 
-                    {
-                        var prevKBar = _kBarRecordDict[GetKBarRecordDictKey(tickTime) - 1];
-                        if (tickPrice > prevKBar.High)
-                        {
-                            if (prevKBar.High < _keyBar.Low)
-                            {
-                                _keyBar.High = 0;
-                                _keyBar.Low = prevKBar.Low;
-                            }
-                            ProcessFutureOrder(SetFutureOrder(EBuySellType.B));
-                        }
                     }
                 }
             }
@@ -398,6 +380,28 @@ namespace Core.Service
             stocktick.StockCode = _targetFutureConfig.FutureCode;
             lstStocktick.Add(stocktick);
             objYuantaOneAPI.SubscribeStockTick(lstStocktick);
+        }
+        private void SetKeyBar(int kBarRecordDictKey)
+        {
+            if (_kBarRecordDict.TryGetValue(kBarRecordDictKey - 1, out KBarRecord prev1KBar) &&
+                _kBarRecordDict.TryGetValue(kBarRecordDictKey - 2, out KBarRecord prev2KBar))
+            {
+                if (prev1KBar.High > prev2KBar.High && prev1KBar.Low > prev2KBar.Low)
+                {
+                    _keyBar.High = prev1KBar.High;
+                    _keyBar.Low = 0;
+                }
+                else if (prev1KBar.High < prev2KBar.High && prev1KBar.Low < prev2KBar.Low)
+                {
+                    _keyBar.High = 0;
+                    _keyBar.Low = prev1KBar.Low;
+                }
+                else
+                {
+                    _keyBar.High = 0;
+                    _keyBar.Low = 0;
+                }
+            }
         }
         private int GetKBarRecordDictKey(TimeSpan tickTime)
         {
