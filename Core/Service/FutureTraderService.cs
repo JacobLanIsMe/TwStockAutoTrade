@@ -134,6 +134,7 @@ namespace Core.Service
                             case "210.10.40.10":    //訂閱個股分時明細
                                 string tickResult = _yuantaService.FunRealStocktick_Out((byte[])objValue);
                                 TickHandler(tickResult, out TimeSpan tickTime, out int tickPrice);
+                                _logger.Information($"Tick price: {tickPrice}");
                                 FutureOrder(tickTime, tickPrice);
                                 break;
                             default:
@@ -518,6 +519,7 @@ namespace Core.Service
             _logger.Information($"收盤時間: {_targetFutureConfig.MarketCloseTime}");
             _logger.Information($"收盤前五分鐘時間: {_beforeMarketClose5Minute}");
             _logger.Information($"最後進場時間: {_lastEntryTime}");
+            _logger.Information($"商品代碼: {_targetFutureConfig.FutureCode}");
             _logger.Information($"商品名稱: {_targetFutureConfig.CommodityId}");
             _logger.Information($"商品年月: {_settlementMonth}");
         }
