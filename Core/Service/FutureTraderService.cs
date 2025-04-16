@@ -435,13 +435,34 @@ namespace Core.Service
                     futureConfig.MarketOpenTime = futureConfig.MarketOpenTime.Add(TimeSpan.FromHours(1));
                 }
             }
+            futureConfig.FutureCode = GetFutureCode(futureConfig.FutureCode);
             return futureConfig;
+        }
+        private string GetFutureCode(string futureCode)
+        {
+            Dictionary<string, string> monthMap = new Dictionary<string, string>
+            {
+                { "01", "A" },
+                { "02", "B" },
+                { "03", "C" },
+                { "04", "D" },
+                { "05", "E" },
+                { "06", "F" },
+                { "07", "G" },
+                { "08", "H" },
+                { "09", "I" },
+                { "10", "J" },
+                { "11", "K" },
+                { "12", "L" }
+            };
+            if (!monthMap.TryGetValue(_settlementMonth.Substring(4), out string code)) throw new Exception("Can not find future code");
+            return $"{futureCode}{code}5";
         }
         private string GetSettlementMonth(DateTime dateTime)
         {
             DateTime thirdWednesday = GetThirdWednesday(dateTime.Year, dateTime.Month);
             string settlementMonth = "";
-            if (dateTime.Day < thirdWednesday.Day || (dateTime.Day == thirdWednesday.Day && dateTime.TimeOfDay < new TimeSpan(14, 0, 0)))
+            if (dateTime.Day < thirdWednesday.Day)
             {
                 settlementMonth = dateTime.ToString("yyyyMM");
             }
