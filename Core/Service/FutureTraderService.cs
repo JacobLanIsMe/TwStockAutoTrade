@@ -457,7 +457,17 @@ namespace Core.Service
                 { "12", "L" }
             };
             if (!monthMap.TryGetValue(_settlementMonth.Substring(4), out string code)) throw new Exception("Can not find future code");
-            return $"{futureCode}{code}5";
+            DateTime now = _dateTimeService.GetTaiwanTime();
+            string correctFutureCode = "";
+            if (now.Hour >= 5 && now.Hour < 14)
+            {
+                correctFutureCode = $"{futureCode}{code}5";
+            }
+            else
+            {
+                correctFutureCode = $"{futureCode}8";
+            }
+            return correctFutureCode;
         }
         private string GetSettlementMonth(DateTime dateTime)
         {
