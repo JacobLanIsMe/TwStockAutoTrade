@@ -134,7 +134,6 @@ namespace Core.Service
                             case "210.10.40.10":    //訂閱個股分時明細
                                 string tickResult = _yuantaService.FunRealStocktick_Out((byte[])objValue);
                                 TickHandler(tickResult, out TimeSpan tickTime, out int tickPrice);
-                                _logger.Information($"Tick price: {tickPrice}");
                                 FutureOrder(tickTime, tickPrice);
                                 break;
                             default:
