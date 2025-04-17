@@ -273,11 +273,11 @@ namespace Core.Service
             {
                 if (tickTime < _lastEntryTime)
                 {
-                    if (_keyBar.High != 0 && tickPrice > _keyBar.High && tickPrice <= _keyBar.High + _stopLossPoint && tickPrice > _longLimitPoint)
+                    if (_keyBar.High != 0 && tickPrice > _keyBar.High && tickPrice <= _keyBar.High + 5 && tickPrice > _longLimitPoint)
                     {
                         ProcessFutureOrder(SetFutureOrder(EBuySellType.B));
                     }
-                    else if (_keyBar.Low != 0 && tickPrice < _keyBar.Low && tickPrice >= _keyBar.Low - _stopLossPoint && tickPrice < _shortLimitPoint)
+                    else if (_keyBar.Low != 0 && tickPrice < _keyBar.Low && tickPrice >= _keyBar.Low - 5 && tickPrice < _shortLimitPoint)
                     {
                         ProcessFutureOrder(SetFutureOrder(EBuySellType.S));
                     }
