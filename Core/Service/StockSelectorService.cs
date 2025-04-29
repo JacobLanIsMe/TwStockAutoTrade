@@ -166,7 +166,7 @@ namespace Core.Service
             double mv5 = techDataList.Take(5).Average(x => x.Volume);
             if (mv5 < 100) return false;
             decimal volatility = techDataList.Take(5).Max(x => x.Close) / techDataList.Take(5).Min(x => x.Close);
-            if (volatility > (decimal)1.02) return false;
+            if (volatility > (decimal)1.03) return false;
             decimal gapUpMa5 = techDataList.Skip(4).Take(5).Average(x => x.Close);
             decimal gapUpMa10 = techDataList.Skip(4).Take(10).Average(x => x.Close);
             decimal gapUpMa20 = techDataList.Skip(4).Take(20).Average(x => x.Close);
