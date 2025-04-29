@@ -28,17 +28,18 @@ namespace Core.Service
         private readonly string _stockAccount;
         private readonly string _stockPassword;
         private readonly string _todayDate;
+        private readonly DateTime _now;
         public StockTraderService(IConfiguration config, ICandidateRepository candidateRepository, IDateTimeService dateTimeService, ILogger logger, IYuantaService yuantaService)
         {
             tradeConfig = config.GetSection("TradeConfig").Get<StockTradeConfig>();
             string environment = config.GetValue<string>("Environment").ToUpper();
             _enumEnvironmentMode = environment == "PROD" ? enumEnvironmentMode.PROD : enumEnvironmentMode.UAT;
             _candidateRepository = candidateRepository;
-            DateTime now = dateTimeService.GetTaiwanTime();
-            DateTime stopTime = now.Date.AddHours(13).AddMinutes(25);
-            TimeSpan delayTime = stopTime - now;
+            _now = dateTimeService.GetTaiwanTime();
+            DateTime stopTime = _now.Date.AddHours(13).AddMinutes(25);
+            TimeSpan delayTime = stopTime - _now;
             _cts = delayTime > TimeSpan.Zero ? new CancellationTokenSource(delayTime) : new CancellationTokenSource();
-            _todayDate = now.ToString("yyyy/MM/dd");
+            _todayDate = _now.ToString("yyyy/MM/dd");
             _logger = logger;
             objYuantaOneAPI.OnResponse += new OnResponseEventHandler(objApi_OnResponse);
             _yuantaService = yuantaService;
@@ -184,6 +185,7 @@ namespace Core.Service
             }
             else
             {
+                if (candidate.ExRrightsExDividendDateTime.HasValue && _now.AddDays(8).Date > candidate.ExRrightsExDividendDateTime.Value.Date) return;
                 int orderQty = (int)(tradeConfig.MaxAmountPerStock / (candidate.EntryPoint * 1000));
                 if (level1AskPrice == candidate.EntryPoint &&
                     orderQty > 0 &&
