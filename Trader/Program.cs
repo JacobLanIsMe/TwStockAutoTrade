@@ -33,6 +33,7 @@ namespace Trader
                 .AddSingleton<ICandidateRepository, CandidateRepository>()
                 .AddSingleton<ITradeRepository, TradeRepository>()
                 .AddSingleton<IYuantaService, YuantaService>()
+                .AddSingleton<IDiscordService, DiscordService>()
                 .BuildServiceProvider();
             var stockTraderService = serviceProvider.GetRequiredService<IStockTraderService>();
             try

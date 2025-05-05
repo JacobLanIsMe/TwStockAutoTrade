@@ -25,11 +25,12 @@ namespace Core.Service
         private readonly ILogger _logger;
         private readonly enumEnvironmentMode _enumEnvironmentMode;
         private readonly IYuantaService _yuantaService;
+        private readonly IDiscordService _discordService;
         private readonly string _stockAccount;
         private readonly string _stockPassword;
         private readonly string _todayDate;
         private readonly DateTime _now;
-        public StockTraderService(IConfiguration config, ICandidateRepository candidateRepository, IDateTimeService dateTimeService, ILogger logger, IYuantaService yuantaService)
+        public StockTraderService(IConfiguration config, ICandidateRepository candidateRepository, IDateTimeService dateTimeService, ILogger logger, IYuantaService yuantaService, IDiscordService discordService)
         {
             tradeConfig = config.GetSection("TradeConfig").Get<StockTradeConfig>();
             string environment = config.GetValue<string>("Environment").ToUpper();
@@ -43,6 +44,7 @@ namespace Core.Service
             _logger = logger;
             objYuantaOneAPI.OnResponse += new OnResponseEventHandler(objApi_OnResponse);
             _yuantaService = yuantaService;
+            _discordService = discordService;
             _stockAccount = _enumEnvironmentMode == enumEnvironmentMode.PROD ? Environment.GetEnvironmentVariable("StockAccount", EnvironmentVariableTarget.Machine) : "S98875005091";
             _stockPassword = _enumEnvironmentMode == enumEnvironmentMode.PROD ? Environment.GetEnvironmentVariable("StockPassword", EnvironmentVariableTarget.Machine) : "1234";
         }
@@ -51,6 +53,7 @@ namespace Core.Service
             try
             {
                 List<StockCandidate> stockCandidateList = await _candidateRepository.GetActiveCandidate();
+                await SendCandidateToDiscord(stockCandidateList);
                 if (!stockCandidateList.Any()) return;
                 SetLast9Close(stockCandidateList);
                 _stockCandidateDict = stockCandidateList.ToDictionary(x => x.StockCode);
@@ -72,6 +75,24 @@ namespace Core.Service
                 objYuantaOneAPI.Close();
                 objYuantaOneAPI.Dispose();
             }
+        }
+        private async Task SendCandidateToDiscord(List<StockCandidate> stockCandidateList)
+        {
+            string message = "Trader started.\n";
+            message += $"Candidate count: {stockCandidateList.Count}\n";
+            if (stockCandidateList.Any())
+            {
+                foreach (var i in stockCandidateList)
+                {
+                    message += $"{i.StockCode} {i.CompanyName}";
+                    if (i.PurchasedLot > 0)
+                    {
+                        message += " Holding";
+                    }
+                    message += "\n";
+                }
+            }
+            await _discordService.SendMessage(message);
         }
         void objApi_OnResponse(int intMark, uint dwIndex, string strIndex, object objHandle, object objValue)
         {
