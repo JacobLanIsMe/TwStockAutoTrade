@@ -178,9 +178,11 @@
     <Compile Include="Repository\Interface\ITradeRepository.cs" />
     <Compile Include="Repository\TradeRepository.cs" />
     <Compile Include="Service\CrazyTraderService.cs" />
+    <Compile Include="Service\DiscordService.cs" />
     <Compile Include="Service\FutureTraderService.cs" />
     <Compile Include="Service\Interface\ICrazyTraderService.cs" />
     <Compile Include="Service\Interface\IDateTimeService.cs" />
+    <Compile Include="Service\Interface\IDiscordService.cs" />
     <Compile Include="Service\Interface\IFutureTraderService.cs" />
     <Compile Include="Service\Interface\IStockSelectorService.cs" />
     <Compile Include="Model\StockCandidate.cs" />

@@ -24,7 +24,8 @@ namespace Core.Service
         private readonly SemaphoreSlim _semaphore;
         private readonly ILogger _logger;
         private readonly IDateTimeService _dateTimeService;
-        public StockSelectorService(ICandidateRepository candidateRepository, ITradeRepository tradeRepository, ILogger logger, IDateTimeService dateTimeService)
+        private readonly IDiscordService _discordService;
+        public StockSelectorService(ICandidateRepository candidateRepository, ITradeRepository tradeRepository, ILogger logger, IDateTimeService dateTimeService, IDiscordService discordService)
         {
             SimpleHttpClientFactory httpClientFactory = new SimpleHttpClientFactory();
             _httpClient = httpClientFactory.CreateClient();
@@ -34,9 +35,11 @@ namespace Core.Service
             _semaphore = new SemaphoreSlim(maxConcurrency);
             _logger = logger;
             _dateTimeService = dateTimeService;
+            _discordService = discordService;
         }
         public async Task SelectStock()
         {
+            //await _discordService.SendMessage("This is a test message");
             List<StockCandidate> allStockInfoList = await GetStockInfoList();
             if (!doesNeedUpdate(allStockInfoList)) return;
             List<StockCandidate> candidateList = SelectCandidate(allStockInfoList);
@@ -49,6 +52,7 @@ namespace Core.Service
         }
         private async Task<List<StockCandidate>> GetStockInfoList()
         {
+
             var twseStockListTask = GetTwseStockCode();
             var tpexStockListTask = GetTwotcStockCode();
             var twseStockList = await twseStockListTask;
@@ -317,7 +321,7 @@ namespace Core.Service
         {
             List<StockCandidate> activeCandidateList = await _candidateRepository.GetActiveCandidate();
             Dictionary<string, StockCandidate> candidateToInsertDict = candidateToInsertList.ToDictionary(x => x.StockCode);
-            List<Guid> candidateToDeleteList = new List<Guid>();
+            List<StockCandidate> candidateToDeleteList = new List<StockCandidate>();
             List<StockCandidate> candidateToUpdateList = new List<StockCandidate>();
             foreach (var i in activeCandidateList)
             {
@@ -339,20 +343,46 @@ namespace Core.Service
                 {
                     if (isDuplicateCandidate || !hasLatestStockInfo || stock.TechDataList.Count < 10)
                     {
-                        candidateToDeleteList.Add(i.Id);
+                        candidateToDeleteList.Add(i);
                         continue;
                     }
                     decimal todayClose = stock.TechDataList.First().Close;
                     if (todayClose < i.GapUpLow || (todayClose > i.EntryPoint && todayClose < stock.TechDataList.Take(10).Average(x => x.Close)))
                     {
-                        candidateToDeleteList.Add(i.Id);
+                        candidateToDeleteList.Add(i);
                         continue;
                     }
                     i.Last9TechData = JsonConvert.SerializeObject(stock.TechDataList.Take(9));
                     candidateToUpdateList.Add(i);
                 }
             }
-            await _candidateRepository.UpdateCandidate(candidateToDeleteList, candidateToUpdateList, candidateToInsertList);
+            List<Guid> candidateIdToDeleteList = candidateToDeleteList.Select(x => x.Id).ToList();
+            await _candidateRepository.UpdateCandidate(candidateIdToDeleteList, candidateToUpdateList, candidateToInsertList);
+            await SendCandidateToDiscord(candidateToDeleteList, candidateToUpdateList, candidateToInsertList);
+        }
+        private async Task SendCandidateToDiscord(List<StockCandidate> candidateToDeleteList, List<StockCandidate> candidateToUpdateList, List<StockCandidate> candidateToInsertList)
+        {
+            string message = "";
+            message += $"Removed candidates: \n";
+            foreach (var i in candidateToDeleteList)
+            {
+                message += $"{i.StockCode} {i.CompanyName}\n";
+            }
+            message += $"New candidates: \n";
+            foreach (var i in candidateToInsertList)
+            {
+                message += $"{i.StockCode} {i.CompanyName}\n";
+            }
+            message += "All candidates: \n";
+            foreach (var i in candidateToUpdateList)
+            {
+                message += $"{i.StockCode} {i.CompanyName}\n";
+            }
+            foreach (var i in candidateToInsertList)
+            {
+                message += $"{i.StockCode} {i.CompanyName}\n";
+            }
+            await _discordService.SendMessage(message);
         }
         //private async Task UpdateTrade(Dictionary<string, StockCandidate> allStockInfoDict)
         //{

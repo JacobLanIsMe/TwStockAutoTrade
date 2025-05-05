@@ -29,6 +29,7 @@ namespace Selector
                 .AddSingleton<IDateTimeService, DateTimeService>()
                 .AddSingleton<ICandidateRepository, CandidateRepository>()
                 .AddSingleton<ITradeRepository, TradeRepository>()
+                .AddSingleton<IDiscordService, DiscordService>()
                 .BuildServiceProvider();
             var getStockInfoService = serviceProvider.GetRequiredService<IStockSelectorService>();
             try
