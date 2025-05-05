@@ -39,7 +39,6 @@ namespace Core.Service
         }
         public async Task SelectStock()
         {
-            //await _discordService.SendMessage("This is a test message");
             List<StockCandidate> allStockInfoList = await GetStockInfoList();
             if (!doesNeedUpdate(allStockInfoList)) return;
             List<StockCandidate> candidateList = SelectCandidate(allStockInfoList);
