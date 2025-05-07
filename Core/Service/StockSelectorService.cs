@@ -362,17 +362,17 @@ namespace Core.Service
         private async Task SendCandidateToDiscord(List<StockCandidate> candidateToDeleteList, List<StockCandidate> candidateToUpdateList, List<StockCandidate> candidateToInsertList)
         {
             string message = "";
-            message += $"Removed candidates: \n";
+            message += $"Removed candidates: {candidateToDeleteList.Count}\n";
             foreach (var i in candidateToDeleteList)
             {
                 message += $"{i.StockCode} {i.CompanyName}\n";
             }
-            message += $"New candidates: \n";
+            message += $"New candidates: {candidateToInsertList.Count}\n";
             foreach (var i in candidateToInsertList)
             {
                 message += $"{i.StockCode} {i.CompanyName}\n";
             }
-            message += "All candidates: \n";
+            message += $"All candidates: {candidateToUpdateList.Count + candidateToInsertList.Count}\n";
             foreach (var i in candidateToUpdateList)
             {
                 message += $"{i.StockCode} {i.CompanyName}\n";
