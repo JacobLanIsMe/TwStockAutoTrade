@@ -165,6 +165,7 @@ namespace Core.Service
             StockTechData prevGapUpTechData = techDataList[5];
             if (gapUpTechData.Low < prevGapUpTechData.High) return false;
             decimal ma60 = techDataList.Take(60).Average(x => x.Close);
+            if (gapUpTechData.Close < ma60) return false;
             if (gapUpTechData.High / ma60 > (decimal)1.15) return false;
             double mv5 = techDataList.Take(5).Average(x => x.Volume);
             if (mv5 < 100) return false;
