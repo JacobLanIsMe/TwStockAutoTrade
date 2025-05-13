@@ -254,30 +254,31 @@ namespace Core.Service
         private void RealReportHandler(string strResult)
         {
             string[] reportArray = strResult.Split(',');
-            if (!int.TryParse(reportArray[1].Split(':')[1], out int reportType))
+            if (!int.TryParse(reportArray[1].Split(':')[1].Trim(), out int reportType))
             {
                 _logger.Error("Report type error");
             }
-            if (!int.TryParse(reportArray[13], out int purchasedShare))
+            if (!int.TryParse(reportArray[13].Trim(), out int purchasedShare))
             {
                 _logger.Error("PurchasedLot error");
             }
             purchasedShare = purchasedShare / 1000;
             string orderNo = reportArray[2].Trim().Substring(4); // 委託單號
+            string stockCode = reportArray[4].Trim();
             if (reportType == 50)
             {
-                string errorCode = reportArray[reportArray.Length - 1];
+                string errorCode = reportArray[reportArray.Length - 1].Trim();
                 if (errorCode == "13048" || errorCode == "19348")
                 {
                     _trade = null;
+                    _logger.Warning($"委託失效，FOK 委託未能成功, Stock code: {stockCode}");
                 }
             }
             else if (reportType == 51)
             {
-                string stockCode = reportArray[4].Trim();
                 if (stockCode != _trade.StockCode) return;
                 if (!_stockCandidateDict.TryGetValue(stockCode, out StockCandidate candidate)) return;
-                if (reportArray[9] == EBuySellType.B.ToString())
+                if (reportArray[9].Trim() == EBuySellType.B.ToString())
                 {
                     candidate.PurchasedLot = candidate.PurchasedLot + purchasedShare;
                     if (candidate.PurchasedLot == _trade.OrderedLot)
