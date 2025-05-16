@@ -174,7 +174,6 @@ namespace Core.Service
             if (mv5 < 100) return false;
             decimal volatility = techDataList.Take(5).Max(x => x.Close) / techDataList.Take(5).Min(x => x.Close);
             if (volatility > (decimal)1.03) return false;
-            
             if (gapUpTechData.Close < gapUpMa5 || gapUpTechData.Close < gapUpMa10 || gapUpTechData.Close < gapUpMa20) return false;
             List<decimal> last4Close = techDataList.Take(4).Select(x => x.Close).ToList();
             bool isPeriodCloseHigherThanGapUpHigh = last4Close.Max() > gapUpTechData.High;
