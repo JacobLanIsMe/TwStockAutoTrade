@@ -160,20 +160,21 @@ namespace Core.Service
         {
             gapUpHigh = 0;
             gapUpLow = 0;
-            if (techDataList.Count < 60) return false;
+            if (techDataList.Count < 65) return false;
             StockTechData gapUpTechData = techDataList[4];
             StockTechData prevGapUpTechData = techDataList[5];
             if (gapUpTechData.Low < prevGapUpTechData.High) return false;
-            decimal ma60 = techDataList.Take(60).Average(x => x.Close);
-            if (gapUpTechData.Close < ma60) return false;
-            if (gapUpTechData.High / ma60 > (decimal)1.15) return false;
+            decimal gapUpMa5 = techDataList.Skip(4).Take(5).Average(x => x.Close);
+            decimal gapUpMa10 = techDataList.Skip(4).Take(10).Average(x => x.Close);
+            decimal gapUpMa20 = techDataList.Skip(4).Take(20).Average(x => x.Close);
+            decimal gapUpMa60 = techDataList.Skip(4).Take(60).Average(x => x.Close);
+            if (gapUpTechData.Close < gapUpMa60) return false;
+            if (gapUpTechData.High / gapUpMa60 > (decimal)1.15) return false;
             double mv5 = techDataList.Take(5).Average(x => x.Volume);
             if (mv5 < 100) return false;
             decimal volatility = techDataList.Take(5).Max(x => x.Close) / techDataList.Take(5).Min(x => x.Close);
             if (volatility > (decimal)1.03) return false;
-            decimal gapUpMa5 = techDataList.Skip(4).Take(5).Average(x => x.Close);
-            decimal gapUpMa10 = techDataList.Skip(4).Take(10).Average(x => x.Close);
-            decimal gapUpMa20 = techDataList.Skip(4).Take(20).Average(x => x.Close);
+            
             if (gapUpTechData.Close < gapUpMa5 || gapUpTechData.Close < gapUpMa10 || gapUpTechData.Close < gapUpMa20) return false;
             List<decimal> last4Close = techDataList.Take(4).Select(x => x.Close).ToList();
             bool isPeriodCloseHigherThanGapUpHigh = last4Close.Max() > gapUpTechData.High;
