@@ -20,7 +20,7 @@ namespace Core.Service
         }
         public async Task SendMessage(string message)
         {
-            string webhookUrl = "https://discord.com/api/webhooks/1368806016346755093/hpg7AE5KnMWqr_wpNJrvZlSg1cojFbjSKCTbL7OBlPyd74YsUVnxizygbrNsvvuEBoQt";
+            string webhookUrl = Environment.GetEnvironmentVariable("DiscordHook", EnvironmentVariableTarget.Machine);
             var payload = new
             {
                 content = message
