@@ -110,22 +110,36 @@ namespace Core.Service
                 await _semaphore.WaitAsync();
                 try
                 {
-                    string url = $"https://tw.quote.finance.yahoo.net/quote/q?type=ta&perd=d&mkt=10&sym={stock.StockCode}&v=1&callback=jQuery111306311117094962886_1574862886629&_=1574862886630";
-                    HttpResponseMessage response = await _httpClient.GetAsync(url);
-                    string responseBody = await response.Content.ReadAsStringAsync();
-                    string modifiedResponseBody = responseBody.Split(new string[] { "\"ta\":" }, StringSplitOptions.None)[1];
-                    modifiedResponseBody = modifiedResponseBody.Split(new string[] { ",\"ex\":" }, StringSplitOptions.None)[0];
-                    modifiedResponseBody = modifiedResponseBody.TrimEnd(new char[] { '}', ')', ';' });
-                    List<YahooTechData> yahooTechData = JsonConvert.DeserializeObject<List<YahooTechData>>(modifiedResponseBody);
-                    stock.TechDataList = yahooTechData.Select(x => new StockTechData
+                    int maxRetryCount = 10;
+                    int retryCount = 0;
+                    while (retryCount <= maxRetryCount)
                     {
-                        Date = DateTime.ParseExact(x.T.ToString(), "yyyyMMdd", null),
-                        Close = x.C,
-                        Open = x.O,
-                        High = x.H,
-                        Low = x.L,
-                        Volume = x.V
-                    }).OrderByDescending(x => x.Date).ToList();
+                        try
+                        {
+                            string url = $"https://tw.quote.finance.yahoo.net/quote/q?type=ta&perd=d&mkt=10&sym={stock.StockCode}&v=1&callback=jQuery111306311117094962886_1574862886629&_=1574862886630";
+                            HttpResponseMessage response = await _httpClient.GetAsync(url);
+                            string responseBody = await response.Content.ReadAsStringAsync();
+                            string modifiedResponseBody = responseBody.Split(new string[] { "\"ta\":" }, StringSplitOptions.None)[1];
+                            modifiedResponseBody = modifiedResponseBody.Split(new string[] { ",\"ex\":" }, StringSplitOptions.None)[0];
+                            modifiedResponseBody = modifiedResponseBody.TrimEnd(new char[] { '}', ')', ';' });
+                            List<YahooTechData> yahooTechData = JsonConvert.DeserializeObject<List<YahooTechData>>(modifiedResponseBody);
+                            stock.TechDataList = yahooTechData.Select(x => new StockTechData
+                            {
+                                Date = DateTime.ParseExact(x.T.ToString(), "yyyyMMdd", null),
+                                Close = x.C,
+                                Open = x.O,
+                                High = x.H,
+                                Low = x.L,
+                                Volume = x.V
+                            }).OrderByDescending(x => x.Date).ToList();
+                            break;
+                        }
+                        catch
+                        {
+                            if (retryCount >= maxRetryCount) throw;
+                            retryCount++;
+                        }
+                    }
                 }
                 catch (Exception ex)
                 {
