@@ -10,5 +10,6 @@ namespace Core.Service.Interface
     {
         DateTime GetTaiwanTime();
         DateTime ConvertTaiwaneseCalendarToGregorianCalendar(string taiwanDate);
+        DateTime ConvertTimestampToDateTime(int timestamp);
     }
 }

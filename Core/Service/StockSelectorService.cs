@@ -174,22 +174,25 @@ namespace Core.Service
                     {
                         try
                         {
-                            string url = $"https://tw.quote.finance.yahoo.net/quote/q?type=ta&perd=d&mkt=10&sym={stock.StockCode}&v=1&callback=jQuery111306311117094962886_1574862886629&_=1574862886630";
+                            string url = $"https://tw.stock.yahoo.com/_td-stock/api/resource/FinanceChartService.ApacLibraCharts;period=d;symbols=%5B%22{stock.StockCode}.TW%22%5D?bkt=%5B%22t20-pc-twstock-article-test%22%2C%22TW-Stock-Desktop-NewTechCharts-Rampup%22%5D&device=desktop&ecma=modern&feature=enableGAMAds%2CenableGAMEdgeToEdge%2CenableEvPlayer%2CenableHighChart&intl=tw&lang=zh-Hant-TW&partner=none&prid=52qgtalk3b72g&region=TW&site=finance&tz=Asia%2FTaipei&ver=1.4.558&returnMeta=true";
                             HttpResponseMessage response = await _httpClient.GetAsync(url);
                             string responseBody = await response.Content.ReadAsStringAsync();
-                            string modifiedResponseBody = responseBody.Split(new string[] { "\"ta\":" }, StringSplitOptions.None)[1];
-                            modifiedResponseBody = modifiedResponseBody.Split(new string[] { ",\"ex\":" }, StringSplitOptions.None)[0];
-                            modifiedResponseBody = modifiedResponseBody.TrimEnd(new char[] { '}', ')', ';' });
-                            List<YahooTechData> yahooTechData = JsonConvert.DeserializeObject<List<YahooTechData>>(modifiedResponseBody);
-                            stock.TechDataList = yahooTechData.Select(x => new StockTechData
+                            YahooTechData yahooTechData = JsonConvert.DeserializeObject<YahooTechData>(responseBody);
+                            List<DateTime> dateList = yahooTechData.Data.First().Chart.Timestamp.Select(x => _dateTimeService.ConvertTimestampToDateTime(x)).ToList();
+                            QuoteModel quote = yahooTechData.Data.First().Chart.Indicators.Quote.FirstOrDefault();
+                            for (int i = 0; i < dateList.Count; i++)
                             {
-                                Date = DateTime.ParseExact(x.T.ToString(), "yyyyMMdd", null),
-                                Close = x.C,
-                                Open = x.O,
-                                High = x.H,
-                                Low = x.L,
-                                Volume = x.V
-                            }).OrderByDescending(x => x.Date).ToList();
+                                stock.TechDataList.Add(new StockTechData
+                                {
+                                    Date = dateList[i],
+                                    Close = quote.Close[i],
+                                    Open = quote.Open[i],
+                                    High = quote.High[i],
+                                    Low = quote.Low[i],
+                                    Volume = quote.Volume[i]
+                                });
+                            }
+                            stock.TechDataList = stock.TechDataList.OrderByDescending(x => x.Date).ToList();
                             break;
                         }
                         catch

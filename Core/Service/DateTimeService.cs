@@ -8,7 +8,7 @@ namespace Core.Service
     {
         public DateTime GetTaiwanTime()
         {
-            DateTime now = DateTime.UtcNow; 
+            DateTime now = DateTime.UtcNow;
             TimeZoneInfo taiwanTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Taipei Standard Time");
             DateTime taiwanTime = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, taiwanTimeZone);
             return taiwanTime;
@@ -30,6 +30,12 @@ namespace Core.Service
             {
                 return default;
             }
+        }
+        public DateTime ConvertTimestampToDateTime(int timestamp)
+        {
+            // Convert Unix timestamp to DateTime
+            DateTime epoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            return epoch.AddSeconds(timestamp).ToLocalTime();
         }
     }
 }
