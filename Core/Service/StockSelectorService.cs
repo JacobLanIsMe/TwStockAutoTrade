@@ -163,9 +163,8 @@ namespace Core.Service
         private async Task GetExchangeReportFromYahoo(List<StockCandidate> stockList)
         {
             _logger.Information("Retrieve exchange report started.");
-            var tasks = stockList.Select(async stock =>
+            foreach (var stock in stockList)
             {
-                await _semaphore.WaitAsync();
                 try
                 {
                     int maxRetryCount = 10;
@@ -174,7 +173,8 @@ namespace Core.Service
                     {
                         try
                         {
-                            string url = $"https://tw.stock.yahoo.com/_td-stock/api/resource/FinanceChartService.ApacLibraCharts;period=d;symbols=%5B%22{stock.StockCode}.TW%22%5D?bkt=%5B%22t20-pc-twstock-article-test%22%2C%22TW-Stock-Desktop-NewTechCharts-Rampup%22%5D&device=desktop&ecma=modern&feature=enableGAMAds%2CenableGAMEdgeToEdge%2CenableEvPlayer%2CenableHighChart&intl=tw&lang=zh-Hant-TW&partner=none&prid=52qgtalk3b72g&region=TW&site=finance&tz=Asia%2FTaipei&ver=1.4.558&returnMeta=true";
+                            string market = stock.Market == enumMarketType.TWSE ? "TW" : "TWO";
+                            string url = $"https://tw.stock.yahoo.com/_td-stock/api/resource/FinanceChartService.ApacLibraCharts;period=d;symbols=%5B%22{stock.StockCode}.{market}%22%5D?bkt=%5B%22t20-pc-twstock-article-test%22%2C%22TW-Stock-Desktop-NewTechCharts-Rampup%22%5D&device=desktop&ecma=modern&feature=enableGAMAds%2CenableGAMEdgeToEdge%2CenableEvPlayer%2CenableHighChart&intl=tw&lang=zh-Hant-TW&partner=none&prid=52qgtalk3b72g&region=TW&site=finance&tz=Asia%2FTaipei&ver=1.4.558&returnMeta=true";
                             HttpResponseMessage response = await _httpClient.GetAsync(url);
                             string responseBody = await response.Content.ReadAsStringAsync();
                             YahooTechData yahooTechData = JsonConvert.DeserializeObject<YahooTechData>(responseBody);
@@ -199,19 +199,16 @@ namespace Core.Service
                         {
                             if (retryCount >= maxRetryCount) throw;
                             retryCount++;
+                            await Task.Delay(2000);
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    _logger.Error($"Error occurs while retrieving exchange report of Stock {stock.StockCode} {stock.CompanyName}. Error message: {ex}");
+                    _logger.Error($"Error occurs while retrieving exchange report of Stock {stock.Market} {stock.StockCode} {stock.CompanyName}. Error message: {ex.Message}");
                 }
-                finally
-                {
-                    _semaphore.Release();
-                }
-            });
-            await Task.WhenAll(tasks);
+                await Task.Delay(2000);
+            }
             _logger.Information("Retrieve exchange report finished.");
         }
 
