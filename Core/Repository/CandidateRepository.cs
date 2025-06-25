@@ -6,6 +6,7 @@ using Microsoft.Extensions.Configuration;
 using Serilog;
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Data.SqlClient;
 using System.Linq;
 using System.Threading.Tasks;
@@ -128,6 +129,24 @@ namespace Core.Repository
             using (SqlConnection sqlConnection = new SqlConnection(_dbConnectionString))
             {
                 await sqlConnection.ExecuteAsync(updateSqlCommand, candidateToUpdateList);
+            }
+        }
+        public async Task UpsertStockTech(List<StockTech> stockList)
+        {
+            var table = new DataTable();
+            table.Columns.Add("StockCode", typeof(string));
+            table.Columns.Add("CompanyName", typeof(string));
+            table.Columns.Add("TechData", typeof(string));
+
+            foreach (var stock in stockList)
+            {
+                table.Rows.Add(stock.StockCode, stock.CompanyName, stock.TechData);
+            }
+            using (var sqlConnection = new SqlConnection(_dbConnectionString))
+            {
+                var parameters = new DynamicParameters();
+                parameters.Add("@StockList", table.AsTableValuedParameter("dbo.StockTechType"));
+                await sqlConnection.ExecuteAsync("dbo.UpsertStockTech", parameters, commandType: CommandType.StoredProcedure);
             }
         }
     }

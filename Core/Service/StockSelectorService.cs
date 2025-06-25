@@ -10,6 +10,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using YuantaOneAPI;
@@ -39,7 +40,7 @@ namespace Core.Service
         }
         public async Task SelectStock()
         {
-            List<StockCandidate> dailyExchangeReport = await GetDailyExchangeReportFromTwseAndTwotc();
+            //List<StockCandidate> dailyExchangeReport = await GetDailyExchangeReportFromTwseAndTwotc();
             List<StockCandidate> allStockInfoList = await GetStockInfoList();
             if (!doesNeedUpdate(allStockInfoList)) return;
             List<StockCandidate> candidateList = SelectCandidate(allStockInfoList);
@@ -47,6 +48,7 @@ namespace Core.Service
             Dictionary<string, StockCandidate> allStockInfoDict = allStockInfoList.ToDictionary(x => x.StockCode);
             await UpdateCandidate(candidateList, allStockInfoDict);
             await UpdateExRightsExDevidendDate();
+            await UpSertTechDataToDb(allStockInfoList);
             //await UpdateTrade(allStockInfoDict);
             //await UpdateCrazyCandidate(crazyCandidateList, allStockInfoDict);
         }
@@ -60,64 +62,7 @@ namespace Core.Service
             await GetExchangeReportFromYahoo(allStockInfoList);
             return allStockInfoList;
         }
-        private async Task<List<StockCandidate>> GetDailyExchangeReportFromTwseAndTwotc()
-        {
-            List<StockCandidate> dailyTechDataList = new List<StockCandidate>();
-            var twseDailyExchangeReport = await GetDailyExchangeReportFromTwse();
-            var twotcDailyExchangeReport = await GetDailyExchangeReportFromTwotc(); 
-            dailyTechDataList.AddRange(twseDailyExchangeReport);
-            dailyTechDataList.AddRange(twotcDailyExchangeReport);
-            return dailyTechDataList;
-        }
-        private async Task<List<StockCandidate>> GetDailyExchangeReportFromTwse()
-        {
-            _logger.Information("Get TWSE stock daily exchange report started.");
-            HttpResponseMessage response = await _httpClient.GetAsync("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL");
-            string responseBody = await response.Content.ReadAsStringAsync();
-            List<TwseTechData> stockTech = JsonConvert.DeserializeObject<List<TwseTechData>>(responseBody);
-            List<StockCandidate> twseDailyExchangeReport = stockTech.Select(x => new StockCandidate()
-            {
-                StockCode = x.Code.ToUpper(),
-                TechDataList = new List<StockTechData>()
-                {
-                    new StockTechData() {
-                    Close = decimal.TryParse(x.ClosingPrice, out decimal close) ? close : 0,
-                    Open = decimal.TryParse(x.OpeningPrice, out decimal open) ? open : 0,
-                    High = decimal.TryParse(x.HighestPrice, out decimal high) ? high : 0,
-                    Low = decimal.TryParse(x.LowestPrice, out decimal low) ? low : 0,
-                    Volume = int.TryParse(x.TradeVolume, out int volume) ? volume : 0,
-                    Date = _dateTimeService.ConvertTaiwaneseCalendarToGregorianCalendar(x.Date)
-                    }
-                }
-            }).ToList();
-            _logger.Information("Get TWSE stock daily exchange report finished.");
-            return twseDailyExchangeReport;
-        }
-        private async Task<List<StockCandidate>> GetDailyExchangeReportFromTwotc()
-        {
-            _logger.Information("Get TWOTC stock daily exchange report started.");
-            HttpResponseMessage response = await _httpClient.GetAsync("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes");
-            string responseBody = await response.Content.ReadAsStringAsync();
-            List<TwotcTechData> stockTech = JsonConvert.DeserializeObject<List<TwotcTechData>>(responseBody);
-            List<StockCandidate> twotcDailyExchangeReport = stockTech.Select(x => new StockCandidate()
-            {
-                StockCode = x.SecuritiesCompanyCode.ToUpper(),
-                TechDataList = new List<StockTechData>() 
-                {
-                    new StockTechData()
-                    {
-                        Close = decimal.TryParse(x.Close, out decimal close) ? close : 0,
-                        Open = decimal.TryParse(x.Open, out decimal open) ? open : 0,
-                        High = decimal.TryParse(x.High, out decimal high) ? high : 0,
-                        Low = decimal.TryParse(x.Low, out decimal low) ? low : 0,
-                        Volume = int.TryParse(x.TradingShares, out int volume) ? volume / 1000 : 0,
-                        Date = _dateTimeService.ConvertTaiwaneseCalendarToGregorianCalendar(x.Date)
-                    }
-                }
-            }).ToList();
-            _logger.Information("Get TWOTC stock daily exchange report finished.");
-            return twotcDailyExchangeReport;
-        }
+        
         private async Task<List<StockCandidate>> GetTwseStockCode()
         {
             _logger.Information("Get TWSE stock code started.");
@@ -211,7 +156,16 @@ namespace Core.Service
             }
             _logger.Information("Retrieve exchange report finished.");
         }
-
+        private async Task UpSertTechDataToDb(List<StockCandidate> stockList)
+        {
+            List<StockTech> stockTechList = stockList.Select(x => new StockTech
+            {
+                StockCode = x.StockCode,
+                CompanyName = x.CompanyName,
+                TechData = JsonConvert.SerializeObject(x.TechDataList)
+            }).ToList();
+            await _candidateRepository.UpsertStockTech(stockTechList);
+        }
         private List<StockCandidate> SelectCandidate(List<StockCandidate> stockList)
         {
             List<StockCandidate> candidateList = new List<StockCandidate>();
@@ -531,6 +485,64 @@ namespace Core.Service
             DateTime latestTechDate = stockList.SelectMany(x => x.TechDataList).Max(x => x.Date);
             if (_dateTimeService.GetTaiwanTime().Date > latestTechDate.Date) return false;
             return true;
+        }
+        private async Task<List<StockCandidate>> GetDailyExchangeReportFromTwseAndTwotc()
+        {
+            List<StockCandidate> dailyTechDataList = new List<StockCandidate>();
+            var twseDailyExchangeReport = await GetDailyExchangeReportFromTwse();
+            var twotcDailyExchangeReport = await GetDailyExchangeReportFromTwotc();
+            dailyTechDataList.AddRange(twseDailyExchangeReport);
+            dailyTechDataList.AddRange(twotcDailyExchangeReport);
+            return dailyTechDataList;
+        }
+        private async Task<List<StockCandidate>> GetDailyExchangeReportFromTwse()
+        {
+            _logger.Information("Get TWSE stock daily exchange report started.");
+            HttpResponseMessage response = await _httpClient.GetAsync("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL");
+            string responseBody = await response.Content.ReadAsStringAsync();
+            List<TwseTechData> stockTech = JsonConvert.DeserializeObject<List<TwseTechData>>(responseBody);
+            List<StockCandidate> twseDailyExchangeReport = stockTech.Select(x => new StockCandidate()
+            {
+                StockCode = x.Code.ToUpper(),
+                TechDataList = new List<StockTechData>()
+                {
+                    new StockTechData() {
+                    Close = decimal.TryParse(x.ClosingPrice, out decimal close) ? close : 0,
+                    Open = decimal.TryParse(x.OpeningPrice, out decimal open) ? open : 0,
+                    High = decimal.TryParse(x.HighestPrice, out decimal high) ? high : 0,
+                    Low = decimal.TryParse(x.LowestPrice, out decimal low) ? low : 0,
+                    Volume = int.TryParse(x.TradeVolume, out int volume) ? volume : 0,
+                    Date = _dateTimeService.ConvertTaiwaneseCalendarToGregorianCalendar(x.Date)
+                    }
+                }
+            }).ToList();
+            _logger.Information("Get TWSE stock daily exchange report finished.");
+            return twseDailyExchangeReport;
+        }
+        private async Task<List<StockCandidate>> GetDailyExchangeReportFromTwotc()
+        {
+            _logger.Information("Get TWOTC stock daily exchange report started.");
+            HttpResponseMessage response = await _httpClient.GetAsync("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes");
+            string responseBody = await response.Content.ReadAsStringAsync();
+            List<TwotcTechData> stockTech = JsonConvert.DeserializeObject<List<TwotcTechData>>(responseBody);
+            List<StockCandidate> twotcDailyExchangeReport = stockTech.Select(x => new StockCandidate()
+            {
+                StockCode = x.SecuritiesCompanyCode.ToUpper(),
+                TechDataList = new List<StockTechData>()
+                {
+                    new StockTechData()
+                    {
+                        Close = decimal.TryParse(x.Close, out decimal close) ? close : 0,
+                        Open = decimal.TryParse(x.Open, out decimal open) ? open : 0,
+                        High = decimal.TryParse(x.High, out decimal high) ? high : 0,
+                        Low = decimal.TryParse(x.Low, out decimal low) ? low : 0,
+                        Volume = int.TryParse(x.TradingShares, out int volume) ? volume / 1000 : 0,
+                        Date = _dateTimeService.ConvertTaiwaneseCalendarToGregorianCalendar(x.Date)
+                    }
+                }
+            }).ToList();
+            _logger.Information("Get TWOTC stock daily exchange report finished.");
+            return twotcDailyExchangeReport;
         }
     }
 }

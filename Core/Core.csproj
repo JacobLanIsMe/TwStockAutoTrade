@@ -165,6 +165,7 @@
     <Compile Include="Model\FutureTrade.cs" />
     <Compile Include="Model\KBarRecord.cs" />
     <Compile Include="Model\StockSharedModel.cs" />
+    <Compile Include="Model\StockTech.cs" />
     <Compile Include="Model\StringListModel.cs" />
     <Compile Include="Model\StockTrade.cs" />
     <Compile Include="Model\StockTradeConfig.cs" />
