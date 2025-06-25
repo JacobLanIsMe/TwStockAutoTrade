@@ -133,6 +133,7 @@ namespace Core.Repository
         }
         public async Task UpsertStockTech(List<StockTech> stockList)
         {
+            _logger.Information("Upsert stock tech data started.");
             var table = new DataTable();
             table.Columns.Add("StockCode", typeof(string));
             table.Columns.Add("CompanyName", typeof(string));
@@ -148,6 +149,17 @@ namespace Core.Repository
                 parameters.Add("@StockList", table.AsTableValuedParameter("dbo.StockTechType"));
                 await sqlConnection.ExecuteAsync("dbo.UpsertStockTech", parameters, commandType: CommandType.StoredProcedure);
             }
+            _logger.Information("Upsert stock tech data finished.");
+        }
+        public async Task<List<StockTech>> GetStockTech()
+        {
+            string sqlCommand = "SELECT [StockCode] ,[CompanyName] ,[TechData] FROM dbo.StockTech";
+            IEnumerable<StockTech> result;
+            using (SqlConnection sqlConnection = new SqlConnection(_dbConnectionString))
+            {
+                result = await sqlConnection.QueryAsync<StockTech>(sqlCommand);
+            }
+            return result.ToList();
         }
     }
 }

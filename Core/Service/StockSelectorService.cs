@@ -1,17 +1,13 @@
-﻿using Core.Enum;
-using Core.HttpClientFactory;
+﻿using Core.HttpClientFactory;
 using Core.Model;
 using Core.Repository.Interface;
 using Core.Service.Interface;
 using Newtonsoft.Json;
 using Serilog;
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
-using System.Text.Json;
-using System.Threading;
 using System.Threading.Tasks;
 using YuantaOneAPI;
 
@@ -21,25 +17,22 @@ namespace Core.Service
     {
         private HttpClient _httpClient;
         private readonly ICandidateRepository _candidateRepository;
-        private readonly ITradeRepository _tradeRepository;
-        private readonly SemaphoreSlim _semaphore;
         private readonly ILogger _logger;
         private readonly IDateTimeService _dateTimeService;
         private readonly IDiscordService _discordService;
-        public StockSelectorService(ICandidateRepository candidateRepository, ITradeRepository tradeRepository, ILogger logger, IDateTimeService dateTimeService, IDiscordService discordService)
+        public StockSelectorService(ICandidateRepository candidateRepository, ILogger logger, IDateTimeService dateTimeService, IDiscordService discordService)
         {
             SimpleHttpClientFactory httpClientFactory = new SimpleHttpClientFactory();
             _httpClient = httpClientFactory.CreateClient();
             _candidateRepository = candidateRepository;
-            _tradeRepository = tradeRepository;
             int maxConcurrency = Environment.ProcessorCount * 40;
-            _semaphore = new SemaphoreSlim(maxConcurrency);
             _logger = logger;
             _dateTimeService = dateTimeService;
             _discordService = discordService;
         }
         public async Task SelectStock()
         {
+            var q = await GetCandidateByNewStrategy();
             //List<StockCandidate> dailyExchangeReport = await GetDailyExchangeReportFromTwseAndTwotc();
             List<StockCandidate> allStockInfoList = await GetStockInfoList();
             if (!doesNeedUpdate(allStockInfoList)) return;
@@ -52,6 +45,53 @@ namespace Core.Service
             //await UpdateTrade(allStockInfoDict);
             //await UpdateCrazyCandidate(crazyCandidateList, allStockInfoDict);
         }
+        private async Task<List<StockTech>> GetCandidateByNewStrategy()
+        {
+            List<StockTech> stockTechList = await _candidateRepository.GetStockTech();
+            List<StockTech> candidate = new List<StockTech>();
+            foreach (var i in stockTechList)
+            {
+                try
+                {
+                    if (!i.TechDataList.Any()) continue;
+                    List<decimal> latest5Close = i.TechDataList.Take(5).Select(x => x.Close).ToList();
+                    decimal latest5CloseMax = latest5Close.Max();
+                    decimal latest5CloseMin = latest5Close.Min();
+                    if ((latest5CloseMax / latest5CloseMin) > 1.03m) continue;
+                    List<StockTechData> modifiedTechList = i.TechDataList.Skip(5).ToList();
+                    for (var j = 0; j < 20; j++)
+                    {
+                        decimal currentHigh = modifiedTechList.Skip(j).First().High;
+                        decimal currentLow = modifiedTechList.Skip(j).First().Low;
+                        decimal currentClose = modifiedTechList.Skip(j).First().Close;
+                        decimal currentVolume = modifiedTechList.Skip(j).First().Volume;
+                        double current5VolumeAverage = modifiedTechList.Skip(j).Take(5).Average(x => x.Volume);
+                        decimal currentMa60 = modifiedTechList.Skip(j).Take(60).Average(x => x.Close);
+                        decimal previousHigh = modifiedTechList.Skip(j + 1).First().High;
+                        decimal previousClose = modifiedTechList.Skip(j + 1).First().Close;
+                        decimal lowBase = currentLow > previousHigh ? previousHigh : currentLow;
+                        if (currentVolume >= (decimal)(current5VolumeAverage * 2) &&
+                            currentVolume >= 500 &&
+                            latest5CloseMax <= currentHigh &&
+                            latest5CloseMin >= lowBase &&
+                            currentClose >= currentMa60 &&
+                            currentClose > previousClose &&
+                            currentHigh / currentMa60 <= 1.15m)
+                        {
+                            candidate.Add(new StockTech() { StockCode = i.StockCode, CompanyName = i.CompanyName });
+                            break;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"Error occurs while processing stock code {i.StockCode}. Error message: {ex.Message}");
+                }
+
+            }
+
+            return candidate;
+        }
         private async Task<List<StockCandidate>> GetStockInfoList()
         {
             var twseStockListTask = GetTwseStockCode();
@@ -62,7 +102,7 @@ namespace Core.Service
             await GetExchangeReportFromYahoo(allStockInfoList);
             return allStockInfoList;
         }
-        
+
         private async Task<List<StockCandidate>> GetTwseStockCode()
         {
             _logger.Information("Get TWSE stock code started.");

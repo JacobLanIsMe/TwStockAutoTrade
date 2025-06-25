@@ -14,5 +14,6 @@ namespace Core.Repository.Interface
         Task UpdateHoldingStock(List<StockCandidate> candidateToUpdateList);
         Task UpdateExRrightsExDividendDate(List<StockCandidate> candidateToUpdateList);
         Task UpsertStockTech(List<StockTech> stockList);
+        Task<List<StockTech>> GetStockTech();
     }
 }
