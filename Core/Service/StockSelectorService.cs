@@ -32,7 +32,6 @@ namespace Core.Service
         }
         public async Task SelectStock()
         {
-            var q = await GetCandidateByNewStrategy();
             //List<StockCandidate> dailyExchangeReport = await GetDailyExchangeReportFromTwseAndTwotc();
             List<StockCandidate> allStockInfoList = await GetStockInfoList();
             if (!doesNeedUpdate(allStockInfoList)) return;
@@ -44,53 +43,6 @@ namespace Core.Service
             await UpSertTechDataToDb(allStockInfoList);
             //await UpdateTrade(allStockInfoDict);
             //await UpdateCrazyCandidate(crazyCandidateList, allStockInfoDict);
-        }
-        private async Task<List<StockTech>> GetCandidateByNewStrategy()
-        {
-            List<StockTech> stockTechList = await _candidateRepository.GetStockTech();
-            List<StockTech> candidate = new List<StockTech>();
-            foreach (var i in stockTechList)
-            {
-                try
-                {
-                    if (!i.TechDataList.Any()) continue;
-                    List<decimal> latest5Close = i.TechDataList.Take(5).Select(x => x.Close).ToList();
-                    decimal latest5CloseMax = latest5Close.Max();
-                    decimal latest5CloseMin = latest5Close.Min();
-                    if ((latest5CloseMax / latest5CloseMin) > 1.03m) continue;
-                    List<StockTechData> modifiedTechList = i.TechDataList.Skip(5).ToList();
-                    for (var j = 0; j < 20; j++)
-                    {
-                        decimal currentHigh = modifiedTechList.Skip(j).First().High;
-                        decimal currentLow = modifiedTechList.Skip(j).First().Low;
-                        decimal currentClose = modifiedTechList.Skip(j).First().Close;
-                        decimal currentVolume = modifiedTechList.Skip(j).First().Volume;
-                        double current5VolumeAverage = modifiedTechList.Skip(j).Take(5).Average(x => x.Volume);
-                        decimal currentMa60 = modifiedTechList.Skip(j).Take(60).Average(x => x.Close);
-                        decimal previousHigh = modifiedTechList.Skip(j + 1).First().High;
-                        decimal previousClose = modifiedTechList.Skip(j + 1).First().Close;
-                        decimal lowBase = currentLow > previousHigh ? previousHigh : currentLow;
-                        if (currentVolume >= (decimal)(current5VolumeAverage * 2) &&
-                            currentVolume >= 500 &&
-                            latest5CloseMax <= currentHigh &&
-                            latest5CloseMin >= lowBase &&
-                            currentClose >= currentMa60 &&
-                            currentClose > previousClose &&
-                            currentHigh / currentMa60 <= 1.15m)
-                        {
-                            candidate.Add(new StockTech() { StockCode = i.StockCode, CompanyName = i.CompanyName });
-                            break;
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error($"Error occurs while processing stock code {i.StockCode}. Error message: {ex.Message}");
-                }
-
-            }
-
-            return candidate;
         }
         private async Task<List<StockCandidate>> GetStockInfoList()
         {
@@ -227,28 +179,40 @@ namespace Core.Service
         {
             gapUpHigh = 0;
             gapUpLow = 0;
-            if (techDataList.Count < 65) return false;
-            StockTechData gapUpTechData = techDataList[4];
-            StockTechData prevGapUpTechData = techDataList[5];
-            if (gapUpTechData.Low < prevGapUpTechData.High) return false;
-            decimal gapUpMa5 = techDataList.Skip(4).Take(5).Average(x => x.Close);
-            decimal gapUpMa10 = techDataList.Skip(4).Take(10).Average(x => x.Close);
-            decimal gapUpMa20 = techDataList.Skip(4).Take(20).Average(x => x.Close);
-            decimal gapUpMa60 = techDataList.Skip(4).Take(60).Average(x => x.Close);
-            if (gapUpTechData.Close < gapUpMa60) return false;
-            if (gapUpTechData.High / gapUpMa60 > (decimal)1.15) return false;
-            double mv5 = techDataList.Take(5).Average(x => x.Volume);
-            if (mv5 < 100) return false;
-            decimal volatility = techDataList.Take(5).Max(x => x.Close) / techDataList.Take(5).Min(x => x.Close);
-            if (volatility > (decimal)1.03) return false;
-            if (gapUpTechData.Close < gapUpMa5 || gapUpTechData.Close < gapUpMa10 || gapUpTechData.Close < gapUpMa20) return false;
-            List<decimal> last4Close = techDataList.Take(4).Select(x => x.Close).ToList();
-            bool isPeriodCloseHigherThanGapUpHigh = last4Close.Max() > gapUpTechData.High;
-            bool isPeriodCloseLowerThanPrevGapUpHigh = last4Close.Min() < prevGapUpTechData.High;
-            if (isPeriodCloseHigherThanGapUpHigh || isPeriodCloseLowerThanPrevGapUpHigh) return false;
-            gapUpHigh = gapUpTechData.High;
-            gapUpLow = prevGapUpTechData.High;
-            return true;
+            if (techDataList.Count < 100) return false;
+            int stableCount = 4;
+            List<StockTechData> lastestStableTech = techDataList.Take(stableCount).ToList();
+            decimal latestStableCloseMax = lastestStableTech.Max(x => x.Close);
+            decimal latestStableCloseMin = lastestStableTech.Min(x => x.Close);
+            if (latestStableCloseMax / latestStableCloseMin > 1.03m) return false;
+            List<StockTechData> modifiedTechList = techDataList.Skip(stableCount).ToList();
+            for (var i = 0; i < 20; i++)
+            {
+                StockTechData currentTechData = modifiedTechList.Skip(i).First();
+                StockTechData previousTechData = modifiedTechList.Skip(i + 1).First();
+                decimal currentHigh = currentTechData.High;
+                decimal currentLow = currentTechData.Low;
+                decimal currentClose = currentTechData.Close;
+                decimal currentVolume = currentTechData.Volume;
+                decimal current5VolumeAverage = (decimal)modifiedTechList.Skip(i).Take(5).Average(x => x.Volume);
+                decimal currentMa60 = modifiedTechList.Skip(i).Take(60).Average(x => x.Close);
+                decimal previousHigh = previousTechData.High;
+                decimal previousClose = previousTechData.Close;
+                bool isJump = currentLow >= previousHigh;
+                decimal lowBase = isJump ? previousHigh : currentLow;
+                if ((isJump || currentVolume >= current5VolumeAverage * 2) &&
+                    currentVolume >= 1000 &&
+                    latestStableCloseMax <= currentHigh &&
+                    latestStableCloseMin >= lowBase &&
+                    currentClose >= currentMa60 &&
+                    currentHigh / currentMa60 <= 1.15m)
+                {
+                    gapUpHigh = currentHigh;
+                    gapUpLow = lowBase;
+                    return true;
+                }
+            }
+            return false;
         }
         private List<StockCandidate> SelectCrazyCandidate(List<StockCandidate> stockList)
         {
