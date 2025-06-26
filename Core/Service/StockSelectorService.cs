@@ -180,11 +180,11 @@ namespace Core.Service
             gapUpHigh = 0;
             gapUpLow = 0;
             if (techDataList.Count < 100) return false;
-            int stableCount = 4;
+            int stableCount = 5;
             List<StockTechData> lastestStableTech = techDataList.Take(stableCount).ToList();
             decimal latestStableCloseMax = lastestStableTech.Max(x => x.Close);
             decimal latestStableCloseMin = lastestStableTech.Min(x => x.Close);
-            if (latestStableCloseMax / latestStableCloseMin > 1.03m) return false;
+            if (latestStableCloseMax / latestStableCloseMin > 1.02m) return false;
             List<StockTechData> modifiedTechList = techDataList.Skip(stableCount).ToList();
             for (var i = 0; i < 20; i++)
             {
@@ -214,48 +214,7 @@ namespace Core.Service
             }
             return false;
         }
-        private List<StockCandidate> SelectCrazyCandidate(List<StockCandidate> stockList)
-        {
-            List<StockCandidate> candidateList = new List<StockCandidate>();
-            foreach (var i in stockList)
-            {
-                i.IsCandidate = IsCrazyCandidate(i.TechDataList, out StockTechData stockTechData);
-                if (!i.IsCandidate || stockTechData == null) continue;
-                i.SelectedDate = i.TechDataList.First().Date;
-                i.EntryPoint = GetEntryPoint(stockTechData.High);
-                i.StopLossPoint = GetStopLossPoint(stockTechData.High);
-                i.Last9TechData = JsonConvert.SerializeObject(i.TechDataList.Take(9));
-                candidateList.Add(i);
-            }
-            return candidateList;
-        }
-        private bool IsCrazyCandidate(List<StockTechData> techDataList, out StockTechData stockTechData)
-        {
-            stockTechData = null;
-            if (techDataList.Count < 20) return false;
-            stockTechData = techDataList.First();
-            decimal ma5 = techDataList.Take(5).Average(x => x.Close);
-            double privMv5 = techDataList.Skip(1).Take(5).Average(x => x.Volume);
-            bool fitVolumeAlready = false;
-            for (int i = 1; i < 6; i++)
-            {
-                if (techDataList[i].Volume >= techDataList.Skip(i + 1).Take(5).Average(x => x.Volume) * 5)
-                {
-                    fitVolumeAlready = true;
-                    break;
-                }
-            }
-            if (!fitVolumeAlready &&
-                stockTechData.Close == stockTechData.High &&
-                stockTechData.Close / techDataList[1].Close > 1.095m &&
-                stockTechData.Volume >= privMv5 * 5 &&
-                stockTechData.Close >= ma5 &&
-                stockTechData.Close / ma5 <= 1.1m)
-            {
-                return true;
-            }
-            return false;
-        }
+        
         private decimal GetEntryPoint(decimal gapUpHigh)
         {
             decimal tick = 0;
@@ -314,40 +273,7 @@ namespace Core.Service
             }
             return gapUpHigh - tick;
         }
-        private async Task UpdateCrazyCandidate(List<StockCandidate> candidateToInsertList, Dictionary<string, StockCandidate> allStockInfoDict)
-        {
-            List<StockCandidate> activeCrazyCandidateList = await _candidateRepository.GetActiveCrazyCandidate();
-            Dictionary<string, StockCandidate> candidateDict = candidateToInsertList.ToDictionary(x => x.StockCode);
-            List<Guid> candidateToDeleteList = new List<Guid>();
-            List<StockCandidate> candidateToUpdateList = new List<StockCandidate>();
-            foreach (var i in activeCrazyCandidateList)
-            {
-                if (candidateDict.ContainsKey(i.StockCode))
-                {
-                    candidateToDeleteList.Add(i.Id);
-                    continue;
-                }
-                if (!allStockInfoDict.TryGetValue(i.StockCode, out StockCandidate stock))
-                {
-                    candidateToDeleteList.Add(i.Id);
-                    continue;
-                }
-                if (stock.TechDataList.Count < 9)
-                {
-                    candidateToDeleteList.Add(i.Id);
-                    continue;
-                }
-                decimal todayClose = stock.TechDataList.First().Close;
-                if (todayClose < stock.TechDataList.Take(5).Average(x => x.Close))
-                {
-                    candidateToDeleteList.Add(i.Id);
-                    continue;
-                }
-                i.Last9TechData = JsonConvert.SerializeObject(stock.TechDataList.Take(9));
-                candidateToUpdateList.Add(i);
-            }
-            await _candidateRepository.UpdateCrazyCandidate(candidateToDeleteList, candidateToUpdateList, candidateToInsertList);
-        }
+        
         private async Task UpdateCandidate(List<StockCandidate> candidateToInsertList, Dictionary<string, StockCandidate> allStockInfoDict)
         {
             List<StockCandidate> activeCandidateList = await _candidateRepository.GetActiveCandidate();
@@ -415,20 +341,7 @@ namespace Core.Service
             }
             await _discordService.SendMessage(message);
         }
-        //private async Task UpdateTrade(Dictionary<string, StockCandidate> allStockInfoDict)
-        //{
-        //    List<StockTrade> stockHoldingList = await _tradeRepository.GetStockHolding();
-        //    foreach (var i in stockHoldingList)
-        //    {
-        //        if (!allStockInfoDict.TryGetValue(i.StockCode, out StockCandidate stock) || stock.TechDataList.Count < 9)
-        //        {
-        //            _logger.Error($"Can not retrieve last 9 tech data of stock code {i.StockCode}.");
-        //            continue;
-        //        }
-        //        i.Last9TechData = JsonConvert.SerializeObject(stock.TechDataList.Take(9));
-        //    }
-        //    await _tradeRepository.UpdateLast9TechData(stockHoldingList);
-        //}
+        
         private async Task UpdateExRightsExDevidendDate()
         {
             List<ExRrightsExDividend> twseExRrightsExDividendList = await GetTwseExRightsExDevidendDate();
@@ -548,5 +461,95 @@ namespace Core.Service
             _logger.Information("Get TWOTC stock daily exchange report finished.");
             return twotcDailyExchangeReport;
         }
+        private List<StockCandidate> SelectCrazyCandidate(List<StockCandidate> stockList)
+        {
+            List<StockCandidate> candidateList = new List<StockCandidate>();
+            foreach (var i in stockList)
+            {
+                i.IsCandidate = IsCrazyCandidate(i.TechDataList, out StockTechData stockTechData);
+                if (!i.IsCandidate || stockTechData == null) continue;
+                i.SelectedDate = i.TechDataList.First().Date;
+                i.EntryPoint = GetEntryPoint(stockTechData.High);
+                i.StopLossPoint = GetStopLossPoint(stockTechData.High);
+                i.Last9TechData = JsonConvert.SerializeObject(i.TechDataList.Take(9));
+                candidateList.Add(i);
+            }
+            return candidateList;
+        }
+        private bool IsCrazyCandidate(List<StockTechData> techDataList, out StockTechData stockTechData)
+        {
+            stockTechData = null;
+            if (techDataList.Count < 20) return false;
+            stockTechData = techDataList.First();
+            decimal ma5 = techDataList.Take(5).Average(x => x.Close);
+            double privMv5 = techDataList.Skip(1).Take(5).Average(x => x.Volume);
+            bool fitVolumeAlready = false;
+            for (int i = 1; i < 6; i++)
+            {
+                if (techDataList[i].Volume >= techDataList.Skip(i + 1).Take(5).Average(x => x.Volume) * 5)
+                {
+                    fitVolumeAlready = true;
+                    break;
+                }
+            }
+            if (!fitVolumeAlready &&
+                stockTechData.Close == stockTechData.High &&
+                stockTechData.Close / techDataList[1].Close > 1.095m &&
+                stockTechData.Volume >= privMv5 * 5 &&
+                stockTechData.Close >= ma5 &&
+                stockTechData.Close / ma5 <= 1.1m)
+            {
+                return true;
+            }
+            return false;
+        }
+        private async Task UpdateCrazyCandidate(List<StockCandidate> candidateToInsertList, Dictionary<string, StockCandidate> allStockInfoDict)
+        {
+            List<StockCandidate> activeCrazyCandidateList = await _candidateRepository.GetActiveCrazyCandidate();
+            Dictionary<string, StockCandidate> candidateDict = candidateToInsertList.ToDictionary(x => x.StockCode);
+            List<Guid> candidateToDeleteList = new List<Guid>();
+            List<StockCandidate> candidateToUpdateList = new List<StockCandidate>();
+            foreach (var i in activeCrazyCandidateList)
+            {
+                if (candidateDict.ContainsKey(i.StockCode))
+                {
+                    candidateToDeleteList.Add(i.Id);
+                    continue;
+                }
+                if (!allStockInfoDict.TryGetValue(i.StockCode, out StockCandidate stock))
+                {
+                    candidateToDeleteList.Add(i.Id);
+                    continue;
+                }
+                if (stock.TechDataList.Count < 9)
+                {
+                    candidateToDeleteList.Add(i.Id);
+                    continue;
+                }
+                decimal todayClose = stock.TechDataList.First().Close;
+                if (todayClose < stock.TechDataList.Take(5).Average(x => x.Close))
+                {
+                    candidateToDeleteList.Add(i.Id);
+                    continue;
+                }
+                i.Last9TechData = JsonConvert.SerializeObject(stock.TechDataList.Take(9));
+                candidateToUpdateList.Add(i);
+            }
+            await _candidateRepository.UpdateCrazyCandidate(candidateToDeleteList, candidateToUpdateList, candidateToInsertList);
+        }
+        //private async Task UpdateTrade(Dictionary<string, StockCandidate> allStockInfoDict)
+        //{
+        //    List<StockTrade> stockHoldingList = await _tradeRepository.GetStockHolding();
+        //    foreach (var i in stockHoldingList)
+        //    {
+        //        if (!allStockInfoDict.TryGetValue(i.StockCode, out StockCandidate stock) || stock.TechDataList.Count < 9)
+        //        {
+        //            _logger.Error($"Can not retrieve last 9 tech data of stock code {i.StockCode}.");
+        //            continue;
+        //        }
+        //        i.Last9TechData = JsonConvert.SerializeObject(stock.TechDataList.Take(9));
+        //    }
+        //    await _tradeRepository.UpdateLast9TechData(stockHoldingList);
+        //}
     }
 }
