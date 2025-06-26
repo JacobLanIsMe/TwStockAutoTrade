@@ -191,7 +191,8 @@ namespace Core.Service
             if (!_stockCandidateDict.TryGetValue(stockCode, out StockCandidate candidate) || !candidate.IsTradingStarted) return;
             if (candidate.PurchasedLot > 0)
             {
-                if ((level1AskPrice <= candidate.EntryPoint && level1AskPrice < candidate.StopLossPoint) ||
+                if ((level1AskPrice / candidate.EntryPoint >= 1.1m) ||
+                    (level1AskPrice <= candidate.EntryPoint && level1AskPrice < candidate.StopLossPoint) ||
                     (level1AskPrice > candidate.EntryPoint && level1AskPrice < (candidate.SumOfLast9Close + level1AskPrice) / 10))
                 {
                     StockOrder stockOrder = SetDefaultStockOrder();
