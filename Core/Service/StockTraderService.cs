@@ -55,7 +55,7 @@ namespace Core.Service
                 List<StockCandidate> stockCandidateList = await _candidateRepository.GetActiveCandidate();
                 await SendCandidateToDiscord(stockCandidateList);
                 if (!stockCandidateList.Any()) return;
-                SetLast9Close(stockCandidateList);
+                //SetLast9Close(stockCandidateList);
                 _stockCandidateDict = stockCandidateList.ToDictionary(x => x.StockCode);
                 objYuantaOneAPI.Open(_enumEnvironmentMode);
                 await Task.Delay(-1, _cts.Token);
@@ -192,8 +192,7 @@ namespace Core.Service
             if (candidate.PurchasedLot > 0)
             {
                 if ((level1AskPrice / candidate.EntryPoint >= 1.1m) ||
-                    (level1AskPrice <= candidate.EntryPoint && level1AskPrice < candidate.StopLossPoint) ||
-                    (level1AskPrice > candidate.EntryPoint && level1AskPrice < (candidate.SumOfLast9Close + level1AskPrice) / 10))
+                    (level1AskPrice < candidate.StopLossPoint))
                 {
                     StockOrder stockOrder = SetDefaultStockOrder();
                     stockOrder.StkCode = stockCode;
@@ -212,7 +211,6 @@ namespace Core.Service
                 if (level1AskPrice == candidate.EntryPoint &&
                     orderQty > 0 &&
                     level1AskSize >= orderQty &&
-                    candidate.EntryPoint >= (candidate.SumOfLast9Close + candidate.EntryPoint) / 10 &&
                     tradeConfig.MaxStockCount > _stockCandidateDict.Count(x => x.Value.PurchasedLot > 0))
                 {
                     StockOrder stockOrder = SetDefaultStockOrder();
@@ -333,15 +331,15 @@ namespace Core.Service
             watch.StockCode = stockCode;                     //填入查詢股票代碼
             objYuantaOneAPI.UnsubscribeWatchlist(new List<Watchlist>() { watch });
         }
-        private void SetLast9Close(List<StockCandidate> stockCandidateList)
-        {
-            foreach (var i in stockCandidateList)
-            {
-                if (string.IsNullOrEmpty(i.Last9TechData)) throw new Exception($"The Last9TechData of Stock {i.StockCode} is null.");
-                List<StockTechData> last9TechDataList = JsonConvert.DeserializeObject<List<StockTechData>>(i.Last9TechData);
-                if (last9TechDataList.Count != 9) throw new Exception($"The count of Last9TechData of Stock {i.StockCode} is not 9.");
-                i.SumOfLast9Close = last9TechDataList.Sum(x => x.Close);
-            }
-        }
+        //private void SetLast9Close(List<StockCandidate> stockCandidateList)
+        //{
+        //    foreach (var i in stockCandidateList)
+        //    {
+        //        if (string.IsNullOrEmpty(i.Last9TechData)) throw new Exception($"The Last9TechData of Stock {i.StockCode} is null.");
+        //        List<StockTechData> last9TechDataList = JsonConvert.DeserializeObject<List<StockTechData>>(i.Last9TechData);
+        //        if (last9TechDataList.Count != 9) throw new Exception($"The count of Last9TechData of Stock {i.StockCode} is not 9.");
+        //        i.SumOfLast9Close = last9TechDataList.Sum(x => x.Close);
+        //    }
+        //}
     }
 }
