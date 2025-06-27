@@ -304,7 +304,7 @@ namespace Core.Service
                         continue;
                     }
                     decimal todayClose = stock.TechDataList.First().Close;
-                    if (todayClose < i.GapUpLow || (todayClose > i.EntryPoint && todayClose < stock.TechDataList.Take(10).Average(x => x.Close)))
+                    if (todayClose < i.GapUpLow || (todayClose > i.EntryPoint && todayClose < stock.TechDataList.Take(20).Average(x => x.Close)))
                     {
                         candidateToDeleteList.Add(i);
                         continue;
