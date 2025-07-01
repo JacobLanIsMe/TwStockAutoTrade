@@ -204,6 +204,7 @@ namespace Core.Service
                     currentVolume >= 1000 &&
                     latestStableCloseMax <= currentHigh &&
                     latestStableCloseMin >= lowBase &&
+                    modifiedTechList.Take(i + 1).Min(x => x.Close) >= lowBase &&
                     currentClose >= currentMa60 &&
                     currentHigh / currentMa60 <= 1.15m)
                 {
@@ -214,7 +215,7 @@ namespace Core.Service
             }
             return false;
         }
-        
+
         private decimal GetEntryPoint(decimal gapUpHigh)
         {
             decimal tick = 0;
@@ -273,7 +274,7 @@ namespace Core.Service
             }
             return gapUpHigh - tick;
         }
-        
+
         private async Task UpdateCandidate(List<StockCandidate> candidateToInsertList, Dictionary<string, StockCandidate> allStockInfoDict)
         {
             List<StockCandidate> activeCandidateList = await _candidateRepository.GetActiveCandidate();
@@ -341,7 +342,7 @@ namespace Core.Service
             }
             await _discordService.SendMessage(message);
         }
-        
+
         private async Task UpdateExRightsExDevidendDate()
         {
             List<ExRrightsExDividend> twseExRrightsExDividendList = await GetTwseExRightsExDevidendDate();
