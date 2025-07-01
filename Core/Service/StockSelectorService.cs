@@ -299,7 +299,7 @@ namespace Core.Service
                 }
                 else
                 {
-                    if (isDuplicateCandidate || !hasLatestStockInfo || stock.TechDataList.Count < 10)
+                    if (!hasLatestStockInfo || stock.TechDataList.Count < 10)
                     {
                         candidateToDeleteList.Add(i);
                         continue;
@@ -309,6 +309,18 @@ namespace Core.Service
                     {
                         candidateToDeleteList.Add(i);
                         continue;
+                    }
+                    if (isDuplicateCandidate)
+                    {
+                        if (candidateToInsertDict[i.StockCode].GapUpHigh == i.GapUpHigh && candidateToInsertDict[i.StockCode].GapUpLow == i.GapUpLow)
+                        {
+                            candidateToInsertList.Remove(candidateToInsertDict[i.StockCode]);
+                        }
+                        else
+                        {
+                            candidateToDeleteList.Add(i);
+                            continue;
+                        }
                     }
                     i.Last9TechData = JsonConvert.SerializeObject(stock.TechDataList.Take(9));
                     candidateToUpdateList.Add(i);
