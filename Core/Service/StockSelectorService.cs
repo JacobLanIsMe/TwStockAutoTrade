@@ -32,7 +32,6 @@ namespace Core.Service
         }
         public async Task SelectStock()
         {
-            List<StockTech> newCandidates = await TryNewSelector();
             //List<StockCandidate> dailyExchangeReport = await GetDailyExchangeReportFromTwseAndTwotc();
             List<StockCandidate> allStockInfoList = await GetStockInfoList();
             if (!doesNeedUpdate(allStockInfoList)) return;
@@ -44,45 +43,6 @@ namespace Core.Service
             await UpSertTechDataToDb(allStockInfoList);
             //await UpdateTrade(allStockInfoDict);
             //await UpdateCrazyCandidate(crazyCandidateList, allStockInfoDict);
-        }
-
-        private async Task<List<StockTech>> TryNewSelector()
-        {
-            List<StockTech> stockTech = await _candidateRepository.GetStockTech();
-            List<StockTech> newCandidates = new List<StockTech>();
-            foreach (var i in stockTech)
-            {
-                if (i.TechDataList.Count() < 100) continue;
-                bool isFirstDayVolumeSpike = true;
-                for (int j = 1; j < 5; j++)
-                {
-                    if (i.TechDataList.Skip(j).First().Volume > i.TechDataList.Skip(j).Take(5).Average(x=>x.Volume) * 3)
-                    {
-                        isFirstDayVolumeSpike = false;
-                        break;
-                    }
-                }
-                if (!isFirstDayVolumeSpike) continue;
-                decimal ma5 = i.TechDataList.Take(5).Average(x => x.Close);
-                decimal ma10 = i.TechDataList.Take(10).Average(x => x.Close);
-                decimal ma20 = i.TechDataList.Take(20).Average(x => x.Close);
-                decimal ma60 = i.TechDataList.Take(60).Average(x => x.Close);
-                decimal prevMa5 = i.TechDataList.Skip(1).Take(5).Average(x => x.Close);
-                decimal prevMa10 = i.TechDataList.Skip(1).Take(10).Average(x => x.Close);
-                decimal prevMa20 = i.TechDataList.Skip(1).Take(20).Average(x => x.Close);
-                decimal prevMa60 = i.TechDataList.Skip(1).Take(60).Average(x => x.Close);
-                decimal mv5 = (decimal)i.TechDataList.Take(5).Average(x => x.Volume);
-                var todayTechData = i.TechDataList.First();
-
-                if (todayTechData.Close > ma5 && todayTechData.Close > ma10 && todayTechData.Close > ma20 && todayTechData.Close > ma60 &&
-                    todayTechData.Volume > 1000 && todayTechData.Volume > mv5 * 3 &&
-                    ma5 > prevMa5 && ma10 > prevMa10 && ma20 > prevMa20 && ma60 > prevMa60)
-                {
-                    newCandidates.Add(i);
-                }
-
-            }
-            return newCandidates;
         }
 
         private async Task<List<StockCandidate>> GetStockInfoList()
