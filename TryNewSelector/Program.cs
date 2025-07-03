@@ -12,6 +12,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Serilog;
+using System.Net.Http;
+using Core.HttpClientFactory;
 
 namespace TryNewSelector
 {
@@ -28,6 +30,18 @@ namespace TryNewSelector
                 .AddSingleton<IDateTimeService, DateTimeService>()
                 .AddSingleton<ICandidateRepository, CandidateRepository>()
                 .BuildServiceProvider();
+
+            //string url_wantgoo = "https://www.wantgoo.com/stock/2330/major-investors/main-trend-data";
+            //string url_
+            //SimpleHttpClientFactory simpleHttpClientFactory = new SimpleHttpClientFactory();
+            //HttpClient httpClient = simpleHttpClientFactory.CreateClient();
+            //var html = await httpClient.GetStringAsync(url_wantgoo);
+
+            // 解析 HTML
+            //var doc = new HtmlDocument();
+            //doc.LoadHtml(html);
+
+
             var candidateRepository = serviceProvider.GetRequiredService<ICandidateRepository>();
             List<StockTech> stockTech = await candidateRepository.GetStockTech();
             List<StockTech> newCandidates = new List<StockTech>();
@@ -56,11 +70,17 @@ namespace TryNewSelector
                 var todayTechData = i.TechDataList.First();
 
                 if (todayTechData.Close > ma5 && todayTechData.Close > ma10 && todayTechData.Close > ma20 && todayTechData.Close > ma60 &&
-                    todayTechData.Volume > 1000 && todayTechData.Volume > mv5 * 3 &&
-                    ma5 > prevMa5 && ma10 > prevMa10 && ma20 > prevMa20 && ma60 > prevMa60)
+                    todayTechData.Volume > 1000 && todayTechData.Volume > mv5 * 3)
+                    //ma5 > prevMa5 && ma10 > prevMa10 && ma20 > prevMa20 && ma60 > prevMa60)
                 {
                     newCandidates.Add(i);
                 }
+                Console.WriteLine($"{i.StockCode} {i.CompanyName} finished.");
+            }
+            Console.WriteLine("-------------------------------");
+            foreach (var i in newCandidates)
+            {
+                Console.WriteLine($"{i.StockCode} match the tech filter");
             }
         }
     }

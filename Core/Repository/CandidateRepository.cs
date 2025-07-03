@@ -147,7 +147,7 @@ namespace Core.Repository
             {
                 var parameters = new DynamicParameters();
                 parameters.Add("@StockList", table.AsTableValuedParameter("dbo.StockTechType"));
-                await sqlConnection.ExecuteAsync("dbo.UpsertStockTech", parameters, commandType: CommandType.StoredProcedure);
+                await sqlConnection.ExecuteAsync("dbo.UpsertStockTech", parameters, commandType: CommandType.StoredProcedure, commandTimeout: 600);
             }
             _logger.Information("Upsert stock tech data finished.");
         }
