@@ -14,6 +14,8 @@ using System.Threading.Tasks;
 using Serilog;
 using System.Net.Http;
 using Core.HttpClientFactory;
+using HtmlAgilityPack;
+using System.Net;
 
 namespace TryNewSelector
 {
@@ -31,19 +33,30 @@ namespace TryNewSelector
                 .AddSingleton<ICandidateRepository, CandidateRepository>()
                 .BuildServiceProvider();
 
-            //string url_wantgoo = "https://www.wantgoo.com/stock/2330/major-investors/main-trend-data";
-            //string url_
-            //SimpleHttpClientFactory simpleHttpClientFactory = new SimpleHttpClientFactory();
-            //HttpClient httpClient = simpleHttpClientFactory.CreateClient();
-            //var html = await httpClient.GetStringAsync(url_wantgoo);
+            
 
-            // 解析 HTML
-            //var doc = new HtmlDocument();
-            //doc.LoadHtml(html);
+
+
 
 
             var candidateRepository = serviceProvider.GetRequiredService<ICandidateRepository>();
             List<StockTech> stockTech = await candidateRepository.GetStockTech();
+
+            foreach (var i in stockTech)
+            {
+                string url_yahoo = $"https://tw.stock.yahoo.com/quote/{i.StockCode}.TW/broker-trading";
+                SimpleHttpClientFactory simpleHttpClientFactory = new SimpleHttpClientFactory();
+                var httpClient = simpleHttpClientFactory.CreateClient();
+                var html = await httpClient.GetStringAsync(url_yahoo);
+                var htmlDoc = new HtmlDocument();
+                htmlDoc.LoadHtml(html);
+                var data = htmlDoc.DocumentNode.SelectSingleNode("//div[@id='main-3-QuoteChipMajor-Proxy']").InnerText;
+                string[] dataArray = data.Split('：')[1].Split('主');
+                string date = dataArray[0];
+                string mainPower = dataArray[1].Split(')')[1].Replace(",", "");
+                Console.WriteLine($"{i.StockCode} {i.CompanyName} {date} {mainPower}");
+            }
+
             List<StockTech> newCandidates = new List<StockTech>();
             foreach (var i in stockTech)
             {
