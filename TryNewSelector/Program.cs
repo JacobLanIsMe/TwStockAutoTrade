@@ -43,6 +43,8 @@ namespace TryNewSelector
             List<StockTech> stockTech = await candidateRepository.GetStockTech();
             SimpleHttpClientFactory simpleHttpClientFactory = new SimpleHttpClientFactory();
             var httpClient = simpleHttpClientFactory.CreateClient();
+
+            List<StockTech> newCandidates = new List<StockTech>();
             foreach (var i in stockTech)
             {
                 string url = $"https://stockchannelnew.sinotrade.com.tw/Z/ZC/ZCO/CZCO.DJBCD?A=5465";
@@ -56,11 +58,20 @@ namespace TryNewSelector
                 {
                     if (int.TryParse(mainPowerArray[mainPowerArray.Length - j], out int mainPower) && mainPower > 0) count++;
                 }
-                if (count < 5) continue;
-                Console.WriteLine($"{i.StockCode} match");
+
+                if (count >= 5)
+                {
+                    if (i.TechDataList.Count < 5) continue;
+                    decimal high = i.TechDataList.Take(5).Max(x => x.Close);
+                    decimal low = i.TechDataList.Take(5).Min(x => x.Close);
+                    decimal mv5 = (decimal)i.TechDataList.Take(5).Average(x => x.Volume);
+                    if (high / low < 1.02m && mv5 > 1000)
+                    {
+                        newCandidates.Add(i);
+                    }
+                } 
             }
 
-            List<StockTech> newCandidates = new List<StockTech>();
             foreach (var i in stockTech)
             {
                 if (i.TechDataList.Count() < 100) continue;
