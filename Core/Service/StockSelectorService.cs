@@ -37,7 +37,7 @@ namespace Core.Service
             //List<StockCandidate> dailyExchangeReport = await GetDailyExchangeReportFromTwseAndTwotc();
             List<StockCandidate> allStockInfoList = await GetStockCodeList();
             Dictionary<string, StockMainPower> allStockMainPowerDict = await GetMainPowerFromYahoo(allStockInfoList);
-
+            await _candidateRepository.UpsertStockMainPower(allStockMainPowerDict.Values.ToList());
             await SetExchangeReportFromYahoo(allStockInfoList);
             if (!doesNeedUpdate(allStockInfoList)) return;
             List<StockCandidate> candidateList = SelectCandidate(allStockInfoList);
@@ -150,6 +150,7 @@ namespace Core.Service
                                 {
                                     stockMainPower.MainPowerDataList.RemoveAt(mainPowerCount - 1);
                                 }
+                                stockMainPower.MainPowerData = JsonConvert.SerializeObject(stockMainPower.MainPowerDataList);
                             }
                             else
                             {
@@ -157,7 +158,8 @@ namespace Core.Service
                                 {
                                     StockCode = stock.StockCode,
                                     CompanyName = stock.CompanyName,
-                                    MainPowerDataList = new List<MainPower> { newMainPower }
+                                    MainPowerDataList = new List<MainPower> { newMainPower },
+                                    MainPowerData = JsonConvert.SerializeObject(new List<MainPower> { newMainPower })
                                 });
                             }
                             break;

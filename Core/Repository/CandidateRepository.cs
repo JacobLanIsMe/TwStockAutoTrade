@@ -131,6 +131,7 @@ namespace Core.Repository
                 await sqlConnection.ExecuteAsync(updateSqlCommand, candidateToUpdateList);
             }
         }
+        
         public async Task UpsertStockTech(List<StockTech> stockList)
         {
             _logger.Information("Upsert stock tech data started.");
@@ -160,6 +161,25 @@ namespace Core.Repository
                 result = await sqlConnection.QueryAsync<StockTech>(sqlCommand);
             }
             return result.ToList();
+        }
+        public async Task UpsertStockMainPower(List<StockMainPower> stockList)
+        {
+            _logger.Information("Upsert stock main power started.");
+            var table = new DataTable();
+            table.Columns.Add("StockCode", typeof(string));
+            table.Columns.Add("CompanyName", typeof(string));
+            table.Columns.Add("MainPowerData", typeof(string));
+            foreach (var stock in stockList)
+            {
+                table.Rows.Add(stock.StockCode, stock.CompanyName, stock.MainPowerData);
+            }
+            using (var sqlConnection = new SqlConnection(_dbConnectionString))
+            {
+                var parameters = new DynamicParameters();
+                parameters.Add("@StockList", table.AsTableValuedParameter("dbo.StockMainPowerType"));
+                await sqlConnection.ExecuteAsync("dbo.UpsertStockMainPower", parameters, commandType: CommandType.StoredProcedure, commandTimeout: 600);
+            }
+            _logger.Information("Upsert stock main power finished.");
         }
         public async Task<List<StockMainPower>> GetStockMainPower()
         {
