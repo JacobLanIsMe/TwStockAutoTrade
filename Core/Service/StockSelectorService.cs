@@ -4,6 +4,7 @@ using Core.Repository.Interface;
 using Core.Service.Interface;
 using HtmlAgilityPack;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Serilog;
 using System;
 using System.Collections.Generic;
@@ -34,21 +35,19 @@ namespace Core.Service
         }
         public async Task SelectStock()
         {
-            //List<StockCandidate> dailyExchangeReport = await GetDailyExchangeReportFromTwseAndTwotc();
             List<StockCandidate> allStockInfoList = await GetStockCodeList();
-            Dictionary<string, StockMainPower> allStockMainPowerDict = await GetMainPowerFromYahoo(allStockInfoList);
-            await _candidateRepository.UpsertStockMainPower(allStockMainPowerDict.Values.ToList());
-            await _candidateRepository.UpsertStockMainPower(allStockMainPowerDict.Values.ToList());
             await SetExchangeReportFromYahoo(allStockInfoList);
             if (!doesNeedUpdate(allStockInfoList)) return;
-            List<StockCandidate> candidateList = SelectCandidate(allStockInfoList);
-            //List<StockCandidate> crazyCandidateList = SelectCrazyCandidate(allStockInfoList);
+            List<string> stockMainPowerMatch = await SelectStockMatchMainPowerFromSinoPac(allStockInfoList);
             Dictionary<string, StockCandidate> allStockInfoDict = allStockInfoList.ToDictionary(x => x.StockCode);
+            List<StockCandidate> candidateList = SelectCandidate(allStockInfoList, stockMainPowerMatch);
             await UpdateCandidate(candidateList, allStockInfoDict);
             await UpdateExRightsExDevidendDate();
             await UpSertTechDataToDb(allStockInfoList);
+            //List<StockCandidate> dailyExchangeReport = await GetDailyExchangeReportFromTwseAndTwotc();
             //await UpdateTrade(allStockInfoDict);
             //await UpdateCrazyCandidate(crazyCandidateList, allStockInfoDict);
+            //List<StockCandidate> crazyCandidateList = SelectCrazyCandidate(allStockInfoList);
         }
 
         private async Task<List<StockCandidate>> GetStockCodeList()
@@ -103,16 +102,10 @@ namespace Core.Service
             _logger.Information("Get TWOTC stock code finished.");
             return stockList;
         }
-        private async Task<Dictionary<string, StockMainPower>> GetMainPowerFromYahoo(List<StockCandidate> stockList)
+        private async Task<List<string>> SelectStockMatchMainPowerFromSinoPac(List<StockCandidate> stockList)
         {
             _logger.Information("Retrieve main power started.");
-            List<StockMainPower> stockMainPowerList = await _candidateRepository.GetStockMainPower();
-            foreach (var i in stockMainPowerList)
-            {
-                if (string.IsNullOrEmpty(i.MainPowerData)) continue;
-                i.MainPowerDataList = JsonConvert.DeserializeObject<List<MainPower>>(i.MainPowerData);
-            }
-            Dictionary<string, StockMainPower> stockMainPowerDict = stockMainPowerList.ToDictionary(x => x.StockCode);
+            List<string> stockMatchMainPowerList = new List<string>();
             foreach (var stock in stockList)
             {
                 try
@@ -123,44 +116,20 @@ namespace Core.Service
                     {
                         try
                         {
-                            string market = ConvertMarketFromYuantaToYahoo(stock.Market);
-                            string url_yahoo = $"https://tw.stock.yahoo.com/quote/{stock.StockCode}.{market}/broker-trading";
-                            //string url_yahoo = $"https://tw.stock.yahoo.com/quote/1504.TW/broker-trading";
-                            var html = await _httpClient.GetStringAsync(url_yahoo);
-                            var htmlDoc = new HtmlDocument();
-                            htmlDoc.LoadHtml(html);
-                            var data = htmlDoc.DocumentNode.SelectSingleNode("//div[@id='main-3-QuoteChipMajor-Proxy']").InnerText;
-                            string[] dataArray = data.Split('：')[1].Split('主');
-                            string dateString = dataArray[0];
-                            string mainPowerString = dataArray[1].Split(')')[1].Replace(",", "");
-                            DateTime date = DateTime.ParseExact(dateString, "yyyy/MM/dd", CultureInfo.InvariantCulture);
-                            int mainPowerVolume = int.TryParse(mainPowerString, out int mainPower) ? mainPower : 0;
-                            MainPower newMainPower = new MainPower
+                            string url = $"https://stockchannelnew.sinotrade.com.tw/Z/ZC/ZCO/CZCO.DJBCD?A={stock.StockCode}";
+                            HttpResponseMessage response = await _httpClient.GetAsync(url);
+                            string responseBody = await response.Content.ReadAsStringAsync();
+                            var parts = responseBody.Split(' ');
+                            string[] mainPowerArray = parts[2].Split(',');
+                            if (mainPowerArray.Length < 5) throw new Exception($"Main power data is not enough for stock {stock.StockCode}.");
+                            int count = 0;
+                            for (var j = 1; j <= 5; j++)
                             {
-                                Date = date,
-                                MainPowerVolume = mainPowerVolume
-                            };
-                            if (stockMainPowerDict.TryGetValue(stock.StockCode, out StockMainPower stockMainPower))
-                            {
-                                if (stockMainPower.MainPowerDataList.Max(x => x.Date) == newMainPower.Date) break;
-                                stockMainPower.MainPowerDataList.Add(newMainPower);
-                                stockMainPower.MainPowerDataList.OrderByDescending(x => x.Date).ToList();
-                                int mainPowerCount = stockMainPower.MainPowerDataList.Count;
-                                if (mainPowerCount > 300)
-                                {
-                                    stockMainPower.MainPowerDataList.RemoveAt(mainPowerCount - 1);
-                                }
-                                stockMainPower.MainPowerData = JsonConvert.SerializeObject(stockMainPower.MainPowerDataList);
+                                if (int.TryParse(mainPowerArray[mainPowerArray.Length - j], out int mainPower) && mainPower > 0) count++;
                             }
-                            else
+                            if (count >= 5)
                             {
-                                stockMainPowerDict.Add(stock.StockCode, new StockMainPower
-                                {
-                                    StockCode = stock.StockCode,
-                                    CompanyName = stock.CompanyName,
-                                    MainPowerDataList = new List<MainPower> { newMainPower },
-                                    MainPowerData = JsonConvert.SerializeObject(new List<MainPower> { newMainPower })
-                                });
+                                stockMatchMainPowerList.Add(stock.StockCode);
                             }
                             break;
                         }
@@ -168,7 +137,6 @@ namespace Core.Service
                         {
                             if (retryCount >= maxRetryCount) throw;
                             retryCount++;
-                            await Task.Delay(2000);
                         }
                     }
                 }
@@ -176,10 +144,9 @@ namespace Core.Service
                 {
                     _logger.Error($"Error occurs while retrieving main power of Stock {stock.Market} {stock.StockCode} {stock.CompanyName}. Error message: {ex}");
                 }
-                await Task.Delay(2000);
             }
             _logger.Information("Retrieve main power finished.");
-            return stockMainPowerDict;
+            return stockMatchMainPowerList;
         }
         private async Task SetExchangeReportFromYahoo(List<StockCandidate> stockList)
         {
@@ -242,7 +209,7 @@ namespace Core.Service
             }).ToList();
             await _candidateRepository.UpsertStockTech(stockTechList);
         }
-        private List<StockCandidate> SelectCandidate(List<StockCandidate> stockList)
+        private List<StockCandidate> SelectCandidate(List<StockCandidate> stockList, List<string> stockMatchMainPowerList)
         {
             List<StockCandidate> candidateList = new List<StockCandidate>();
             foreach (var i in stockList)

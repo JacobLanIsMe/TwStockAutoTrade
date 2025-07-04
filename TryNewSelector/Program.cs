@@ -41,20 +41,23 @@ namespace TryNewSelector
 
             var candidateRepository = serviceProvider.GetRequiredService<ICandidateRepository>();
             List<StockTech> stockTech = await candidateRepository.GetStockTech();
-
+            SimpleHttpClientFactory simpleHttpClientFactory = new SimpleHttpClientFactory();
+            var httpClient = simpleHttpClientFactory.CreateClient();
             foreach (var i in stockTech)
             {
-                string url_yahoo = $"https://tw.stock.yahoo.com/quote/{i.StockCode}.TW/broker-trading";
-                SimpleHttpClientFactory simpleHttpClientFactory = new SimpleHttpClientFactory();
-                var httpClient = simpleHttpClientFactory.CreateClient();
-                var html = await httpClient.GetStringAsync(url_yahoo);
-                var htmlDoc = new HtmlDocument();
-                htmlDoc.LoadHtml(html);
-                var data = htmlDoc.DocumentNode.SelectSingleNode("//div[@id='main-3-QuoteChipMajor-Proxy']").InnerText;
-                string[] dataArray = data.Split('：')[1].Split('主');
-                string date = dataArray[0];
-                string mainPower = dataArray[1].Split(')')[1].Replace(",", "");
-                Console.WriteLine($"{i.StockCode} {i.CompanyName} {date} {mainPower}");
+                string url = $"https://stockchannelnew.sinotrade.com.tw/Z/ZC/ZCO/CZCO.DJBCD?A=5465";
+                HttpResponseMessage response = await httpClient.GetAsync(url);
+                string responseBody = await response.Content.ReadAsStringAsync();
+                var parts = responseBody.Split(' ');
+                string[] mainPowerArray = parts[2].Split(',');
+                List<string> mainPowerList = mainPowerArray.Skip(mainPowerArray.Length - 5).ToList();
+                int count = 0;
+                for (var j = 1; j <=5; j++)
+                {
+                    if (int.TryParse(mainPowerArray[mainPowerArray.Length - j], out int mainPower) && mainPower > 0) count++;
+                }
+                if (count < 5) continue;
+                Console.WriteLine($"{i.StockCode} match");
             }
 
             List<StockTech> newCandidates = new List<StockTech>();
