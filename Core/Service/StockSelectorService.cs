@@ -142,6 +142,7 @@ namespace Core.Service
                             };
                             if (stockMainPowerDict.TryGetValue(stock.StockCode, out StockMainPower stockMainPower))
                             {
+                                if (stockMainPower.MainPowerDataList.Max(x => x.Date) == newMainPower.Date) break;
                                 stockMainPower.MainPowerDataList.Add(newMainPower);
                                 stockMainPower.MainPowerDataList.OrderByDescending(x => x.Date).ToList();
                                 int mainPowerCount = stockMainPower.MainPowerDataList.Count;
@@ -159,7 +160,6 @@ namespace Core.Service
                                     MainPowerDataList = new List<MainPower> { newMainPower }
                                 });
                             }
-                            Console.WriteLine($"{stock.StockCode} {newMainPower.Date.ToString("yyyy/MM/dd")} {newMainPower.MainPowerVolume}");
                             break;
                         }
                         catch
