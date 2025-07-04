@@ -161,5 +161,15 @@ namespace Core.Repository
             }
             return result.ToList();
         }
+        public async Task<List<StockMainPower>> GetStockMainPower()
+        {
+            string sqlCommand = "SELECT [StockCode] ,[CompanyName] ,[MainPowerData] FROM dbo.StockMainPower";
+            IEnumerable<StockMainPower> result;
+            using (SqlConnection sqlConnection = new SqlConnection(_dbConnectionString))
+            {
+                result = await sqlConnection.QueryAsync<StockMainPower>(sqlCommand);
+            }
+            return result.ToList();
+        }
     }
 }

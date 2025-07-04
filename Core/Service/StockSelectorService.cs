@@ -2,10 +2,12 @@
 using Core.Model;
 using Core.Repository.Interface;
 using Core.Service.Interface;
+using HtmlAgilityPack;
 using Newtonsoft.Json;
 using Serilog;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -33,7 +35,10 @@ namespace Core.Service
         public async Task SelectStock()
         {
             //List<StockCandidate> dailyExchangeReport = await GetDailyExchangeReportFromTwseAndTwotc();
-            List<StockCandidate> allStockInfoList = await GetStockInfoList();
+            List<StockCandidate> allStockInfoList = await GetStockCodeList();
+            Dictionary<string, StockMainPower> allStockMainPowerDict = await GetMainPowerFromYahoo(allStockInfoList);
+
+            await SetExchangeReportFromYahoo(allStockInfoList);
             if (!doesNeedUpdate(allStockInfoList)) return;
             List<StockCandidate> candidateList = SelectCandidate(allStockInfoList);
             //List<StockCandidate> crazyCandidateList = SelectCrazyCandidate(allStockInfoList);
@@ -45,14 +50,13 @@ namespace Core.Service
             //await UpdateCrazyCandidate(crazyCandidateList, allStockInfoDict);
         }
 
-        private async Task<List<StockCandidate>> GetStockInfoList()
+        private async Task<List<StockCandidate>> GetStockCodeList()
         {
             var twseStockListTask = GetTwseStockCode();
             var tpexStockListTask = GetTwotcStockCode();
             var twseStockList = await twseStockListTask;
             var tpexStockList = await tpexStockListTask;
             List<StockCandidate> allStockInfoList = twseStockList.Concat(tpexStockList).ToList();
-            await GetExchangeReportFromYahoo(allStockInfoList);
             return allStockInfoList;
         }
 
@@ -98,7 +102,84 @@ namespace Core.Service
             _logger.Information("Get TWOTC stock code finished.");
             return stockList;
         }
-        private async Task GetExchangeReportFromYahoo(List<StockCandidate> stockList)
+        private async Task<Dictionary<string, StockMainPower>> GetMainPowerFromYahoo(List<StockCandidate> stockList)
+        {
+            _logger.Information("Retrieve main power started.");
+            List<StockMainPower> stockMainPowerList = await _candidateRepository.GetStockMainPower();
+            foreach (var i in stockMainPowerList)
+            {
+                if (string.IsNullOrEmpty(i.MainPowerData)) continue;
+                i.MainPowerDataList = JsonConvert.DeserializeObject<List<MainPower>>(i.MainPowerData);
+            }
+            Dictionary<string, StockMainPower> stockMainPowerDict = stockMainPowerList.ToDictionary(x => x.StockCode);
+            foreach (var stock in stockList)
+            {
+                try
+                {
+                    int maxRetryCount = 10;
+                    int retryCount = 0;
+                    while (retryCount <= maxRetryCount)
+                    {
+                        try
+                        {
+                            string market = ConvertMarketFromYuantaToYahoo(stock.Market);
+                            string url_yahoo = $"https://tw.stock.yahoo.com/quote/{stock.StockCode}.{market}/broker-trading";
+                            SimpleHttpClientFactory simpleHttpClientFactory = new SimpleHttpClientFactory();
+                            var httpClient = simpleHttpClientFactory.CreateClient();
+                            var html = await httpClient.GetStringAsync(url_yahoo);
+                            var htmlDoc = new HtmlDocument();
+                            htmlDoc.LoadHtml(html);
+                            var data = htmlDoc.DocumentNode.SelectSingleNode("//div[@id='main-3-QuoteChipMajor-Proxy']").InnerText;
+                            string[] dataArray = data.Split('：')[1].Split('主');
+                            string dateString = dataArray[0];
+                            string mainPowerString = dataArray[1].Split(')')[1].Replace(",", "");
+                            DateTime date = DateTime.ParseExact(dateString, "yyyy/MM/dd", CultureInfo.InvariantCulture);
+                            int mainPowerVolume = int.TryParse(mainPowerString, out int mainPower) ? mainPower : 0;
+                            MainPower newMainPower = new MainPower
+                            {
+                                Date = date,
+                                MainPowerVolume = mainPowerVolume
+                            };
+                            if (stockMainPowerDict.TryGetValue(stock.StockCode, out StockMainPower stockMainPower))
+                            {
+                                stockMainPower.MainPowerDataList.Add(newMainPower);
+                                stockMainPower.MainPowerDataList.OrderByDescending(x => x.Date).ToList();
+                                int mainPowerCount = stockMainPower.MainPowerDataList.Count;
+                                if (mainPowerCount > 300)
+                                {
+                                    stockMainPower.MainPowerDataList.RemoveAt(mainPowerCount - 1);
+                                }
+                            }
+                            else
+                            {
+                                stockMainPowerDict.Add(stock.StockCode, new StockMainPower
+                                {
+                                    StockCode = stock.StockCode,
+                                    CompanyName = stock.CompanyName,
+                                    MainPowerDataList = new List<MainPower> { newMainPower }
+                                });
+                            }
+                            Console.WriteLine($"{stock.StockCode} {newMainPower.Date.ToString("yyyy/MM/dd")} {newMainPower.MainPowerVolume}");
+                            break;
+                        }
+                        catch
+                        {
+                            if (retryCount >= maxRetryCount) throw;
+                            retryCount++;
+                            await Task.Delay(2000);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"Error occurs while retrieving exchange report of Stock {stock.Market} {stock.StockCode} {stock.CompanyName}. Error message: {ex.Message}");
+                }
+                await Task.Delay(2000);
+            }
+            _logger.Information("Retrieve main power finished.");
+            return stockMainPowerDict;
+        }
+        private async Task SetExchangeReportFromYahoo(List<StockCandidate> stockList)
         {
             _logger.Information("Retrieve exchange report started.");
             foreach (var stock in stockList)
@@ -111,7 +192,7 @@ namespace Core.Service
                     {
                         try
                         {
-                            string market = stock.Market == enumMarketType.TWSE ? "TW" : "TWO";
+                            string market = ConvertMarketFromYuantaToYahoo(stock.Market);
                             string url = $"https://tw.stock.yahoo.com/_td-stock/api/resource/FinanceChartService.ApacLibraCharts;period=d;symbols=%5B%22{stock.StockCode}.{market}%22%5D?bkt=%5B%22t20-pc-twstock-article-test%22%2C%22TW-Stock-Desktop-NewTechCharts-Rampup%22%5D&device=desktop&ecma=modern&feature=enableGAMAds%2CenableGAMEdgeToEdge%2CenableEvPlayer%2CenableHighChart&intl=tw&lang=zh-Hant-TW&partner=none&prid=52qgtalk3b72g&region=TW&site=finance&tz=Asia%2FTaipei&ver=1.4.558&returnMeta=true";
                             HttpResponseMessage response = await _httpClient.GetAsync(url);
                             string responseBody = await response.Content.ReadAsStringAsync();
@@ -550,6 +631,10 @@ namespace Core.Service
                 candidateToUpdateList.Add(i);
             }
             await _candidateRepository.UpdateCrazyCandidate(candidateToDeleteList, candidateToUpdateList, candidateToInsertList);
+        }
+        private string ConvertMarketFromYuantaToYahoo(enumMarketType enumMarketType)
+        {
+            return enumMarketType == enumMarketType.TWSE ? "TW" : "TWO";
         }
         //private async Task UpdateTrade(Dictionary<string, StockCandidate> allStockInfoDict)
         //{
