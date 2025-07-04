@@ -38,6 +38,7 @@ namespace Core.Service
             List<StockCandidate> allStockInfoList = await GetStockCodeList();
             Dictionary<string, StockMainPower> allStockMainPowerDict = await GetMainPowerFromYahoo(allStockInfoList);
             await _candidateRepository.UpsertStockMainPower(allStockMainPowerDict.Values.ToList());
+            await _candidateRepository.UpsertStockMainPower(allStockMainPowerDict.Values.ToList());
             await SetExchangeReportFromYahoo(allStockInfoList);
             if (!doesNeedUpdate(allStockInfoList)) return;
             List<StockCandidate> candidateList = SelectCandidate(allStockInfoList);
@@ -124,9 +125,8 @@ namespace Core.Service
                         {
                             string market = ConvertMarketFromYuantaToYahoo(stock.Market);
                             string url_yahoo = $"https://tw.stock.yahoo.com/quote/{stock.StockCode}.{market}/broker-trading";
-                            SimpleHttpClientFactory simpleHttpClientFactory = new SimpleHttpClientFactory();
-                            var httpClient = simpleHttpClientFactory.CreateClient();
-                            var html = await httpClient.GetStringAsync(url_yahoo);
+                            //string url_yahoo = $"https://tw.stock.yahoo.com/quote/1504.TW/broker-trading";
+                            var html = await _httpClient.GetStringAsync(url_yahoo);
                             var htmlDoc = new HtmlDocument();
                             htmlDoc.LoadHtml(html);
                             var data = htmlDoc.DocumentNode.SelectSingleNode("//div[@id='main-3-QuoteChipMajor-Proxy']").InnerText;
@@ -174,7 +174,7 @@ namespace Core.Service
                 }
                 catch (Exception ex)
                 {
-                    _logger.Error($"Error occurs while retrieving exchange report of Stock {stock.Market} {stock.StockCode} {stock.CompanyName}. Error message: {ex.Message}");
+                    _logger.Error($"Error occurs while retrieving main power of Stock {stock.Market} {stock.StockCode} {stock.CompanyName}. Error message: {ex}");
                 }
                 await Task.Delay(2000);
             }
