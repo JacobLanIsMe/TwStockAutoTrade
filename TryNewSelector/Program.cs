@@ -47,7 +47,7 @@ namespace TryNewSelector
             List<StockTech> newCandidates = new List<StockTech>();
             foreach (var i in stockTech)
             {
-                string url = $"https://stockchannelnew.sinotrade.com.tw/Z/ZC/ZCO/CZCO.DJBCD?A=5465";
+                string url = $"https://stockchannelnew.sinotrade.com.tw/Z/ZC/ZCO/CZCO.DJBCD?A={i.StockCode}";
                 HttpResponseMessage response = await httpClient.GetAsync(url);
                 string responseBody = await response.Content.ReadAsStringAsync();
                 var parts = responseBody.Split(' ');
@@ -62,12 +62,21 @@ namespace TryNewSelector
                 if (count >= 5)
                 {
                     if (i.TechDataList.Count < 5) continue;
+                    List<StockTechData> latest5TechList = i.TechDataList.Take(5).ToList();
+                    for (int j = 0; j < latest5TechList.Count; j++)
+                    {
+                        decimal baseHigh = latest5TechList[j].High;
+                        decimal baseLow = latest5TechList[j].Low;
+
+                    }
                     decimal high = i.TechDataList.Take(5).Max(x => x.Close);
                     decimal low = i.TechDataList.Take(5).Min(x => x.Close);
                     decimal mv5 = (decimal)i.TechDataList.Take(5).Average(x => x.Volume);
+
                     if (high / low < 1.02m && mv5 > 1000)
                     {
                         newCandidates.Add(i);
+                        Console.WriteLine($"{i.StockCode} match the main power filter with count {count} and high/low ratio {high / low}");
                     }
                 } 
             }
