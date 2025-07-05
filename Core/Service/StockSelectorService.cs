@@ -40,7 +40,7 @@ namespace Core.Service
             if (!doesNeedUpdate(allStockInfoList)) return;
             List<string> stockMainPowerMatch = await SelectStockMatchMainPowerFromSinoPac(allStockInfoList);
             Dictionary<string, StockCandidate> allStockInfoDict = allStockInfoList.ToDictionary(x => x.StockCode);
-            List<StockCandidate> candidateList = SelectCandidate(allStockInfoList, stockMainPowerMatch);
+            List<StockCandidate> candidateList = SelectCandidate(stockMainPowerMatch, allStockInfoDict);
             await UpdateCandidate(candidateList, allStockInfoDict);
             await UpdateExRightsExDevidendDate();
             await UpSertTechDataToDb(allStockInfoList);
@@ -127,7 +127,7 @@ namespace Core.Service
                             {
                                 if (int.TryParse(mainPowerArray[mainPowerArray.Length - j], out int mainPower) && mainPower > 0) count++;
                             }
-                            if (count >= 5)
+                            if (count >= 4)
                             {
                                 stockMatchMainPowerList.Add(stock.StockCode);
                             }
@@ -209,11 +209,12 @@ namespace Core.Service
             }).ToList();
             await _candidateRepository.UpsertStockTech(stockTechList);
         }
-        private List<StockCandidate> SelectCandidate(List<StockCandidate> stockList, List<string> stockMatchMainPowerList)
+        private List<StockCandidate> SelectCandidate(List<string> stockMatchMainPowerList, Dictionary<string, StockCandidate> allStockInfoDict)
         {
             List<StockCandidate> candidateList = new List<StockCandidate>();
-            foreach (var i in stockList)
+            foreach (var stockCode in stockMatchMainPowerList)
             {
+                if (!allStockInfoDict.TryGetValue(stockCode, out StockCandidate i)) continue;
                 i.IsCandidate = IsCandidate(i.TechDataList, out decimal gapUpHigh, out decimal gapUpLow);
                 if (!i.IsCandidate || gapUpHigh == 0 || gapUpLow == 0) continue;
                 i.GapUpHigh = gapUpHigh;
@@ -232,39 +233,28 @@ namespace Core.Service
             gapUpLow = 0;
             if (techDataList.Count < 100) return false;
             int stableCount = 5;
-            List<StockTechData> lastestStableTech = techDataList.Take(stableCount).ToList();
-            decimal latestStableCloseMax = lastestStableTech.Max(x => x.Close);
-            decimal latestStableCloseMin = lastestStableTech.Min(x => x.Close);
-            if (latestStableCloseMax / latestStableCloseMin > 1.02m) return false;
-            List<StockTechData> modifiedTechList = techDataList.Skip(stableCount).ToList();
-            for (var i = 0; i < 20; i++)
+            List<StockTechData> latestStableTech = techDataList.Take(stableCount).ToList();
+            decimal latestStableCloseMax = latestStableTech.Max(x => x.Close);
+            decimal latestStableCloseMin = latestStableTech.Min(x => x.Close);
+            decimal ma60 = techDataList.Take(60).Average(x => x.Close);
+            decimal mv5 = (decimal)latestStableTech.Average(x => x.Volume);
+            decimal todayClose = techDataList.First().Close;
+            if (latestStableCloseMax / latestStableCloseMin > 1.02m || mv5 < 1000 || todayClose < ma60) return false;
+            for (int i = 0; i < stableCount - 1; i++)
             {
-                StockTechData currentTechData = modifiedTechList.Skip(i).First();
-                StockTechData previousTechData = modifiedTechList.Skip(i + 1).First();
-                decimal currentHigh = currentTechData.High;
-                decimal currentLow = currentTechData.Low;
-                decimal currentClose = currentTechData.Close;
-                decimal currentVolume = currentTechData.Volume;
-                decimal current5VolumeAverage = (decimal)modifiedTechList.Skip(i).Take(5).Average(x => x.Volume);
-                decimal currentMa60 = modifiedTechList.Skip(i).Take(60).Average(x => x.Close);
-                decimal previousHigh = previousTechData.High;
-                decimal previousClose = previousTechData.Close;
-                bool isJump = currentLow >= previousHigh;
-                decimal lowBase = isJump ? previousHigh : currentLow;
-                if ((isJump || currentVolume >= current5VolumeAverage * 2) &&
-                    currentVolume >= 1000 &&
-                    latestStableCloseMax <= currentHigh &&
-                    latestStableCloseMin >= lowBase &&
-                    modifiedTechList.Take(i + 1).Min(x => x.Close) >= lowBase &&
-                    currentClose >= currentMa60 &&
-                    currentHigh / currentMa60 <= 1.15m)
+                decimal baseHigh = latestStableTech[i].High;
+                decimal baseLow = latestStableTech[i].Low;
+                for (int j = i + 1; j < stableCount; j++)
                 {
-                    gapUpHigh = currentHigh;
-                    gapUpLow = lowBase;
-                    return true;
+                    if (!(baseHigh >= latestStableTech[j].Low && latestStableTech[j].High >= baseLow))
+                    {
+                        return false;
+                    }
                 }
             }
-            return false;
+            gapUpHigh = latestStableTech.Max(x => x.High);
+            gapUpLow = latestStableTech.Min(x => x.Low);
+            return true;
         }
 
         private decimal GetEntryPoint(decimal gapUpHigh)
@@ -350,7 +340,7 @@ namespace Core.Service
                 }
                 else
                 {
-                    if (!hasLatestStockInfo || stock.TechDataList.Count < 10)
+                    if (isDuplicateCandidate || !hasLatestStockInfo || stock.TechDataList.Count < 10)
                     {
                         candidateToDeleteList.Add(i);
                         continue;
@@ -360,18 +350,6 @@ namespace Core.Service
                     {
                         candidateToDeleteList.Add(i);
                         continue;
-                    }
-                    if (isDuplicateCandidate)
-                    {
-                        if (candidateToInsertDict[i.StockCode].GapUpHigh == i.GapUpHigh && candidateToInsertDict[i.StockCode].GapUpLow == i.GapUpLow)
-                        {
-                            candidateToInsertList.Remove(candidateToInsertDict[i.StockCode]);
-                        }
-                        else
-                        {
-                            candidateToDeleteList.Add(i);
-                            continue;
-                        }
                     }
                     i.Last9TechData = JsonConvert.SerializeObject(stock.TechDataList.Take(9));
                     candidateToUpdateList.Add(i);
