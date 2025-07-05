@@ -59,26 +59,38 @@ namespace TryNewSelector
                     if (int.TryParse(mainPowerArray[mainPowerArray.Length - j], out int mainPower) && mainPower > 0) count++;
                 }
 
-                if (count >= 5)
+                if (count < 4) continue;
+                
+                //Console.WriteLine($"{i.StockCode} match main power");
+                if (i.TechDataList.Count < 5) continue;
+
+                decimal todayClose = i.TechDataList.First().Close;
+                decimal high = i.TechDataList.Take(5).Max(x => x.Close);
+                decimal low = i.TechDataList.Take(5).Min(x => x.Close);
+                decimal ma60 = i.TechDataList.Take(60).Average(x => x.Close);
+                decimal mv5 = (decimal)i.TechDataList.Take(5).Average(x => x.Volume);
+
+                if (high / low > 1.02m || mv5 < 1000 || todayClose < ma60) continue;
+                //Console.WriteLine($"{i.StockCode} match the volume filter");
+                    
+                List<StockTechData> latest5TechList = i.TechDataList.Take(5).ToList();
+                int isSideWay = 0;
+                for (int j = 0; j < latest5TechList.Count; j++)
                 {
-                    if (i.TechDataList.Count < 5) continue;
-                    List<StockTechData> latest5TechList = i.TechDataList.Take(5).ToList();
-                    for (int j = 0; j < latest5TechList.Count; j++)
-                    {
-                        decimal baseHigh = latest5TechList[j].High;
-                        decimal baseLow = latest5TechList[j].Low;
-
+                    decimal baseHigh = latest5TechList[j].High;
+                    decimal baseLow = latest5TechList[j].Low;
+                    for (int k = 0; k < latest5TechList.Count; k++) 
+                    { 
+                        if(j==k) continue;
+                        if (baseHigh >= latest5TechList[k].Low && latest5TechList[k].High >= baseLow)
+                        {
+                            isSideWay++;
+                        }
                     }
-                    decimal high = i.TechDataList.Take(5).Max(x => x.Close);
-                    decimal low = i.TechDataList.Take(5).Min(x => x.Close);
-                    decimal mv5 = (decimal)i.TechDataList.Take(5).Average(x => x.Volume);
 
-                    if (high / low < 1.02m && mv5 > 1000)
-                    {
-                        newCandidates.Add(i);
-                        Console.WriteLine($"{i.StockCode} match the main power filter with count {count} and high/low ratio {high / low}");
-                    }
-                } 
+                }
+                if (isSideWay < 20) continue;
+                Console.WriteLine($"{i.StockCode} match all filter");
             }
 
             foreach (var i in stockTech)
