@@ -47,6 +47,7 @@ namespace TryNewSelector
             List<StockTech> newCandidates = new List<StockTech>();
             foreach (var i in stockTech)
             {
+
                 string url = $"https://stockchannelnew.sinotrade.com.tw/Z/ZC/ZCO/CZCO.DJBCD?A={i.StockCode}";
                 HttpResponseMessage response = await httpClient.GetAsync(url);
                 string responseBody = await response.Content.ReadAsStringAsync();

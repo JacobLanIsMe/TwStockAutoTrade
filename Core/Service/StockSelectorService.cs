@@ -161,23 +161,26 @@ namespace Core.Service
                     {
                         try
                         {
-                            string market = ConvertMarketFromYuantaToYahoo(stock.Market);
-                            string url = $"https://tw.stock.yahoo.com/_td-stock/api/resource/FinanceChartService.ApacLibraCharts;period=d;symbols=%5B%22{stock.StockCode}.{market}%22%5D?bkt=%5B%22t20-pc-twstock-article-test%22%2C%22TW-Stock-Desktop-NewTechCharts-Rampup%22%5D&device=desktop&ecma=modern&feature=enableGAMAds%2CenableGAMEdgeToEdge%2CenableEvPlayer%2CenableHighChart&intl=tw&lang=zh-Hant-TW&partner=none&prid=52qgtalk3b72g&region=TW&site=finance&tz=Asia%2FTaipei&ver=1.4.558&returnMeta=true";
+                            string url = $"https://stockchannelnew.sinotrade.com.tw/z/BCD/czkc1.djbcd?a={stock.StockCode}&b=D&c=2880&E=1&ver=5";
                             HttpResponseMessage response = await _httpClient.GetAsync(url);
                             string responseBody = await response.Content.ReadAsStringAsync();
-                            YahooTechData yahooTechData = JsonConvert.DeserializeObject<YahooTechData>(responseBody);
-                            List<DateTime> dateList = yahooTechData.Data.First().Chart.Timestamp.Select(x => _dateTimeService.ConvertTimestampToDateTime(x)).ToList();
-                            QuoteModel quote = yahooTechData.Data.First().Chart.Indicators.Quote.FirstOrDefault();
-                            for (int i = 0; i < dateList.Count; i++)
+                            var parts = responseBody.Split(' ');
+                            string[] date = parts[0].Split(',');
+                            string[] open = parts[1].Split(',');
+                            string[] high = parts[2].Split(',');
+                            string[] low = parts[3].Split(',');
+                            string[] close = parts[4].Split(',');
+                            string[] volume = parts[5].Split(',');
+                            for (int i = 0; i < date.Length; i++)
                             {
                                 stock.TechDataList.Add(new StockTechData
                                 {
-                                    Date = dateList[i],
-                                    Close = quote.Close[i],
-                                    Open = quote.Open[i],
-                                    High = quote.High[i],
-                                    Low = quote.Low[i],
-                                    Volume = quote.Volume[i]
+                                    Date = DateTime.ParseExact(date[i], "yyyy/MM/dd", CultureInfo.InvariantCulture),
+                                    Close = decimal.Parse(close[i]),
+                                    Open = decimal.Parse(open[i]),
+                                    High = decimal.Parse(high[i]),
+                                    Low = decimal.Parse(low[i]),
+                                    Volume = int.Parse(volume[i])
                                 });
                             }
                             stock.TechDataList = stock.TechDataList.OrderByDescending(x => x.Date).ToList();
@@ -187,7 +190,6 @@ namespace Core.Service
                         {
                             if (retryCount >= maxRetryCount) throw;
                             retryCount++;
-                            await Task.Delay(2000);
                         }
                     }
                 }
@@ -195,7 +197,6 @@ namespace Core.Service
                 {
                     _logger.Error($"Error occurs while retrieving exchange report of Stock {stock.Market} {stock.StockCode} {stock.CompanyName}. Error message: {ex.Message}");
                 }
-                await Task.Delay(2000);
             }
             _logger.Information("Retrieve exchange report finished.");
         }
