@@ -36,11 +36,11 @@ namespace Core.Service
         public async Task SelectStock()
         {
             List<StockCandidate> allStockInfoList = await GetStockCodeList();
-            await SetExchangeReportFromYahoo(allStockInfoList);
+            await SetExchangeReportFromSino(allStockInfoList);
             if (!doesNeedUpdate(allStockInfoList)) return;
-            List<string> stockMainPowerMatch = await SelectStockMatchMainPowerFromSinoPac(allStockInfoList);
+            List<StockCandidate> candidateList = SelectCandidateByTech(allStockInfoList);
+            candidateList = await SelectCandidateByMainPower(candidateList);
             Dictionary<string, StockCandidate> allStockInfoDict = allStockInfoList.ToDictionary(x => x.StockCode);
-            List<StockCandidate> candidateList = SelectCandidate(stockMainPowerMatch, allStockInfoDict);
             await UpdateCandidate(candidateList, allStockInfoDict);
             await UpdateExRightsExDevidendDate();
             await UpSertTechDataToDb(allStockInfoList);
@@ -102,11 +102,11 @@ namespace Core.Service
             _logger.Information("Get TWOTC stock code finished.");
             return stockList;
         }
-        private async Task<List<string>> SelectStockMatchMainPowerFromSinoPac(List<StockCandidate> stockList)
+        private async Task<List<StockCandidate>> SelectCandidateByMainPower(List<StockCandidate> candidateList)
         {
             _logger.Information("Retrieve main power started.");
-            List<string> stockMatchMainPowerList = new List<string>();
-            foreach (var stock in stockList)
+            List<StockCandidate> stockMatchMainPowerList = new List<StockCandidate>();
+            foreach (var stock in candidateList)
             {
                 try
                 {
@@ -129,7 +129,7 @@ namespace Core.Service
                             }
                             if (count >= 4)
                             {
-                                stockMatchMainPowerList.Add(stock.StockCode);
+                                stockMatchMainPowerList.Add(stock);
                             }
                             break;
                         }
@@ -148,7 +148,7 @@ namespace Core.Service
             _logger.Information("Retrieve main power finished.");
             return stockMatchMainPowerList;
         }
-        private async Task SetExchangeReportFromYahoo(List<StockCandidate> stockList)
+        private async Task SetExchangeReportFromSino(List<StockCandidate> stockList)
         {
             _logger.Information("Retrieve exchange report started.");
             foreach (var stock in stockList)
@@ -210,12 +210,11 @@ namespace Core.Service
             }).ToList();
             await _candidateRepository.UpsertStockTech(stockTechList);
         }
-        private List<StockCandidate> SelectCandidate(List<string> stockMatchMainPowerList, Dictionary<string, StockCandidate> allStockInfoDict)
+        private List<StockCandidate> SelectCandidateByTech(List<StockCandidate> allStockInfoList)
         {
             List<StockCandidate> candidateList = new List<StockCandidate>();
-            foreach (var stockCode in stockMatchMainPowerList)
+            foreach (var i in allStockInfoList)
             {
-                if (!allStockInfoDict.TryGetValue(stockCode, out StockCandidate i)) continue;
                 i.IsCandidate = IsCandidate(i.TechDataList, out decimal gapUpHigh, out decimal gapUpLow);
                 if (!i.IsCandidate || gapUpHigh == 0 || gapUpLow == 0) continue;
                 i.GapUpHigh = gapUpHigh;
