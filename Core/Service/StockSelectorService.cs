@@ -23,6 +23,7 @@ namespace Core.Service
         private readonly ILogger _logger;
         private readonly IDateTimeService _dateTimeService;
         private readonly IDiscordService _discordService;
+        private int _maxRetryCount = 10;
         public StockSelectorService(ICandidateRepository candidateRepository, ILogger logger, IDateTimeService dateTimeService, IDiscordService discordService)
         {
             SimpleHttpClientFactory httpClientFactory = new SimpleHttpClientFactory();
@@ -63,42 +64,72 @@ namespace Core.Service
         private async Task<List<StockCandidate>> GetTwseStockCode()
         {
             _logger.Information("Get TWSE stock code started.");
-            HttpResponseMessage response = await _httpClient.GetAsync("https://openapi.twse.com.tw/v1/opendata/t187ap03_L");
-            string responseBody = await response.Content.ReadAsStringAsync();
-            List<TwseStockInfo> stockInfoList = JsonConvert.DeserializeObject<List<TwseStockInfo>>(responseBody);
-            HttpResponseMessage intradayResponse = await _httpClient.GetAsync("https://openapi.twse.com.tw/v1/exchangeReport/TWTB4U");
-            string intradayResponseBody = await intradayResponse.Content.ReadAsStringAsync();
-            List<TwseIntradayStockInfo> intradayStockInfoList = JsonConvert.DeserializeObject<List<TwseIntradayStockInfo>>(intradayResponseBody);
-            HashSet<string> intradayStockCodeHashSet = new HashSet<string>(intradayStockInfoList.Select(x => x.Code.ToUpper()));
-            List<StockCandidate> stockList = stockInfoList.Where(x => intradayStockCodeHashSet.Contains(x.公司代號.ToUpper())).Select(x => new StockCandidate()
+            List<StockCandidate> stockList = new List<StockCandidate>();
+            int retryCount = 0;
+            while (retryCount <= _maxRetryCount)
             {
-                Market = enumMarketType.TWSE,
-                StockCode = x.公司代號.ToUpper(),
-                CompanyName = x.公司簡稱
-            }).ToList();
+                try
+                {
+                    HttpResponseMessage response = await _httpClient.GetAsync("https://openapi.twse.com.tw/v1/opendata/t187ap03_L");
+                    string responseBody = await response.Content.ReadAsStringAsync();
+                    List<TwseStockInfo> stockInfoList = JsonConvert.DeserializeObject<List<TwseStockInfo>>(responseBody);
+                    HttpResponseMessage intradayResponse = await _httpClient.GetAsync("https://openapi.twse.com.tw/v1/exchangeReport/TWTB4U");
+                    string intradayResponseBody = await intradayResponse.Content.ReadAsStringAsync();
+                    List<TwseIntradayStockInfo> intradayStockInfoList = JsonConvert.DeserializeObject<List<TwseIntradayStockInfo>>(intradayResponseBody);
+                    HashSet<string> intradayStockCodeHashSet = new HashSet<string>(intradayStockInfoList.Select(x => x.Code.ToUpper()));
+                    stockList = stockInfoList.Where(x => intradayStockCodeHashSet.Contains(x.公司代號.ToUpper())).Select(x => new StockCandidate()
+                    {
+                        Market = enumMarketType.TWSE,
+                        StockCode = x.公司代號.ToUpper(),
+                        CompanyName = x.公司簡稱
+                    }).ToList();
+                    break;
+                }
+                catch(Exception ex)
+                {
+                    _logger.Error($"Error occurs while retrieving TWSE stock code. Error message: {ex.Message}");
+                    if (retryCount >= _maxRetryCount) throw;
+                    retryCount++;
+                }
+            }
             _logger.Information("Get TWSE stock code finished.");
             return stockList;
         }
         private async Task<List<StockCandidate>> GetTwotcStockCode()
         {
             _logger.Information("Get TWOTC stock code started.");
-            HttpResponseMessage response = await _httpClient.GetAsync("https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O");
-            string responseBody = await response.Content.ReadAsStringAsync();
-            List<TwotcStockInfo> stockInfoList = JsonConvert.DeserializeObject<List<TwotcStockInfo>>(responseBody);
-            HttpResponseMessage intradayResponse = await _httpClient.GetAsync("https://www.tpex.org.tw/www/zh-tw/intraday/list");
-            string intradayResponseBody = await intradayResponse.Content.ReadAsStringAsync();
-            TwotcIntradayStockInfo intradayStockInfoList = JsonConvert.DeserializeObject<TwotcIntradayStockInfo>(intradayResponseBody);
-            HashSet<string> intradayStockCodeHashSet = new HashSet<string>();
-            if (intradayStockInfoList.Tables.Any())
+            List<StockCandidate> stockList = new List<StockCandidate>();
+            int retryCount = 0;
+            while (retryCount <= _maxRetryCount)
             {
-                intradayStockCodeHashSet = new HashSet<string>(intradayStockInfoList.Tables.First().Data.Select(x => x[0].ToUpper()));
+                try
+                {
+                    HttpResponseMessage response = await _httpClient.GetAsync("https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O");
+                    string responseBody = await response.Content.ReadAsStringAsync();
+                    List<TwotcStockInfo> stockInfoList = JsonConvert.DeserializeObject<List<TwotcStockInfo>>(responseBody);
+                    HttpResponseMessage intradayResponse = await _httpClient.GetAsync("https://www.tpex.org.tw/www/zh-tw/intraday/list");
+                    string intradayResponseBody = await intradayResponse.Content.ReadAsStringAsync();
+                    TwotcIntradayStockInfo intradayStockInfoList = JsonConvert.DeserializeObject<TwotcIntradayStockInfo>(intradayResponseBody);
+                    HashSet<string> intradayStockCodeHashSet = new HashSet<string>();
+                    if (intradayStockInfoList.Tables.Any())
+                    {
+                        intradayStockCodeHashSet = new HashSet<string>(intradayStockInfoList.Tables.First().Data.Select(x => x[0].ToUpper()));
+                    }
+                    stockList = stockInfoList.Where(x => intradayStockCodeHashSet.Contains(x.SecuritiesCompanyCode.ToUpper())).Select(x => new StockCandidate()
+                    {
+                        Market = enumMarketType.TWOTC,
+                        StockCode = x.SecuritiesCompanyCode.ToUpper(),
+                        CompanyName = x.CompanyAbbreviation
+                    }).ToList();
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"Error occurs while retrieving TWOTC stock code. Error message: {ex.Message}");
+                    if (retryCount >= _maxRetryCount) throw;
+                    retryCount++;
+                }
             }
-            List<StockCandidate> stockList = stockInfoList.Where(x => intradayStockCodeHashSet.Contains(x.SecuritiesCompanyCode.ToUpper())).Select(x => new StockCandidate()
-            {
-                Market = enumMarketType.TWOTC,
-                StockCode = x.SecuritiesCompanyCode.ToUpper(),
-                CompanyName = x.CompanyAbbreviation
-            }).ToList();
             _logger.Information("Get TWOTC stock code finished.");
             return stockList;
         }
@@ -110,9 +141,8 @@ namespace Core.Service
             {
                 try
                 {
-                    int maxRetryCount = 10;
                     int retryCount = 0;
-                    while (retryCount <= maxRetryCount)
+                    while (retryCount <= _maxRetryCount)
                     {
                         try
                         {
@@ -135,7 +165,7 @@ namespace Core.Service
                         }
                         catch
                         {
-                            if (retryCount >= maxRetryCount) throw;
+                            if (retryCount >= _maxRetryCount) throw;
                             retryCount++;
                         }
                     }
@@ -155,9 +185,8 @@ namespace Core.Service
             {
                 try
                 {
-                    int maxRetryCount = 10;
                     int retryCount = 0;
-                    while (retryCount <= maxRetryCount)
+                    while (retryCount <= _maxRetryCount)
                     {
                         try
                         {
@@ -188,7 +217,7 @@ namespace Core.Service
                         }
                         catch
                         {
-                            if (retryCount >= maxRetryCount) throw;
+                            if (retryCount >= _maxRetryCount) throw;
                             retryCount++;
                         }
                     }
@@ -236,11 +265,12 @@ namespace Core.Service
             List<StockTechData> latestStableTech = techDataList.Take(stableCount).ToList();
             decimal latestStableCloseMax = latestStableTech.Max(x => x.Close);
             decimal latestStableCloseMin = latestStableTech.Min(x => x.Close);
+            decimal prev4High = techDataList.Skip(1).Take(4).Max(x => x.High);
             decimal ma20 = techDataList.Take(20).Average(x => x.Close);
             decimal ma60 = techDataList.Take(60).Average(x => x.Close);
             decimal mv5 = (decimal)latestStableTech.Average(x => x.Volume);
             decimal todayClose = techDataList.First().Close;
-            if (latestStableCloseMax / latestStableCloseMin > 1.02m || mv5 < 1000 || todayClose / ma20 > 1.05m || todayClose < ma60) return false;
+            if (latestStableCloseMax / latestStableCloseMin > 1.02m || mv5 < 1000 || todayClose / ma20 > 1.05m || todayClose < ma60 || todayClose > prev4High) return false;
             for (int i = 0; i < stableCount - 1; i++)
             {
                 decimal baseHigh = latestStableTech[i].High;
