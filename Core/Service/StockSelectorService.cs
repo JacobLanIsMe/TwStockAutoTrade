@@ -236,10 +236,11 @@ namespace Core.Service
             List<StockTechData> latestStableTech = techDataList.Take(stableCount).ToList();
             decimal latestStableCloseMax = latestStableTech.Max(x => x.Close);
             decimal latestStableCloseMin = latestStableTech.Min(x => x.Close);
+            decimal ma20 = techDataList.Take(20).Average(x => x.Close);
             decimal ma60 = techDataList.Take(60).Average(x => x.Close);
             decimal mv5 = (decimal)latestStableTech.Average(x => x.Volume);
             decimal todayClose = techDataList.First().Close;
-            if (latestStableCloseMax / latestStableCloseMin > 1.02m || mv5 < 1000 || todayClose < ma60) return false;
+            if (latestStableCloseMax / latestStableCloseMin > 1.02m || mv5 < 1000 || todayClose / ma20 > 1.05m || todayClose < ma60) return false;
             for (int i = 0; i < stableCount - 1; i++)
             {
                 decimal baseHigh = latestStableTech[i].High;
