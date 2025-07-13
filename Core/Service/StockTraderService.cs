@@ -84,7 +84,7 @@ namespace Core.Service
             {
                 foreach (var i in stockCandidateList)
                 {
-                    message += $"{i.StockCode} {i.CompanyName}";
+                    message += $"{i.StockCode} {i.CompanyName} {i.EntryPoint}";
                     if (i.PurchasedLot > 0)
                     {
                         message += " Holding";

@@ -396,21 +396,21 @@ namespace Core.Service
             message += $"Removed candidates: {candidateToDeleteList.Count}\n";
             foreach (var i in candidateToDeleteList)
             {
-                message += $"{i.StockCode} {i.CompanyName}\n";
+                message += $"{i.StockCode} {i.CompanyName} {i.EntryPoint}\n";
             }
             message += $"New candidates: {candidateToInsertList.Count}\n";
             foreach (var i in candidateToInsertList)
             {
-                message += $"{i.StockCode} {i.CompanyName}\n";
+                message += $"{i.StockCode} {i.CompanyName} {i.EntryPoint}\n";
             }
             message += $"All candidates: {candidateToUpdateList.Count + candidateToInsertList.Count}\n";
             foreach (var i in candidateToUpdateList)
             {
-                message += $"{i.StockCode} {i.CompanyName}\n";
+                message += $"{i.StockCode} {i.CompanyName} {i.EntryPoint}\n";
             }
             foreach (var i in candidateToInsertList)
             {
-                message += $"{i.StockCode} {i.CompanyName}\n";
+                message += $"{i.StockCode} {i.CompanyName} {i.EntryPoint}\n";
             }
             await _discordService.SendMessage(message);
         }
