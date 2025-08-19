@@ -371,11 +371,12 @@ namespace Core.Service
                 }
                 else
                 {
-                    if (isDuplicateCandidate || !hasLatestStockInfo || stock.TechDataList.Count < 10)
+                    if (isDuplicateCandidate)
                     {
                         candidateToDeleteList.Add(i);
                         continue;
                     }
+                    if (!hasLatestStockInfo || stock.TechDataList.Count < 9) continue;
                     decimal todayClose = stock.TechDataList.First().Close;
                     if (todayClose < i.GapUpLow || (todayClose > i.EntryPoint && todayClose < stock.TechDataList.Take(20).Average(x => x.Close)))
                     {
