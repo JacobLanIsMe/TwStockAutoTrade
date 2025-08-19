@@ -353,6 +353,7 @@ namespace Core.Service
             Dictionary<string, StockCandidate> candidateToInsertDict = candidateToInsertList.ToDictionary(x => x.StockCode);
             List<StockCandidate> candidateToDeleteList = new List<StockCandidate>();
             List<StockCandidate> candidateToUpdateList = new List<StockCandidate>();
+            List<StockCandidate> errorCandidateList = new List<StockCandidate>();
             foreach (var i in activeCandidateList)
             {
                 bool isDuplicateCandidate = candidateToInsertDict.ContainsKey(i.StockCode);
@@ -376,7 +377,12 @@ namespace Core.Service
                         candidateToDeleteList.Add(i);
                         continue;
                     }
-                    if (!hasLatestStockInfo || stock.TechDataList.Count < 9) continue;
+                    if (!hasLatestStockInfo || stock.TechDataList.Count < 9) 
+                    {
+                        errorCandidateList.Add(i);
+                        _logger.Error($"Can not retrieve last 9 tech data of stock code {i.StockCode}.");
+                        continue;
+                    } 
                     decimal todayClose = stock.TechDataList.First().Close;
                     if (todayClose < i.GapUpLow || (todayClose > i.EntryPoint && todayClose < stock.TechDataList.Take(20).Average(x => x.Close)))
                     {
@@ -389,9 +395,9 @@ namespace Core.Service
             }
             List<Guid> candidateIdToDeleteList = candidateToDeleteList.Select(x => x.Id).ToList();
             await _candidateRepository.UpdateCandidate(candidateIdToDeleteList, candidateToUpdateList, candidateToInsertList);
-            await SendCandidateToDiscord(candidateToDeleteList, candidateToUpdateList, candidateToInsertList);
+            await SendCandidateToDiscord(candidateToDeleteList, candidateToUpdateList, candidateToInsertList, errorCandidateList);
         }
-        private async Task SendCandidateToDiscord(List<StockCandidate> candidateToDeleteList, List<StockCandidate> candidateToUpdateList, List<StockCandidate> candidateToInsertList)
+        private async Task SendCandidateToDiscord(List<StockCandidate> candidateToDeleteList, List<StockCandidate> candidateToUpdateList, List<StockCandidate> candidateToInsertList, List<StockCandidate> errorCandidateList)
         {
             string message = "";
             message += $"Removed candidates: {candidateToDeleteList.Count}\n";
@@ -401,6 +407,11 @@ namespace Core.Service
             }
             message += $"New candidates: {candidateToInsertList.Count}\n";
             foreach (var i in candidateToInsertList)
+            {
+                message += $"{i.StockCode} {i.CompanyName} {i.EntryPoint}\n";
+            }
+            message += $"Error candidates: {errorCandidateList.Count}\n";
+            foreach (var i in errorCandidateList)
             {
                 message += $"{i.StockCode} {i.CompanyName} {i.EntryPoint}\n";
             }
