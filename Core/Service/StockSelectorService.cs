@@ -2,13 +2,15 @@
 using Core.Model;
 using Core.Repository.Interface;
 using Core.Service.Interface;
-using HtmlAgilityPack;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using OpenQA.Selenium;
+using OpenQA.Selenium.Edge;
+using OpenQA.Selenium.Support.UI;
 using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -36,6 +38,7 @@ namespace Core.Service
         }
         public async Task SelectStock()
         {
+            SelectCandidateByBuySellDiff(new List<StockCandidate>() { new StockCandidate() { StockCode = "3706" } });
             List<StockCandidate> allStockInfoList = await GetStockCodeList();
             await SetExchangeReportFromSino(allStockInfoList);
             if (!doesNeedUpdate(allStockInfoList)) return;
@@ -177,6 +180,62 @@ namespace Core.Service
             }
             _logger.Information("Retrieve main power finished.");
             return stockMatchMainPowerList;
+        }
+        private List<StockCandidate> SelectCandidateByBuySellDiff(List<StockCandidate> candidateList)
+        {
+            _logger.Information("Retrieve BuySellDiff started.");
+            var options = new EdgeOptions();
+            options.AddArgument("headless"); // 可移除這行來觀察瀏覽器操作
+            string driverPath = Path.GetDirectoryName(System.Reflection.Assembly.GetEntryAssembly().Location);
+            var driverService = EdgeDriverService.CreateDefaultService(driverPath);
+            List<StockCandidate> stockMatchBuySellDiffList = new List<StockCandidate>();
+            foreach (var stock in candidateList)
+            {
+                try
+                {
+                    int retryCount = 0;
+                    while (retryCount <= _maxRetryCount)
+                    {
+                        try
+                        {
+                            using (IWebDriver driver = new EdgeDriver(driverService))
+                            {
+                                driver.Navigate().GoToUrl("https://www.wantgoo.com/stock/3706/major-investors/main-trend");
+
+                                // 等待頁面 JavaScript 載入完成
+                                var wait = new WebDriverWait(driver, TimeSpan.FromMinutes(10));
+                                wait.Until(d => d.FindElements(By.CssSelector("#main-trend")).Count > 0);
+
+                                // 找出含有家數差欄位的表格列
+                                var rows = driver.FindElements(By.CssSelector(".table-responsive table tbody tr"));
+
+                                foreach (var row in rows)
+                                {
+                                    var cells = row.FindElements(By.TagName("td"));
+                                    if (cells.Count >= 7) // 根據表格欄位順序，家數差可能在第 7 欄
+                                    {
+                                        string date = cells[0].Text;
+                                        string diff = cells[6].Text; // ← 家數差欄位（實測是第 7 欄）
+                                        Console.WriteLine($"日期：{date}，家數差：{diff}");
+                                    }
+                                }
+                            }
+                            break;
+                        }
+                        catch
+                        {
+                            if (retryCount >= _maxRetryCount) throw;
+                            retryCount++;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"Error occurs while retrieving BuySellDiff of Stock {stock.Market} {stock.StockCode} {stock.CompanyName}. Error message: {ex}");
+                }
+            }
+            _logger.Information("Retrieve BuySellDiff finished.");
+            return stockMatchBuySellDiffList;
         }
         private async Task SetExchangeReportFromSino(List<StockCandidate> stockList)
         {
@@ -371,11 +430,12 @@ namespace Core.Service
                 }
                 else
                 {
-                    if (isDuplicateCandidate || !hasLatestStockInfo || stock.TechDataList.Count < 10)
+                    if (isDuplicateCandidate)
                     {
                         candidateToDeleteList.Add(i);
                         continue;
                     }
+                    if (!hasLatestStockInfo || stock.TechDataList.Count < 9) continue;
                     decimal todayClose = stock.TechDataList.First().Close;
                     if (todayClose < i.GapUpLow || (todayClose > i.EntryPoint && todayClose < stock.TechDataList.Take(20).Average(x => x.Close)))
                     {
