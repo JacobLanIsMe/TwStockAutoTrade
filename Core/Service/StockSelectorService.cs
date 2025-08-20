@@ -218,6 +218,7 @@ namespace Core.Service
                         catch
                         {
                             if (retryCount >= _maxRetryCount) throw;
+                            await Task.Delay(2000);
                             retryCount++;
                         }
                     }
