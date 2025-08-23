@@ -24,15 +24,17 @@ namespace Core.Service
         YuantaOneAPITrader objYuantaOneAPI = new YuantaOneAPITrader();
         private readonly enumEnvironmentMode _enumEnvironmentMode;
         private CancellationTokenSource _cts = new CancellationTokenSource();
-        private Dictionary<int, KBarRecord> _kBarRecordDict = new Dictionary<int, KBarRecord>();
-        private int _kBarRecordDictMaxKey = 0;
-        private bool _doesProgramStartAfterMarketOpenTime = false;
-        private KBarRecord _keyBar = new KBarRecord();
+        private int _longLimitPoint = 0;
+        private int _shortLimitPoint = 0;
+        private int _high = 0;
+        private int _low = 0;
+        private int _volume = 0;
+        private int _preVolume = 0;
         private FutureTrade _trade = new FutureTrade();
         private bool _hasFutureOrder = false;
+        private bool _isTradingStarted = false;
         private readonly TimeSpan _beforeMarketClose5Minute;
         private readonly TimeSpan _lastEntryTime;
-        private readonly TimeSpan _eveningMarketCloseTime = TimeSpan.FromHours(5);
         private readonly ILogger _logger;
         private readonly string _futureAccount;
         private readonly string _futurePassword;
@@ -42,8 +44,6 @@ namespace Core.Service
         private readonly IYuantaService _yuantaService;
         private readonly IDateTimeService _dateTimeService;
         private readonly string _settlementMonth;
-        private int _longLimitPoint;
-        private int _shortLimitPoint;
 
         public FutureTraderService(IConfiguration config, ILogger logger, IDateTimeService dateTimeService, IYuantaService yuantaService)
         {
@@ -56,21 +56,12 @@ namespace Core.Service
             _futureAccount = _enumEnvironmentMode == enumEnvironmentMode.PROD ? Environment.GetEnvironmentVariable("FutureAccount", EnvironmentVariableTarget.Machine) : "S98875005091";
             _futurePassword = _enumEnvironmentMode == enumEnvironmentMode.PROD ? Environment.GetEnvironmentVariable("StockPassword", EnvironmentVariableTarget.Machine) : "1234";
             _maxOrderQuantity = config.GetValue<int>("MaxOrderQuantity");
-            _stopLossPoint = config.GetValue<int>("StopLossPoint");
+            //_stopLossPoint = config.GetValue<int>("StopLossPoint");
             DateTime now = _dateTimeService.GetTaiwanTime();
             _settlementMonth = GetSettlementMonth(now);
             _targetFutureConfig = SetFutureConfig(config);
             _beforeMarketClose5Minute = _targetFutureConfig.MarketCloseTime.Subtract(TimeSpan.FromMinutes(5));
             _lastEntryTime = _targetFutureConfig.MarketCloseTime.Subtract(TimeSpan.FromHours(1));
-            TimeSpan nowTimeSpan = now.TimeOfDay;
-            if (nowTimeSpan < _eveningMarketCloseTime)
-            {
-                nowTimeSpan = nowTimeSpan.Add(TimeSpan.FromHours(24));
-            }
-            if (nowTimeSpan >= _targetFutureConfig.MarketOpenTime)
-            {
-                _doesProgramStartAfterMarketOpenTime = true;
-            }
             PrintConfig();
         }
         public async Task Trade()
@@ -78,7 +69,7 @@ namespace Core.Service
             try
             {
                 _cts.CancelAfter(TimeSpan.FromHours(8));
-                await SetLimitPoint();
+                //await SetLimitPoint();
                 objYuantaOneAPI.Open(_enumEnvironmentMode);
                 await Task.Delay(-1, _cts.Token);
             }
@@ -160,6 +151,7 @@ namespace Core.Service
         {
             tickPrice = 0;
             tickTime = TimeSpan.Zero;
+            _logger.Information($"TickHandler: {strResult}");
             if (string.IsNullOrEmpty(strResult)) return;
             string[] tickInfo = strResult.Split(',');
             if (!TimeSpan.TryParse(tickInfo[3], out tickTime))
@@ -167,12 +159,7 @@ namespace Core.Service
                 _logger.Error("Tick time failed in TickHandler");
                 return;
             }
-            if (tickTime < _eveningMarketCloseTime)
-            {
-                tickTime = tickTime.Add(TimeSpan.FromHours(24));
-            }
             if (tickTime < _targetFutureConfig.MarketOpenTime) return;
-            int kBarRecordDictKey = GetKBarRecordDictKey(tickTime);
 
             if (!int.TryParse(tickInfo[6], out tickPrice))
             {
@@ -180,34 +167,67 @@ namespace Core.Service
                 return;
             }
             tickPrice = tickPrice / 1000;
-            if (_kBarRecordDict.TryGetValue(kBarRecordDictKey, out KBarRecord record))
+            if (tickTime < _targetFutureConfig.TimeThreshold)
             {
-                if (tickPrice > record.High)
+                if (_high == 0 && _low == 0)
                 {
-                    record.High = tickPrice;
+                    _high = tickPrice;
+                    _low = tickPrice;
                 }
-                if (tickPrice < record.Low)
+                else
                 {
-                    record.Low = tickPrice;
+                    if (tickPrice > _high)
+                    {
+                        _high = tickPrice;
+                    }
+                    if (tickPrice < _low)
+                    {
+                        _low = tickPrice;
+                    }
                 }
             }
             else
             {
-                KBarRecord kBarRecord = new KBarRecord
+                if (_isTradingStarted) return;
+                if (_volume > _preVolume * 0.3 && _high - _low > 100)
                 {
-                    High = tickPrice,
-                    Low = tickPrice,
-                };
-                _kBarRecordDict.Add(kBarRecordDictKey, kBarRecord);
-                _kBarRecordDictMaxKey = kBarRecordDictKey;
-            }
-            if (_trade.OpenOffsetKind == EOpenOffsetKind.平倉 && !_hasFutureOrder)
-            {
-                SetKeyBar(kBarRecordDictKey);
-                if (tickTime >= _lastEntryTime)
+                    _isTradingStarted = true;
+                }
+                else
                 {
                     _cts.Cancel();
                 }
+            }
+        }
+        private void FutureOrder(TimeSpan tickTime, int tickPrice)
+        {
+            if (!_isTradingStarted || tickTime == TimeSpan.Zero || tickPrice == 0 || _hasFutureOrder) return;
+            if (_trade.OpenOffsetKind == EOpenOffsetKind.新倉)
+            {
+                if (tickTime > _beforeMarketClose5Minute)
+                {
+                    ProcessFutureOrder(SetFutureOrder(EBuySellType.B));
+                }
+            }
+            else
+            {
+                if (tickPrice < _low && tickTime < _lastEntryTime)
+                {
+                    ProcessFutureOrder(SetFutureOrder(EBuySellType.S));
+                }
+            }
+        }
+        private void ProcessFutureOrder(FutureOrder futureOrder)
+        {
+            bool bResult = objYuantaOneAPI.SendFutureOrder(_futureAccount, new List<FutureOrder>() { futureOrder });
+            if (bResult)
+            {
+                _hasFutureOrder = true;
+                _logger.Information($"SendFutureOrder success. Buy or Sell: {futureOrder.BuySell1}");
+            }
+            else
+            {
+                _logger.Error($"SendFutureOrder error. Buy or Sell: {futureOrder.BuySell1}");
             }
         }
         private FutureOrder SetFutureOrder(EBuySellType eBuySellType)
@@ -241,60 +261,6 @@ namespace Core.Service
             futureOrder.BuySell2 = "";                                                       //買賣別2
             #endregion
             return futureOrder;
-        }
-        private void FutureOrder(TimeSpan tickTime, int tickPrice)
-        {
-            if (tickTime == TimeSpan.Zero || tickPrice == 0 || _hasFutureOrder || (_keyBar.High == 0 && _keyBar.Low == 0)) return;
-            if (_trade.OpenOffsetKind == EOpenOffsetKind.新倉)
-            {
-                if (_trade.BuySell == EBuySellType.B)
-                {
-                    if ((_trade.Point - _keyBar.High >= _stopLossPoint && tickPrice < _keyBar.High) ||
-                        (_trade.Point - _keyBar.High < _stopLossPoint && tickPrice < _trade.Point - _stopLossPoint) ||
-                        tickPrice < _kBarRecordDict[_kBarRecordDictMaxKey - 1].Low ||
-                        tickTime >= _beforeMarketClose5Minute)
-                    {
-                        ProcessFutureOrder(SetFutureOrder(EBuySellType.S));
-                    }
-                }
-                else if (_trade.BuySell == EBuySellType.S)
-                {
-                    if ((_keyBar.Low - _trade.Point >= _stopLossPoint && tickPrice > _keyBar.Low) ||
-                        (_keyBar.Low - _trade.Point < _stopLossPoint && tickPrice > _trade.Point + _stopLossPoint) ||
-                        tickPrice > _kBarRecordDict[_kBarRecordDictMaxKey - 1].High ||
-                        tickTime >= _beforeMarketClose5Minute)
-                    {
-                        ProcessFutureOrder(SetFutureOrder(EBuySellType.B));
-                    }
-                }
-            }
-            else
-            {
-                if (tickTime < _lastEntryTime)
-                {
-                    if (_keyBar.High != 0 && tickPrice > _keyBar.High && tickPrice <= _keyBar.High + 5 && tickPrice > _longLimitPoint)
-                    {
-                        ProcessFutureOrder(SetFutureOrder(EBuySellType.B));
-                    }
-                    else if (_keyBar.Low != 0 && tickPrice < _keyBar.Low && tickPrice >= _keyBar.Low - 5 && tickPrice < _shortLimitPoint)
-                    {
-                        ProcessFutureOrder(SetFutureOrder(EBuySellType.S));
-                    }
-                }
-            }
-        }
-        private void ProcessFutureOrder(FutureOrder futureOrder)
-        {
-            bool bResult = objYuantaOneAPI.SendFutureOrder(_futureAccount, new List<FutureOrder>() { futureOrder });
-            if (bResult)
-            {
-                _hasFutureOrder = true;
-                _logger.Information($"SendFutureOrder success. Buy or Sell: {futureOrder.BuySell1}");
-            }
-            else
-            {
-                _logger.Error($"SendFutureOrder error. Buy or Sell: {futureOrder.BuySell1}");
-            }
         }
         private void FutureOrderHandler(string strResult)
         {
@@ -366,6 +332,7 @@ namespace Core.Service
                     _trade.PurchasedLot = _trade.PurchasedLot - lot;
                     if (_trade.PurchasedLot == 0)
                     {
+                        _cts.Cancel();
                         _hasFutureOrder = false;
                     }
                 }
@@ -380,66 +347,9 @@ namespace Core.Service
             lstStocktick.Add(stocktick);
             objYuantaOneAPI.SubscribeStockTick(lstStocktick);
         }
-        private void SetKeyBar(int kBarRecordDictKey)
-        {
-            if (_doesProgramStartAfterMarketOpenTime && !_kBarRecordDict.TryGetValue(kBarRecordDictKey - 3, out KBarRecord prev3KBar)) return;
-            if (_kBarRecordDict.TryGetValue(kBarRecordDictKey - 1, out KBarRecord prev1KBar) &&
-                _kBarRecordDict.TryGetValue(kBarRecordDictKey - 2, out KBarRecord prev2KBar))
-            {
-                if (prev1KBar.High > prev2KBar.High && prev1KBar.Low > prev2KBar.Low)
-                {
-                    _keyBar.High = prev1KBar.High;
-                    _keyBar.Low = 0;
-                }
-                else if (prev1KBar.High < prev2KBar.High && prev1KBar.Low < prev2KBar.Low)
-                {
-                    _keyBar.High = 0;
-                    _keyBar.Low = prev1KBar.Low;
-                }
-                else
-                {
-                    _keyBar.High = 0;
-                    _keyBar.Low = 0;
-                }
-            }
-        }
-        private int GetKBarRecordDictKey(TimeSpan tickTime)
-        {
-            return (int)((tickTime - _targetFutureConfig.MarketOpenTime).TotalMinutes / 30);
-        }
         private FutureConfig SetFutureConfig(IConfiguration config)
         {
-            DateTime now = _dateTimeService.GetTaiwanTime();
-            List<FutureConfig> futureConfigList = config.GetSection("TargetFuture").Get<List<FutureConfig>>();
-            FutureConfig futureConfig = new FutureConfig();
-            if (now.Hour >= 5 && now.Hour < 14)
-            {
-                futureConfig = futureConfigList.First(x => x.MarketOpenTime.Hours >= 5 && x.MarketOpenTime.Hours < 14);
-            }
-            else if (now.Hour >= 14 && now.Hour < 21)
-            {
-                futureConfig = futureConfigList.First(x => x.MarketOpenTime.Hours >= 14 && x.MarketOpenTime.Hours < 21);
-            }
-            else
-            {
-                futureConfig = futureConfigList.First(x => x.MarketOpenTime.Hours >= 21);
-                futureConfig.MarketCloseTime = futureConfig.MarketCloseTime.Add(TimeSpan.FromHours(24));
-                // 取得美東時間（Eastern Time, ET），適用於紐約、華盛頓等
-                TimeZoneInfo easternTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time");
-                // 取得當前美東時間
-                DateTime currentEasternTime = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, easternTimeZone);
-                // 判斷是否為夏令時間
-                bool isDaylightSaving = easternTimeZone.IsDaylightSavingTime(currentEasternTime);
-                if (!isDaylightSaving)
-                {
-                    futureConfig.MarketOpenTime = futureConfig.MarketOpenTime.Add(TimeSpan.FromHours(1));
-                }
-            }
-            futureConfig.FutureCode = GetFutureCode(futureConfig.FutureCode);
-            return futureConfig;
-        }
-        private string GetFutureCode(string futureCode)
-        {
+            FutureConfig futureConfig = config.GetSection("TargetFuture").Get<FutureConfig>();
             Dictionary<string, string> monthMap = new Dictionary<string, string>
             {
                 { "01", "A" },
@@ -456,17 +366,8 @@ namespace Core.Service
                 { "12", "L" }
             };
             if (!monthMap.TryGetValue(_settlementMonth.Substring(4), out string code)) throw new Exception("Can not find future code");
-            DateTime now = _dateTimeService.GetTaiwanTime();
-            string correctFutureCode = "";
-            if (now.Hour >= 5 && now.Hour < 14)
-            {
-                correctFutureCode = $"{futureCode}{code}5";
-            }
-            else
-            {
-                correctFutureCode = $"{futureCode}8";
-            }
-            return correctFutureCode;
+            futureConfig.FutureCode = $"{futureConfig.FutureCode}{code}5";
+            return futureConfig;
         }
         private string GetSettlementMonth(DateTime dateTime)
         {
