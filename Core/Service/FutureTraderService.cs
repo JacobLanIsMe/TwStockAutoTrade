@@ -29,7 +29,7 @@ namespace Core.Service
         private int _high = 0;
         private int _low = 0;
         private int _volume = 0;
-        private int _preVolume = 0;
+        private int _prevVolume = 0;
         private FutureTrade _trade = new FutureTrade();
         private bool _hasFutureOrder = false;
         private bool _isTradingStarted = false;
@@ -69,6 +69,7 @@ namespace Core.Service
             try
             {
                 _cts.CancelAfter(TimeSpan.FromHours(8));
+                _prevVolume = await GetPrevVolume();
                 //await SetLimitPoint();
                 objYuantaOneAPI.Open(_enumEnvironmentMode);
                 await Task.Delay(-1, _cts.Token);
@@ -189,7 +190,7 @@ namespace Core.Service
             else
             {
                 if (_isTradingStarted) return;
-                if (_volume > _preVolume * 0.3 && _high - _low > 100)
+                if (_volume > _prevVolume * 0.3 && _high - _low > 100)
                 {
                     _isTradingStarted = true;
                 }
@@ -396,6 +397,13 @@ namespace Core.Service
             DateTime thirdWednesday = firstWednesday.AddDays(14);
 
             return thirdWednesday;
+        }
+        private async Task<int> GetPrevVolume()
+        {
+            SimpleHttpClientFactory httpClientFactory = new SimpleHttpClientFactory();
+            HttpClient httpClient = httpClientFactory.CreateClient();
+            HttpResponseMessage response = await httpClient.GetAsync("https://openapi.taifex.com.tw/v1/DailyMarketReportFut");
+            string responseBody = await response.Content.ReadAsStringAsync();
         }
         private async Task SetLimitPoint()
         {

@@ -173,6 +173,7 @@
     <Compile Include="Model\StringListModel.cs" />
     <Compile Include="Model\StockTrade.cs" />
     <Compile Include="Model\StockTradeConfig.cs" />
+    <Compile Include="Model\TaifexDailyMarketReport.cs" />
     <Compile Include="Model\TwotcExRrightsExDividend.cs" />
     <Compile Include="Model\TwotcIntradayStockInfo.cs" />
     <Compile Include="Model\TwotcTechData.cs" />
