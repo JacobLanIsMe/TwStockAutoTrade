@@ -29,6 +29,7 @@ namespace FutureTrader
                 .AddSingleton<IFutureTraderService, FutureTraderService>()
                 .AddSingleton<IYuantaService, YuantaService>()
                 .AddSingleton<IDateTimeService, DateTimeService>()
+                .AddSingleton<IDiscordService, DiscordService>()
                 .BuildServiceProvider();
             var futureTraderService = serviceProvider.GetRequiredService<IFutureTraderService>();
             try

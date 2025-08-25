@@ -24,8 +24,6 @@ namespace Core.Service
         YuantaOneAPITrader objYuantaOneAPI = new YuantaOneAPITrader();
         private readonly enumEnvironmentMode _enumEnvironmentMode;
         private CancellationTokenSource _cts = new CancellationTokenSource();
-        private int _longLimitPoint = 0;
-        private int _shortLimitPoint = 0;
         private int _high = 0;
         private int _low = 0;
         private int _volume = 0;
@@ -40,12 +38,16 @@ namespace Core.Service
         private readonly string _futurePassword;
         private readonly FutureConfig _targetFutureConfig;
         private readonly int _maxOrderQuantity;
-        private readonly int _stopLossPoint;
         private readonly IYuantaService _yuantaService;
         private readonly IDateTimeService _dateTimeService;
         private readonly string _settlementMonth;
+        private int _settlementPrice = 0;
+        private int _stopLossPoint = 0;
+        private int _longLimitPoint = 0;
+        private int _shortLimitPoint = 0;
+        private readonly IDiscordService _discordService;
 
-        public FutureTraderService(IConfiguration config, ILogger logger, IDateTimeService dateTimeService, IYuantaService yuantaService)
+        public FutureTraderService(IConfiguration config, ILogger logger, IDateTimeService dateTimeService, IYuantaService yuantaService, IDiscordService discordService)
         {
             objYuantaOneAPI.OnResponse += new OnResponseEventHandler(objApi_OnResponse);
             string environment = config.GetValue<string>("Environment").ToUpper();
@@ -56,20 +58,20 @@ namespace Core.Service
             _futureAccount = _enumEnvironmentMode == enumEnvironmentMode.PROD ? Environment.GetEnvironmentVariable("FutureAccount", EnvironmentVariableTarget.Machine) : "S98875005091";
             _futurePassword = _enumEnvironmentMode == enumEnvironmentMode.PROD ? Environment.GetEnvironmentVariable("StockPassword", EnvironmentVariableTarget.Machine) : "1234";
             _maxOrderQuantity = config.GetValue<int>("MaxOrderQuantity");
-            //_stopLossPoint = config.GetValue<int>("StopLossPoint");
             DateTime now = _dateTimeService.GetTaiwanTime();
             _settlementMonth = GetSettlementMonth(now);
             _targetFutureConfig = SetFutureConfig(config);
             _beforeMarketClose5Minute = _targetFutureConfig.MarketCloseTime.Subtract(TimeSpan.FromMinutes(5));
             _lastEntryTime = _targetFutureConfig.MarketCloseTime.Subtract(TimeSpan.FromHours(1));
-            PrintConfig();
+            _discordService = discordService;
         }
         public async Task Trade()
         {
             try
             {
                 _cts.CancelAfter(TimeSpan.FromHours(8));
-                _prevVolume = await GetPrevVolume();
+                await SetPrevVolume();
+                await PrintConfig();
                 //await SetLimitPoint();
                 objYuantaOneAPI.Open(_enumEnvironmentMode);
                 await Task.Delay(-1, _cts.Token);
@@ -126,7 +128,7 @@ namespace Core.Service
                             case "210.10.40.10":    //訂閱個股分時明細
                                 string tickResult = _yuantaService.FunRealStocktick_Out((byte[])objValue);
                                 TickHandler(tickResult, out TimeSpan tickTime, out int tickPrice);
-                                FutureOrder(tickTime, tickPrice);
+                                //FutureOrder(tickTime, tickPrice);
                                 break;
                             default:
                                 strResult = $"{strIndex},{objValue}";
@@ -168,6 +170,7 @@ namespace Core.Service
                 return;
             }
             tickPrice = tickPrice / 1000;
+            _logger.Information($"Tick time: {tickTime}, Tick price: {tickPrice}");
             if (tickTime < _targetFutureConfig.TimeThreshold)
             {
                 if (_high == 0 && _low == 0)
@@ -186,19 +189,27 @@ namespace Core.Service
                         _low = tickPrice;
                     }
                 }
+                if (int.TryParse(tickInfo[7], out int tickVolume))
+                {
+                    _volume += tickVolume;
+                    _logger.Information($"Tick time: {tickTime}, Tick volume: {tickVolume}, Total volume: {_volume}");
+                }
             }
             else
             {
                 if (_isTradingStarted) return;
-                if (_volume > _prevVolume * 0.3 && _high - _low > 100)
+                if (_volume > _prevVolume * 0.3 && _high - _low > 100 && _low <= (_settlementPrice + (_settlementPrice * 0.09)))
                 {
+                    _stopLossPoint = _settlementPrice * 0.004
                     _isTradingStarted = true;
                 }
                 else
                 {
+                    _logger.Information("開盤後成交量小於前一個交易日成交量的30%或是高低點差小於100點，未達進場條件");
                     _cts.Cancel();
                 }
             }
+            _logger.Information($"Tick time: {tickTime}, High: {_high}, Log: {_low}");
         }
         private void FutureOrder(TimeSpan tickTime, int tickPrice)
         {
@@ -276,7 +287,7 @@ namespace Core.Service
                 _hasFutureOrder = false;
             }
         }
-        private void RealReportHandler(string strResult)
+        private async Task RealReportHandler(string strResult)
         {
             string[] reportArray = strResult.Split(',');
             if (!int.TryParse(reportArray[1].Split(':')[1], out int reportType))    // 回報類別
@@ -333,6 +344,8 @@ namespace Core.Service
                     _trade.PurchasedLot = _trade.PurchasedLot - lot;
                     if (_trade.PurchasedLot == 0)
                     {
+                        await _discordService.SendMessage($"平倉成功");
+                        _logger.Information($"平倉成功");
                         _cts.Cancel();
                         _hasFutureOrder = false;
                     }
@@ -398,12 +411,24 @@ namespace Core.Service
 
             return thirdWednesday;
         }
-        private async Task<int> GetPrevVolume()
+        private async Task SetPrevVolume()
         {
             SimpleHttpClientFactory httpClientFactory = new SimpleHttpClientFactory();
             HttpClient httpClient = httpClientFactory.CreateClient();
             HttpResponseMessage response = await httpClient.GetAsync("https://openapi.taifex.com.tw/v1/DailyMarketReportFut");
             string responseBody = await response.Content.ReadAsStringAsync();
+            List<TaifexDailyMarketReport> futureReportList = JsonConvert.DeserializeObject<List<TaifexDailyMarketReport>>(responseBody);
+            var prevFutureReport = futureReportList.Where(x => x.Contract == _targetFutureConfig.FutureCode.Substring(0, 3) && x.TradingSession == "一般" && x.ContractMonth == _settlementMonth).FirstOrDefault();
+            if (prevFutureReport == null || 
+                !int.TryParse(prevFutureReport.Volume, out _prevVolume) || 
+                _prevVolume == 0 || 
+                !int.TryParse(prevFutureReport.SettlementPrice, out _settlementPrice) || 
+                _settlementPrice == 0)
+            {
+                await _discordService.SendMessage("取得前一個交易日的交易資訊出現錯誤");
+                _logger.Error("取得前一個交易日的交易資訊出現錯誤");
+                _cts.Cancel();
+            }
         }
         private async Task SetLimitPoint()
         {
@@ -431,7 +456,7 @@ namespace Core.Service
                 throw new Exception("Can not find sellement price from Yahoo url");
             }
         }
-        private void PrintConfig()
+        private async Task PrintConfig()
         {
             _logger.Information($"開盤時間: {_targetFutureConfig.MarketOpenTime}");
             _logger.Information($"收盤時間: {_targetFutureConfig.MarketCloseTime}");
@@ -440,6 +465,16 @@ namespace Core.Service
             _logger.Information($"商品代碼: {_targetFutureConfig.FutureCode}");
             _logger.Information($"商品名稱: {_targetFutureConfig.CommodityId}");
             _logger.Information($"商品年月: {_settlementMonth}");
+            _logger.Information($"前一天的成交量: {_prevVolume}");
+            string message = $"開盤時間: {_targetFutureConfig.MarketOpenTime}\n";
+            message += $"收盤時間: {_targetFutureConfig.MarketCloseTime}\n";
+            message += $"收盤前五分鐘時間: {_beforeMarketClose5Minute}\n";
+            message += $"最後進場時間: {_lastEntryTime}\n";
+            message += $"商品代碼: {_targetFutureConfig.FutureCode}\n";
+            message += $"商品名稱: {_targetFutureConfig.CommodityId}\n";
+            message += $"商品年月: {_settlementMonth}\n";
+            message += $"前一個交易日的成交量: {_prevVolume}\n";
+            await _discordService.SendMessage(message);
         }
     }
 }
