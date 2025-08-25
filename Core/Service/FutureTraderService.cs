@@ -198,9 +198,9 @@ namespace Core.Service
             else
             {
                 if (_isTradingStarted) return;
-                if (_volume > _prevVolume * 0.3 && _high - _low > 100 && _low <= (_settlementPrice + (_settlementPrice * 0.09)))
+                if (_volume > _prevVolume * 0.3 && _high != 0 && _low != 0 && _high - _low > 100 && _low <= (_settlementPrice + (_settlementPrice * 0.09)))
                 {
-                    _stopLossPoint = _settlementPrice * 0.004
+                    _stopLossPoint = (int)((double)_low + _settlementPrice * 0.004);
                     _isTradingStarted = true;
                 }
                 else
@@ -216,7 +216,7 @@ namespace Core.Service
             if (!_isTradingStarted || tickTime == TimeSpan.Zero || tickPrice == 0 || _hasFutureOrder) return;
             if (_trade.OpenOffsetKind == EOpenOffsetKind.新倉)
             {
-                if (tickTime > _beforeMarketClose5Minute)
+                if (tickPrice > _stopLossPoint || tickTime > _beforeMarketClose5Minute)
                 {
                     ProcessFutureOrder(SetFutureOrder(EBuySellType.B));
                 }
