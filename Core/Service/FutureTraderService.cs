@@ -128,7 +128,7 @@ namespace Core.Service
                             case "210.10.40.10":    //訂閱個股分時明細
                                 string tickResult = _yuantaService.FunRealStocktick_Out((byte[])objValue);
                                 TickHandler(tickResult, out TimeSpan tickTime, out int tickPrice);
-                                //FutureOrder(tickTime, tickPrice);
+                                FutureOrder(tickTime, tickPrice);
                                 break;
                             default:
                                 strResult = $"{strIndex},{objValue}";
@@ -201,6 +201,8 @@ namespace Core.Service
                 if (_volume > _prevVolume * 0.3 && _high != 0 && _low != 0 && _high - _low > 100 && _low <= (_settlementPrice + (_settlementPrice * 0.09)))
                 {
                     _stopLossPoint = (int)((double)_low + _settlementPrice * 0.004);
+                    _logger.Information($"開盤後成交量達前一個交易日成交量的30%，高低點差大於100點，達進場條件");
+                    _logger.Information($"停損點設在: {_stopLossPoint}");
                     _isTradingStarted = true;
                 }
                 else
@@ -287,7 +289,7 @@ namespace Core.Service
                 _hasFutureOrder = false;
             }
         }
-        private async Task RealReportHandler(string strResult)
+        private void RealReportHandler(string strResult)
         {
             string[] reportArray = strResult.Split(',');
             if (!int.TryParse(reportArray[1].Split(':')[1], out int reportType))    // 回報類別
@@ -344,7 +346,6 @@ namespace Core.Service
                     _trade.PurchasedLot = _trade.PurchasedLot - lot;
                     if (_trade.PurchasedLot == 0)
                     {
-                        await _discordService.SendMessage($"平倉成功");
                         _logger.Information($"平倉成功");
                         _cts.Cancel();
                         _hasFutureOrder = false;
@@ -465,6 +466,7 @@ namespace Core.Service
             _logger.Information($"商品代碼: {_targetFutureConfig.FutureCode}");
             _logger.Information($"商品名稱: {_targetFutureConfig.CommodityId}");
             _logger.Information($"商品年月: {_settlementMonth}");
+            _logger.Information($"前一個交易日的結算價格: {_settlementPrice}");
             _logger.Information($"前一天的成交量: {_prevVolume}");
             string message = $"開盤時間: {_targetFutureConfig.MarketOpenTime}\n";
             message += $"收盤時間: {_targetFutureConfig.MarketCloseTime}\n";
@@ -473,6 +475,7 @@ namespace Core.Service
             message += $"商品代碼: {_targetFutureConfig.FutureCode}\n";
             message += $"商品名稱: {_targetFutureConfig.CommodityId}\n";
             message += $"商品年月: {_settlementMonth}\n";
+            message += $"前一個交易日的結算價格: {_settlementPrice}\n";
             message += $"前一個交易日的成交量: {_prevVolume}\n";
             await _discordService.SendMessage(message);
         }
