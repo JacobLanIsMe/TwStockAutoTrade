@@ -154,7 +154,6 @@ namespace Core.Service
         {
             tickPrice = 0;
             tickTime = TimeSpan.Zero;
-            _logger.Information($"TickHandler: {strResult}");
             if (string.IsNullOrEmpty(strResult)) return;
             string[] tickInfo = strResult.Split(',');
             if (!TimeSpan.TryParse(tickInfo[3], out tickTime))
@@ -170,7 +169,6 @@ namespace Core.Service
                 return;
             }
             tickPrice = tickPrice / 1000;
-            _logger.Information($"Tick time: {tickTime}, Tick price: {tickPrice}");
             if (tickTime < _targetFutureConfig.TimeThreshold)
             {
                 if (_high == 0 && _low == 0)
@@ -192,7 +190,6 @@ namespace Core.Service
                 if (int.TryParse(tickInfo[7], out int tickVolume))
                 {
                     _volume += tickVolume;
-                    _logger.Information($"Tick time: {tickTime}, Tick volume: {tickVolume}, Total volume: {_volume}");
                 }
             }
             else
@@ -201,7 +198,7 @@ namespace Core.Service
                 if (_volume > _prevVolume * 0.3 && _high != 0 && _low != 0 && _high - _low > 100 && _low <= (_settlementPrice + (_settlementPrice * 0.09)))
                 {
                     _stopLossPoint = (int)((double)_low + _settlementPrice * 0.004);
-                    _logger.Information($"開盤後成交量達前一個交易日成交量的30%，高低點差大於100點，達進場條件");
+                    _logger.Information($"開盤後成交量達({_volume})前一個交易日成交量({_prevVolume})的30%，高低點差大於100點(High: {_high}, Low: {_low})，達進場條件");
                     _logger.Information($"停損點設在: {_stopLossPoint}");
                     _isTradingStarted = true;
                 }
@@ -211,7 +208,6 @@ namespace Core.Service
                     _cts.Cancel();
                 }
             }
-            _logger.Information($"Tick time: {tickTime}, High: {_high}, Log: {_low}");
         }
         private void FutureOrder(TimeSpan tickTime, int tickPrice)
         {
