@@ -157,7 +157,7 @@ namespace Core.Service
                             {
                                 if (int.TryParse(mainPowerArray[mainPowerArray.Length - j], out int mainPower) && mainPower > 0) count++;
                             }
-                            if (count >= 4)
+                            if (count >= 5)
                             {
                                 stockMatchMainPowerList.Add(stock);
                             }
