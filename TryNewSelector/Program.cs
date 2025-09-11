@@ -16,6 +16,8 @@ using System.Net.Http;
 using Core.HttpClientFactory;
 using HtmlAgilityPack;
 using System.Net;
+using Newtonsoft.Json;
+using System.Collections.Concurrent;
 
 namespace TryNewSelector
 {
@@ -33,104 +35,345 @@ namespace TryNewSelector
                 .AddSingleton<ICandidateRepository, CandidateRepository>()
                 .BuildServiceProvider();
 
-            
-
-
-
-
-
             var candidateRepository = serviceProvider.GetRequiredService<ICandidateRepository>();
             List<StockTech> stockTech = await candidateRepository.GetStockTech();
-            SimpleHttpClientFactory simpleHttpClientFactory = new SimpleHttpClientFactory();
-            var httpClient = simpleHttpClientFactory.CreateClient();
+            //SimpleHttpClientFactory simpleHttpClientFactory = new SimpleHttpClientFactory();
+            //var httpClient = simpleHttpClientFactory.CreateClient();
 
             List<StockTech> newCandidates = new List<StockTech>();
-            foreach (var i in stockTech)
-            {
-
-                string url = $"https://stockchannelnew.sinotrade.com.tw/Z/ZC/ZCO/CZCO.DJBCD?A={i.StockCode}";
-                HttpResponseMessage response = await httpClient.GetAsync(url);
-                string responseBody = await response.Content.ReadAsStringAsync();
-                var parts = responseBody.Split(' ');
-                string[] mainPowerArray = parts[2].Split(',');
-                List<string> mainPowerList = mainPowerArray.Skip(mainPowerArray.Length - 5).ToList();
-                int count = 0;
-                for (var j = 1; j <=5; j++)
+            int winCount = 0;
+            int loseCount = 0;
+            decimal totalReturnRate = 0;
+            object _lockObject = new object();
+            string filePath = "C:\\Users\\Administrator\\Downloads\\result.csv";
+            ConcurrentBag<string> results = new ConcurrentBag<string>();
+            //stockTech = stockTech.Where(x => x.StockCode == "6216").ToList();
+            var tasks = stockTech.Select(i => Task.Run(() =>
                 {
-                    if (int.TryParse(mainPowerArray[mainPowerArray.Length - j], out int mainPower) && mainPower > 0) count++;
-                }
+                    i.TechDataList = JsonConvert.DeserializeObject<List<StockTechData>>(i.TechData);
+                    int techDataListCount = i.TechDataList.Count;
+                    for (var j = 0; j < techDataListCount; j++)
+                    {
+                        i.TechDataList[j].MA5 = j + 5 <= techDataListCount ? i.TechDataList.Skip(j).Take(5).Average(x => x.Close) : 0;
+                        i.TechDataList[j].MA10 = j + 10 <= techDataListCount ? i.TechDataList.Skip(j).Take(10).Average(x => x.Close) : 0;
+                        i.TechDataList[j].MA20 = j + 20 <= techDataListCount ? i.TechDataList.Skip(j).Take(20).Average(x => x.Close) : 0;
+                        i.TechDataList[j].MA60 = j + 60 <= techDataListCount ? i.TechDataList.Skip(j).Take(60).Average(x => x.Close) : 0;
+                        i.TechDataList[j].MV5 = j + 5 <= techDataListCount ? (decimal)i.TechDataList.Skip(j).Take(5).Average(x => x.Volume) : 0;
+                    }
+                    #region 大量上漲後，隔天小漲，再隔天開盤做多。
+                    //for (var j = 0; j < techDataListCount - 3; j++)
+                    //{
+                    //    StockTechData today = i.TechDataList[j];
+                    //    StockTechData yesterday = i.TechDataList[j + 1];
+                    //    StockTechData theDayBeforeYesterday = i.TechDataList[j + 2]; // 紅 K
+                    //    StockTechData theDayBeforeBeforeYesterday = i.TechDataList[j + 3];
+                    //    if (theDayBeforeYesterday.Volume > theDayBeforeBeforeYesterday.MV5 * 7 && theDayBeforeYesterday.Volume > 10000 && theDayBeforeYesterday.Close > theDayBeforeBeforeYesterday.High && theDayBeforeYesterday.Close > theDayBeforeYesterday.Open && yesterday.Close > theDayBeforeYesterday.Close && yesterday.Close > yesterday.Open && yesterday.Close/theDayBeforeYesterday.Close < 1.02m)
+                    //    {
+                    //        for (var k = 0; k < techDataListCount; k++)
+                    //        {
+                    //            if (j - k < 0)
+                    //            {
+                    //                Console.WriteLine($"StockCode: {i.StockCode}, Buy Date: {today.Date.ToShortDateString()}, Holding");
+                    //                break;
+                    //            }
+                    //            StockTechData currentTechData = i.TechDataList[j - k];
+                    //            if (currentTechData.MA10 > yesterday.Low)
+                    //            {
+                    //                if (currentTechData.Close < currentTechData.MA10)
+                    //                {
+                    //                    if (currentTechData.Close > today.Open)
+                    //                    {
+                    //                        lock (_lockObject)
+                    //                        {
+                    //                            totalReturnRate += currentTechData.Close / today.Open;
+                    //                            winCount++;
+                    //                        }
+                    //                        Console.WriteLine($"StockCode: {i.StockCode}, Buy Date: {today.Date.ToShortDateString()}, Sell Date: {currentTechData.Date.ToShortDateString()}, WIN, {(currentTechData.Close / today.Open).ToString("0.00")}%");
+                    //                    }
+                    //                    else
+                    //                    {
+                    //                        lock (_lockObject)
+                    //                        {
+                    //                            totalReturnRate -= today.Open / currentTechData.Close;
+                    //                            loseCount++;
+                    //                        }
+                    //                        Console.WriteLine($"StockCode: {i.StockCode}, Buy Date: {today.Date.ToShortDateString()}, Sell Date: {currentTechData.Date.ToShortDateString()}, LOSE, {(today.Open / currentTechData.Close).ToString("0.00")}%");
+                    //                    }
+                    //                    break;
+                    //                }
+                    //            }
+                    //            else
+                    //            {
+                    //                if (currentTechData.Close < yesterday.Low)
+                    //                {
+                    //                    if (currentTechData.Close > today.Open)
+                    //                    {
+                    //                        lock (_lockObject)
+                    //                        {
+                    //                            totalReturnRate += currentTechData.Close / today.Open;
+                    //                            winCount++;
+                    //                        }
+                    //                        Console.WriteLine($"StockCode: {i.StockCode}, Buy Date: {today.Date.ToShortDateString()}, Sell Date: {currentTechData.Date.ToShortDateString()}, WIN, {(currentTechData.Close / today.Open).ToString("0.00")}%");
+                    //                    }
+                    //                    else
+                    //                    {
+                    //                        lock (_lockObject)
+                    //                        {
+                    //                            totalReturnRate -= today.Open / currentTechData.Close;
+                    //                            loseCount++;
+                    //                        }
+                    //                        Console.WriteLine($"StockCode: {i.StockCode}, Buy Date: {today.Date.ToShortDateString()}, Sell Date: {currentTechData.Date.ToShortDateString()}, LOSE, {(today.Open / currentTechData.Close).ToString("0.00")}%");
+                    //                    }
+                    //                    break;
+                    //                }
+                    //            }
+                    //        }
+                    //    }
+                    //}
+                    #endregion
+                    #region 多頭回檔，收盤站上所有均線買進，跌破五日均線出場
+                    //for (var j = 0; j < techDataListCount - 11; j++)
+                    //{
 
-                if (count < 4) continue;
-                
-                //Console.WriteLine($"{i.StockCode} match main power");
-                if (i.TechDataList.Count < 5) continue;
+                    //    StockTechData today = i.TechDataList[j];
+                    //    //StockTechData yesterday = i.TechDataList[j + 1];
+                    //    //StockTechData theDayBeforeYesterday = i.TechDataList[j + 2];
+                    //    List<StockTechData> prev10Days = i.TechDataList.Skip(j + 1).Take(10).ToList();
+                    //    bool isAllAboveMA5 = prev10Days.All(x => x.Close > x.MA5 && x.MA5 != 0 && x.Close > x.MA60 && x.MA60 != 0);
+                    //    if (today.Close < today.MA5 && isAllAboveMA5)
+                    //    {
+                    //        bool isHolding = false;
+                    //        decimal buyPrice = 0;
+                    //        for (int k = 1; k < techDataListCount; k++)
+                    //        {
+                    //            if (j - k < 0)
+                    //            {
+                    //                Console.WriteLine($"StockCode: {i.StockCode}, Date: {today.Date.ToShortDateString()}, Action: end");
+                    //                break;
+                    //            }
+                    //            StockTechData currentTechData = i.TechDataList[j - k];
+                    //            StockTechData prevTechData = i.TechDataList[j - k + 1];
+                    //            if (isHolding)
+                    //            {
+                    //                //decimal exitPrice = currentTechData.MA5 > currentTechData.MA10 ? currentTechData.MA10 : currentTechData.MA5;
+                    //                if (currentTechData.Close < currentTechData.MA5)
+                    //                {
+                    //                    bool isWin = currentTechData.Close > buyPrice ? true : false;
+                    //                    decimal returnRate = isWin ? currentTechData.Close / buyPrice : buyPrice / currentTechData.Close;
+                    //                    if (isWin)
+                    //                    {
+                    //                        lock (_lockObject)
+                    //                        {
+                    //                            totalReturnRate += returnRate;
+                    //                            winCount++;
+                    //                        }
+                    //                        Console.WriteLine($"StockCode: {i.StockCode}, Date: {currentTechData.Date.ToShortDateString()}, Action: sell, WIN, {returnRate.ToString("0.00")}%");
+                    //                        //writer.WriteLine($"{i.StockCode},{today.Date.ToShortDateString()},{currentTechData.Date.ToShortDateString()},WIN,{returnRate.ToString("0.00")}%");
+                    //                    }
+                    //                    else
+                    //                    {
+                    //                        lock (_lockObject)
+                    //                        {
+                    //                            totalReturnRate -= returnRate;
+                    //                            loseCount++;
+                    //                        }
+                    //                        Console.WriteLine($"StockCode: {i.StockCode}, Date: {currentTechData.Date.ToShortDateString()}, Action: sell, LOSE, {returnRate.ToString("0.00")}%");
+                    //                        //writer.WriteLine($"{i.StockCode},{today.Date.ToShortDateString()},{currentTechData.Date.ToShortDateString()},LOSE,{returnRate.ToString("0.00")}%");
+                    //                    }
+                    //                    isHolding = false;
+                    //                    buyPrice = 0;
+                    //                    if (currentTechData.Close < currentTechData.MA20)
+                    //                    {
+                    //                        Console.WriteLine($"StockCode: {i.StockCode}, Date: {currentTechData.Date.ToShortDateString()}, Action: removed");
+                    //                        break;
+                    //                    }
+                    //                }
+                    //            }
+                    //            else
+                    //            {
+                    //                if (currentTechData.Close > currentTechData.MA5 && currentTechData.Close > currentTechData.MA10 && currentTechData.Close > currentTechData.MA20 && currentTechData.Close > currentTechData.MA60 && currentTechData.Volume > 10000 &&
+                    //                    (prevTechData.Close <= prevTechData.MA5 || prevTechData.Close <= prevTechData.MA10 || prevTechData.Close <= prevTechData.MA20 || prevTechData.Close <= prevTechData.MA60))
+                    //                {
+                    //                    isHolding = true;
+                    //                    buyPrice = currentTechData.Close;
+                    //                    Console.WriteLine($"StockCode: {i.StockCode}, Date: {currentTechData.Date.ToShortDateString()}, Action: buy");
+                    //                }
+                    //                else if (currentTechData.Close < currentTechData.MA20)
+                    //                {
+                    //                    Console.WriteLine($"StockCode: {i.StockCode}, Date: {currentTechData.Date.ToShortDateString()}, Action: removed");
+                    //                    break;
+                    //                }
+                    //            }
+                    //        }
+                    //    }
+                    //}
+                    #endregion
+                    #region 漲停後，隔兩天都綠K，第三天開盤做空。
+                    //for (int j = 0; j < techDataListCount - 4; j++)
+                    //{
+                    //    StockTechData today = i.TechDataList.Skip(j).First();
+                    //    StockTechData yesterday = i.TechDataList.Skip(j + 1).First(); 
+                    //    StockTechData theDayBeforeYesterday = i.TechDataList.Skip(j + 2).First();
+                    //    StockTechData theDayBeforeBeforeYesterday = i.TechDataList.Skip(j + 3).First(); // 紅 K 
+                    //    StockTechData theDayBeforeBeforeBeforeYesterday = i.TechDataList.Skip(j + 4).First();
+                    //    if (theDayBeforeBeforeYesterday.Close / theDayBeforeBeforeBeforeYesterday.Close > 1.095m && theDayBeforeBeforeYesterday.Close == theDayBeforeBeforeYesterday.High && theDayBeforeYesterday.Close < theDayBeforeYesterday.Open && yesterday.Close < yesterday.Open && yesterday.Close < theDayBeforeYesterday.Close && yesterday.Volume < theDayBeforeYesterday.Volume && yesterday.Close < theDayBeforeBeforeYesterday.High)
+                    //    {
+                    //        if (today.Close < today.Open)
+                    //        {
+                    //            decimal returnRate = today.Open / today.Close;
+                    //            lock (_lockObject)
+                    //            {
+                    //                totalReturnRate += returnRate;
+                    //                winCount++;
+                    //            }
+                    //            Console.WriteLine($"StockCode: {i.StockCode}, Buy Date: {today.Date.ToShortDateString()}, Sell Date: {today.Date.ToShortDateString()}, WIN, {returnRate.ToString("0.00")}%");
+                    //            writer.WriteLine($"{i.StockCode},{today.Date.ToShortDateString()},{today.Date.ToShortDateString()},WIN,{returnRate.ToString("0.00")}");
+                    //        }
+                    //        else
+                    //        {
+                    //            decimal returnRate = today.Close / today.Open;
+                    //            lock (_lockObject)
+                    //            {
+                    //                totalReturnRate -= returnRate;
+                    //                loseCount++;
+                    //            }
+                    //            Console.WriteLine($"StockCode: {i.StockCode}, Buy Date: {today.Date.ToShortDateString()}, Sell Date: {today.Date.ToShortDateString()}, LOSE, {returnRate.ToString("0.00")}%");
+                    //            writer.WriteLine($"{i.StockCode},{today.Date.ToShortDateString()},{today.Date.ToShortDateString()},LOSE,{returnRate.ToString("0.00")}");
+                    //        }
+                    //    }
+                    //}
+                    #endregion
+                    #region 大量上漲後隔天再漲，收盤前做多。 
+                    //for (int j = 0; j < i.TechDataList.Count - 45; j++)
+                    //{
+                    //    StockTechData today = i.TechDataList.Skip(j).First();
+                    //    StockTechData yesterday = i.TechDataList.Skip(j + 1).First(); // 紅 K 
+                    //    StockTechData theDayBeforeYesterday = i.TechDataList.Skip(j + 2).First();
+                    //    StockTechData theDayBeforeBeforeYesterday = i.TechDataList.Skip(j + 3).First();
+                    //    var prevMV5 = i.TechDataList.Skip(j + 2).Take(5).Average(x => x.Volume);
+                    //    if (yesterday.Volume > prevMV5 * 7 && yesterday.Volume > 10000 && yesterday.Close > theDayBeforeYesterday.Close &&
+                    //        !(theDayBeforeYesterday.Close / theDayBeforeBeforeYesterday.Close > 1.095m && theDayBeforeYesterday.Close == theDayBeforeYesterday.High) && today.Close > yesterday.High && yesterday.Close > i.TechDataList.Skip(j + 2).Take(40).Max(x => x.High) && theDayBeforeYesterday.Close <= i.TechDataList.Skip(j + 3).Take(40).Max(x => x.High))
+                    //    {
+                    //        bool isRedBar = today.Close >= today.Open ? true : false;
+                    //        bool isVolumeUp = today.Volume > yesterday.Volume ? true : false;
+                    //        string increasement = (today.Close / yesterday.Close).ToString("0.00");
+                    //        bool isLimitUp = yesterday.Close / theDayBeforeYesterday.Close > 1.095m && yesterday.Close == yesterday.High ? true : false;
+                    //        for (int k = 1; k < i.TechDataList.Count - 40; k++)
+                    //        {
+                    //            if (j - k < 0)
+                    //            {
+                    //                Console.WriteLine($"StockCode: {i.StockCode}, Buy Date: {today.Date.ToShortDateString()}, Holding");
+                    //                writer.WriteLine($"{i.StockCode},{today.Date.ToShortDateString()},,Holding,,{isRedBar},{isVolumeUp},{increasement},{isLimitUp}");
+                    //                break;
+                    //            }
+                    //            StockTechData currentTeckData = i.TechDataList.Skip(j - k).First();
+                    //            if (currentTeckData.Close < yesterday.High)
+                    //            {
+                    //                decimal returnRate = today.Close / currentTeckData.Close;
+                    //                lock (_lockObject)
+                    //                {
+                    //                    totalReturnRate -= returnRate;
+                    //                    loseCount++;
+                    //                }
+                    //                Console.WriteLine($"StockCode: {i.StockCode}, Buy Date: {today.Date.ToShortDateString()}, Sell Date: {currentTeckData.Date.ToShortDateString()}, LOSE {returnRate.ToString("0.00")}%");
+                    //                writer.WriteLine($"{i.StockCode},{today.Date.ToShortDateString()},{currentTeckData.Date.ToShortDateString()},LOSE,{returnRate.ToString("0.00")},{isRedBar},{isVolumeUp},{increasement},{isLimitUp}");
+                    //                break;
+                    //            }
+                    //            else
+                    //            {
+                    //                if (currentTeckData.Close < i.TechDataList.Skip(j - k).Take(10).Average(x => x.Close))
+                    //                {
+                    //                    if (currentTeckData.Close > today.Close)
+                    //                    {
+                    //                        decimal returnRate = currentTeckData.Close / today.Close;
+                    //                        lock (_lockObject)
+                    //                        {
+                    //                            totalReturnRate += returnRate;
+                    //                            winCount++;
+                    //                        }
+                    //                        Console.WriteLine($"StockCode: {i.StockCode}, Buy Date: {today.Date.ToShortDateString()}, Sell Date: {currentTeckData.Date.ToShortDateString()}, WIN {returnRate.ToString("0.00")}%");
+                    //                        writer.WriteLine($"{i.StockCode},{today.Date.ToShortDateString()},{currentTeckData.Date.ToShortDateString()},WIN,{returnRate.ToString("0.00")},{isRedBar},{isVolumeUp},{increasement},{isLimitUp}");
+                    //                        break;
+                    //                    }
+                    //                    else
+                    //                    {
+                    //                        decimal returnRate = today.Close / currentTeckData.Close;
+                    //                        lock (_lockObject)
+                    //                        {
+                    //                            totalReturnRate -= returnRate;
+                    //                            loseCount++;
+                    //                        }
+                    //                        Console.WriteLine($"StockCode: {i.StockCode}, Buy Date: {today.Date.ToShortDateString()}, Sell Date: {currentTeckData.Date.ToShortDateString()}, LOSE {returnRate.ToString("0.00")}%");
+                    //                        writer.WriteLine($"{i.StockCode},{today.Date.ToShortDateString()},{currentTeckData.Date.ToShortDateString()},LOSE,{returnRate.ToString("0.00")},{isRedBar},{isVolumeUp},{increasement},{isLimitUp}");
+                    //                        break;
+                    //                    }
+                    //                }
+                    //            }
+                    //        }
 
-                decimal todayClose = i.TechDataList.First().Close;
-                decimal high = i.TechDataList.Take(5).Max(x => x.Close);
-                decimal low = i.TechDataList.Take(5).Min(x => x.Close);
-                decimal ma60 = i.TechDataList.Take(60).Average(x => x.Close);
-                decimal mv5 = (decimal)i.TechDataList.Take(5).Average(x => x.Volume);
+                    //    }
+                    //}
+                    #endregion
+                    #region 紅 K 漲停後隔天做空
+                    for (int j = 0; j < i.TechDataList.Count - 6; j++)
+                    {
+                        StockTechData today = i.TechDataList[j];
+                        StockTechData yesterday = i.TechDataList[j + 1]; // 紅 K 漲停
+                        StockTechData theDayBeforeYesterday = i.TechDataList[j + 2];
+                        StockTechData twoDaysBeforeYesterday = i.TechDataList[j + 3];
+                        StockTechData threeDaysBeforeYesterday = i.TechDataList[j + 4];
+                        StockTechData fourDaysBeforeYesterday = i.TechDataList[j + 5];
+                        StockTechData fiveDaysBeforeYesterday = i.TechDataList[j + 6];
 
-                if (high / low > 1.02m || mv5 < 1000 || todayClose < ma60) continue;
-                //Console.WriteLine($"{i.StockCode} match the volume filter");
-                    
-                List<StockTechData> latest5TechList = i.TechDataList.Take(5).ToList();
-                int isSideWay = 0;
-                for (int j = 0; j < latest5TechList.Count; j++)
-                {
-                    decimal baseHigh = latest5TechList[j].High;
-                    decimal baseLow = latest5TechList[j].Low;
-                    for (int k = 0; k < latest5TechList.Count; k++) 
-                    { 
-                        if(j==k) continue;
-                        if (baseHigh >= latest5TechList[k].Low && latest5TechList[k].High >= baseLow)
+                        if (yesterday.MA60 == 0) continue;
+                        if (theDayBeforeYesterday.MA60 == 0) continue;
+                        //if (today.Date.ToShortDateString() == "4/11/2025") continue;
+                        bool hasMovingAverageResistance = today.Open < today.MA5 || today.Open < today.MA10 || today.Open < today.MA20 || today.Open < today.MA60;
+                        bool hasPrevLimitUp = (theDayBeforeYesterday.Close / twoDaysBeforeYesterday.Close > 1.095m && theDayBeforeYesterday.Close == theDayBeforeYesterday.High) || (twoDaysBeforeYesterday.Close / threeDaysBeforeYesterday.Close > 1.095m && twoDaysBeforeYesterday.Close == twoDaysBeforeYesterday.High) || (threeDaysBeforeYesterday.Close / fourDaysBeforeYesterday.Close > 1.095m && threeDaysBeforeYesterday.Close == threeDaysBeforeYesterday.High) || (fourDaysBeforeYesterday.Close / fiveDaysBeforeYesterday.Close > 1.095m && fourDaysBeforeYesterday.Close == fourDaysBeforeYesterday.High);
+                        if (yesterday.Close / theDayBeforeYesterday.Close > 1.095m && yesterday.High == yesterday.Close && yesterday.Volume > 70000 && yesterday.Open < yesterday.Close)
                         {
-                            isSideWay++;
+                            bool isWin = today.Open > today.Close ? true : false;
+                            decimal returnRate = isWin ? today.Open / today.Close : today.Close / today.Open;
+                            string result = $"{i.StockCode},{today.Date.ToShortDateString()},{returnRate.ToString("0.00")},{(yesterday.Close / yesterday.Open).ToString("0.00")},{today.Open > yesterday.Close},{yesterday.Close},{hasMovingAverageResistance},{hasPrevLimitUp}";
+                            if (isWin)
+                            {
+                                lock (_lockObject)
+                                {
+                                    totalReturnRate += returnRate;
+                                    winCount++;
+                                }
+                                result += ",WIN";
+                            }
+                            else
+                            {
+                                lock (_lockObject)
+                                {
+                                    totalReturnRate -= returnRate;
+                                    loseCount++;
+                                }
+                                result += ",LOSE";
+                            }
+                            Console.WriteLine(result);
+                            results.Add(result);
                         }
                     }
+                    #endregion
+                }));
+            await Task.WhenAll(tasks);
 
-                }
-                if (isSideWay < 20) continue;
-                Console.WriteLine($"{i.StockCode} match all filter");
-            }
-
-            foreach (var i in stockTech)
+            using (var writer = new StreamWriter(filePath, false, Encoding.UTF8))
             {
-                if (i.TechDataList.Count() < 100) continue;
-                bool isFirstDayVolumeSpike = true;
-                for (int j = 1; j < 5; j++)
+                writer.WriteLine("StockCode,BuyDate,ReturnRate,紅K收盤價/開盤價,隔天是否開高,紅K收盤價,上方是否有均線壓力,前四天是否已經漲停過,Result");
+                foreach (var i in results)
                 {
-                    if (i.TechDataList.Skip(j).First().Volume > i.TechDataList.Skip(j).Take(5).Average(x => x.Volume) * 3)
-                    {
-                        isFirstDayVolumeSpike = false;
-                        break;
-                    }
+                    writer.WriteLine(i);
                 }
-                if (!isFirstDayVolumeSpike) continue;
-                decimal ma5 = i.TechDataList.Take(5).Average(x => x.Close);
-                decimal ma10 = i.TechDataList.Take(10).Average(x => x.Close);
-                decimal ma20 = i.TechDataList.Take(20).Average(x => x.Close);
-                decimal ma60 = i.TechDataList.Take(60).Average(x => x.Close);
-                decimal prevMa5 = i.TechDataList.Skip(1).Take(5).Average(x => x.Close);
-                decimal prevMa10 = i.TechDataList.Skip(1).Take(10).Average(x => x.Close);
-                decimal prevMa20 = i.TechDataList.Skip(1).Take(20).Average(x => x.Close);
-                decimal prevMa60 = i.TechDataList.Skip(1).Take(60).Average(x => x.Close);
-                decimal mv5 = (decimal)i.TechDataList.Take(5).Average(x => x.Volume);
-                var todayTechData = i.TechDataList.First();
+            }
+            Console.WriteLine($"Win: {winCount}, Lose: {loseCount}, Total Return Rate: {totalReturnRate.ToString("0.00")}%");
 
-                if (todayTechData.Close > ma5 && todayTechData.Close > ma10 && todayTechData.Close > ma20 && todayTechData.Close > ma60 &&
-                    todayTechData.Volume > 1000 && todayTechData.Volume > mv5 * 3)
-                    //ma5 > prevMa5 && ma10 > prevMa10 && ma20 > prevMa20 && ma60 > prevMa60)
-                {
-                    newCandidates.Add(i);
-                }
-                Console.WriteLine($"{i.StockCode} {i.CompanyName} finished.");
-            }
-            Console.WriteLine("-------------------------------");
-            foreach (var i in newCandidates)
-            {
-                Console.WriteLine($"{i.StockCode} match the tech filter");
-            }
+
+
+
         }
     }
 }

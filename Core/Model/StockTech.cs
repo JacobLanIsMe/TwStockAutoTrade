@@ -12,9 +12,9 @@ namespace Core.Model
         public string StockCode { get; set; }
         public string CompanyName { get; set; } 
         public string TechData { get; set; }
-        public List<StockTechData> TechDataList
-        {
-            get => JsonConvert.DeserializeObject<List<StockTechData>>(TechData);
-        }
+        public List<StockTechData> TechDataList { get; set; }
+        //{
+        //    get => JsonConvert.DeserializeObject<List<StockTechData>>(TechData);
+        //}
     }
 }

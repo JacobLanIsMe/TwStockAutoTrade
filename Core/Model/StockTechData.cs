@@ -14,5 +14,10 @@ namespace Core.Model
         public decimal High { get; set; }
         public decimal Low { get; set; }
         public int Volume { get; set; }
+        public decimal MA5 { get; set; }
+        public decimal MA10 { get; set; }
+        public decimal MA20 { get; set; }
+        public decimal MA60 { get; set; }
+        public decimal MV5 { get; set; }
     }
 }
