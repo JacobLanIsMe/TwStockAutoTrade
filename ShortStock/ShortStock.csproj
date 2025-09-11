@@ -4,17 +4,17 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{E3EAC149-FFBE-496C-8538-BCAECA28E346}</ProjectGuid>
-    <OutputType>Library</OutputType>
-    <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>Core</RootNamespace>
-    <AssemblyName>Core</AssemblyName>
+    <ProjectGuid>{72B7CA8C-70C0-423A-99AF-D2341E6AF9D3}</ProjectGuid>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>ShortStock</RootNamespace>
+    <AssemblyName>ShortStock</AssemblyName>
     <TargetFrameworkVersion>v4.6.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <Deterministic>true</Deterministic>
-    <TargetFrameworkProfile />
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
@@ -24,6 +24,7 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
     <OutputPath>bin\Release\</OutputPath>
@@ -32,12 +33,6 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="Dapper, Version=2.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\Dapper.2.1.66\lib\net461\Dapper.dll</HintPath>
-    </Reference>
-    <Reference Include="HtmlAgilityPack, Version=1.12.1.0, Culture=neutral, PublicKeyToken=bd319b19eaf3b43a, processorArchitecture=MSIL">
-      <HintPath>..\packages\HtmlAgilityPack.1.12.1\lib\Net45\HtmlAgilityPack.dll</HintPath>
-    </Reference>
     <Reference Include="Microsoft.Bcl.AsyncInterfaces, Version=9.0.0.2, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
       <HintPath>..\packages\Microsoft.Bcl.AsyncInterfaces.9.0.2\lib\net462\Microsoft.Bcl.AsyncInterfaces.dll</HintPath>
     </Reference>
@@ -46,9 +41,6 @@
     </Reference>
     <Reference Include="Microsoft.Extensions.Configuration.Abstractions, Version=9.0.0.2, Culture=neutral, PublicKeyToken=adb9793829ddae60, processorArchitecture=MSIL">
       <HintPath>..\packages\Microsoft.Extensions.Configuration.Abstractions.9.0.2\lib\net462\Microsoft.Extensions.Configuration.Abstractions.dll</HintPath>
-    </Reference>
-    <Reference Include="Microsoft.Extensions.Configuration.Binder, Version=9.0.0.2, Culture=neutral, PublicKeyToken=adb9793829ddae60, processorArchitecture=MSIL">
-      <HintPath>..\packages\Microsoft.Extensions.Configuration.Binder.9.0.2\lib\net462\Microsoft.Extensions.Configuration.Binder.dll</HintPath>
     </Reference>
     <Reference Include="Microsoft.Extensions.Configuration.FileExtensions, Version=9.0.0.2, Culture=neutral, PublicKeyToken=adb9793829ddae60, processorArchitecture=MSIL">
       <HintPath>..\packages\Microsoft.Extensions.Configuration.FileExtensions.9.0.2\lib\net462\Microsoft.Extensions.Configuration.FileExtensions.dll</HintPath>
@@ -73,9 +65,6 @@
     </Reference>
     <Reference Include="Microsoft.Extensions.Primitives, Version=9.0.0.2, Culture=neutral, PublicKeyToken=adb9793829ddae60, processorArchitecture=MSIL">
       <HintPath>..\packages\Microsoft.Extensions.Primitives.9.0.2\lib\net462\Microsoft.Extensions.Primitives.dll</HintPath>
-    </Reference>
-    <Reference Include="Newtonsoft.Json, Version=13.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
-      <HintPath>..\packages\Newtonsoft.Json.13.0.3\lib\net45\Newtonsoft.Json.dll</HintPath>
     </Reference>
     <Reference Include="Serilog, Version=4.2.0.0, Culture=neutral, PublicKeyToken=24c2f752a8e58a10, processorArchitecture=MSIL">
       <HintPath>..\packages\Serilog.4.2.0\lib\net462\Serilog.dll</HintPath>
@@ -128,93 +117,26 @@
     <Reference Include="System.Data" />
     <Reference Include="System.Net.Http" />
     <Reference Include="System.Xml" />
-    <Reference Include="YuantaOneAPI, Version=1.0.17.0, Culture=neutral, PublicKeyToken=1a9c65c55c74e5b3, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>YuantaOneApi\YuantaOneAPI.dll</HintPath>
-    </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="DataStructs\0A000010_10.0.0.16.cs" />
-    <Compile Include="DataStructs\0A000014_10.0.0.20.cs" />
-    <Compile Include="DataStructs\14650010_20.101.0.16.cs" />
-    <Compile Include="DataStructs\14650012_20.101.0.18.cs" />
-    <Compile Include="DataStructs\1467000B_20.103.0.11.cs" />
-    <Compile Include="DataStructs\14670016_20.103.0.22.cs" />
-    <Compile Include="DataStructs\1467140D_20.103.20.13.cs" />
-    <Compile Include="DataStructs\1467280A_20.103.40.10.cs" />
-    <Compile Include="DataStructs\14672812_20.103.40.18.cs" />
-    <Compile Include="DataStructs\14681414_20.104.20.20.cs" />
-    <Compile Include="DataStructs\1E640A1F_30.100.10.31.cs" />
-    <Compile Include="DataStructs\1E641418_30.100.20.24.cs" />
-    <Compile Include="DataStructs\1E64280C_30.100.40.12.cs" />
-    <Compile Include="DataStructs\32000010_50.0.0.16.cs" />
-    <Compile Include="DataStructs\620A460A_98.10.70.10.cs" />
-    <Compile Include="DataStructs\C80A0A1A_200.10.10.26.cs" />
-    <Compile Include="DataStructs\C80A0A1B_200.10.10.27.cs" />
-    <Compile Include="DataStructs\D20A280A_210.10.40.10.cs" />
-    <Compile Include="DataStructs\D20A3C0A_210.10.60.10.cs" />
-    <Compile Include="DataStructs\D20A460B_210.10.70.11.cs" />
-    <Compile Include="DataStructs\Login.cs" />
-    <Compile Include="DataStructs\YuantaShareStructList.cs" />
-    <Compile Include="Enum\EBuySellType.cs" />
-    <Compile Include="Enum\EFutureOrderType.cs" />
-    <Compile Include="Enum\EOpenOffsetKind.cs" />
-    <Compile Include="Enum\EPeriod.cs" />
-    <Compile Include="HttpClientFactory\SimpleHttpClientFactory.cs" />
-    <Compile Include="Model\BlockingQueue.cs" />
-    <Compile Include="Model\ExRrightsExDividend.cs" />
-    <Compile Include="Model\FutureConfig.cs" />
-    <Compile Include="Model\FutureTechData.cs" />
-    <Compile Include="Model\FutureTrade.cs" />
-    <Compile Include="Model\KBarRecord.cs" />
-    <Compile Include="Model\StockMainPower.cs" />
-    <Compile Include="Model\StockSharedModel.cs" />
-    <Compile Include="Model\StockTech.cs" />
-    <Compile Include="Model\StringListModel.cs" />
-    <Compile Include="Model\StockTrade.cs" />
-    <Compile Include="Model\StockTradeConfig.cs" />
-    <Compile Include="Model\TaifexDailyMarketReport.cs" />
-    <Compile Include="Model\TwotcExRrightsExDividend.cs" />
-    <Compile Include="Model\TwotcIntradayStockInfo.cs" />
-    <Compile Include="Model\TwotcTechData.cs" />
-    <Compile Include="Model\TwseExRrightsExDividend.cs" />
-    <Compile Include="Model\TwseIntradayStockInfo.cs" />
-    <Compile Include="Model\TwseTechData.cs" />
-    <Compile Include="Model\YahooTechData.cs" />
-    <Compile Include="Repository\CandidateRepository.cs" />
-    <Compile Include="Repository\Interface\ICandidateRepository.cs" />
-    <Compile Include="Repository\Interface\ITradeRepository.cs" />
-    <Compile Include="Repository\TradeRepository.cs" />
-    <Compile Include="Service\CrazyTraderService.cs" />
-    <Compile Include="Service\DiscordService.cs" />
-    <Compile Include="Service\FutureTraderService.cs" />
-    <Compile Include="Service\Interface\ICrazyTraderService.cs" />
-    <Compile Include="Service\Interface\IDateTimeService.cs" />
-    <Compile Include="Service\Interface\IDiscordService.cs" />
-    <Compile Include="Service\Interface\IFutureTraderService.cs" />
-    <Compile Include="Service\Interface\IShortStockService.cs" />
-    <Compile Include="Service\Interface\IStockSelectorService.cs" />
-    <Compile Include="Model\StockCandidate.cs" />
-    <Compile Include="Model\StockTechData.cs" />
-    <Compile Include="Model\TwotcStockInfo.cs" />
-    <Compile Include="Model\TwseStockExchangeReport.cs" />
-    <Compile Include="Model\TwseStockInfo.cs" />
+    <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Service\DateTimeService.cs" />
-    <Compile Include="Service\Interface\IStockTraderService.cs" />
-    <Compile Include="Service\Interface\IYuantaService.cs" />
-    <Compile Include="Service\ShortStockService.cs" />
-    <Compile Include="Service\StockSelectorService.cs" />
-    <Compile Include="Service\StockTraderService.cs" />
-    <Compile Include="Service\YuantaService.cs" />
   </ItemGroup>
-  <ItemGroup />
   <ItemGroup>
-    <None Include="app.config" />
+    <None Include="App.config" />
+    <None Include="appsettings.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="YuantaOneApi\YuantaOneAPI.dll">
+    <ProjectReference Include="..\Core\Core.csproj">
+      <Project>{e3eac149-ffbe-496c-8538-bcaeca28e346}</Project>
+      <Name>Core</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="YuantaCAPIDLL.dll">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

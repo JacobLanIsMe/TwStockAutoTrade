@@ -15,6 +15,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CrazyTrader", "CrazyTrader\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TryNewSelector", "TryNewSelector\TryNewSelector.csproj", "{2894B66B-56C6-4481-9A43-CAB57FF46360}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ShortStock", "ShortStock\ShortStock.csproj", "{72B7CA8C-70C0-423A-99AF-D2341E6AF9D3}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -45,6 +47,10 @@ Global
 		{2894B66B-56C6-4481-9A43-CAB57FF46360}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2894B66B-56C6-4481-9A43-CAB57FF46360}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2894B66B-56C6-4481-9A43-CAB57FF46360}.Release|Any CPU.Build.0 = Release|Any CPU
+		{72B7CA8C-70C0-423A-99AF-D2341E6AF9D3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{72B7CA8C-70C0-423A-99AF-D2341E6AF9D3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{72B7CA8C-70C0-423A-99AF-D2341E6AF9D3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{72B7CA8C-70C0-423A-99AF-D2341E6AF9D3}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
