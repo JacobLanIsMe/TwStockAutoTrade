@@ -18,6 +18,8 @@ using HtmlAgilityPack;
 using System.Net;
 using Newtonsoft.Json;
 using System.Collections.Concurrent;
+using System.Security.Policy;
+using System.Diagnostics.Eventing.Reader;
 
 namespace TryNewSelector
 {
@@ -37,17 +39,39 @@ namespace TryNewSelector
 
             var candidateRepository = serviceProvider.GetRequiredService<ICandidateRepository>();
             List<StockTech> stockTech = await candidateRepository.GetStockTech();
-            //SimpleHttpClientFactory simpleHttpClientFactory = new SimpleHttpClientFactory();
-            //var httpClient = simpleHttpClientFactory.CreateClient();
+            SimpleHttpClientFactory simpleHttpClientFactory = new SimpleHttpClientFactory();
+            var httpClient = simpleHttpClientFactory.CreateClient();
 
-            List<StockTech> newCandidates = new List<StockTech>();
+            #region 抓上市櫃公司基本資料
+            HttpResponseMessage twseResponse = await httpClient.GetAsync("https://openapi.twse.com.tw/v1/opendata/t187ap03_L");
+            string twseResponseBody = await twseResponse.Content.ReadAsStringAsync();
+            List<TwseCompanyInfo> twseCompanyInfoList = JsonConvert.DeserializeObject<List<TwseCompanyInfo>>(twseResponseBody);
+            HttpResponseMessage twotcResponse = await httpClient.GetAsync("https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O");
+            string twotcResponseBody = await twotcResponse.Content.ReadAsStringAsync();
+            List<TwotcCompanyInfo> twotcCompanyInfoList = JsonConvert.DeserializeObject<List<TwotcCompanyInfo>>(twotcResponseBody);
+            #endregion
+
+            Dictionary<string, long> companyShareDict = new Dictionary<string, long>();
+            foreach (var i in twseCompanyInfoList)
+            {
+                if (!companyShareDict.ContainsKey(i.StockCode))
+                {
+                    companyShareDict.Add(i.StockCode, i.IssuedShares);
+                }
+            }
+            foreach (var i in twotcCompanyInfoList)
+            {
+                if (!companyShareDict.ContainsKey(i.SecuritiesCompanyCode))
+                {
+                    companyShareDict.Add(i.SecuritiesCompanyCode, i.IssuedShares);
+                }
+            }
             int winCount = 0;
             int loseCount = 0;
             decimal totalReturnRate = 0;
             object _lockObject = new object();
             string filePath = "C:\\Users\\Administrator\\Downloads\\result.csv";
             ConcurrentBag<string> results = new ConcurrentBag<string>();
-            //stockTech = stockTech.Where(x => x.StockCode == "6216").ToList();
             var tasks = stockTech.Select(i => Task.Run(() =>
                 {
                     i.TechDataList = JsonConvert.DeserializeObject<List<StockTechData>>(i.TechData);
@@ -59,6 +83,10 @@ namespace TryNewSelector
                         i.TechDataList[j].MA20 = j + 20 <= techDataListCount ? i.TechDataList.Skip(j).Take(20).Average(x => x.Close) : 0;
                         i.TechDataList[j].MA60 = j + 60 <= techDataListCount ? i.TechDataList.Skip(j).Take(60).Average(x => x.Close) : 0;
                         i.TechDataList[j].MV5 = j + 5 <= techDataListCount ? (decimal)i.TechDataList.Skip(j).Take(5).Average(x => x.Volume) : 0;
+                    }
+                    if (!companyShareDict.TryGetValue(i.StockCode, out long issuedShares))
+                    {
+                        return;
                     }
                     #region 大量上漲後，隔天小漲，再隔天開盤做多。
                     //for (var j = 0; j < techDataListCount - 3; j++)
@@ -315,26 +343,18 @@ namespace TryNewSelector
                     //}
                     #endregion
                     #region 紅 K 漲停後隔天做空
-                    for (int j = 0; j < i.TechDataList.Count - 6; j++)
+                    for (int j = 0; j < i.TechDataList.Count - 2; j++)
                     {
                         StockTechData today = i.TechDataList[j];
                         StockTechData yesterday = i.TechDataList[j + 1]; // 紅 K 漲停
                         StockTechData theDayBeforeYesterday = i.TechDataList[j + 2];
-                        StockTechData twoDaysBeforeYesterday = i.TechDataList[j + 3];
-                        StockTechData threeDaysBeforeYesterday = i.TechDataList[j + 4];
-                        StockTechData fourDaysBeforeYesterday = i.TechDataList[j + 5];
-                        StockTechData fiveDaysBeforeYesterday = i.TechDataList[j + 6];
 
-                        if (yesterday.MA60 == 0) continue;
-                        if (theDayBeforeYesterday.MA60 == 0) continue;
-                        //if (today.Date.ToShortDateString() == "4/11/2025") continue;
-                        bool hasMovingAverageResistance = today.Open < today.MA5 || today.Open < today.MA10 || today.Open < today.MA20 || today.Open < today.MA60;
-                        bool hasPrevLimitUp = (theDayBeforeYesterday.Close / twoDaysBeforeYesterday.Close > 1.095m && theDayBeforeYesterday.Close == theDayBeforeYesterday.High) || (twoDaysBeforeYesterday.Close / threeDaysBeforeYesterday.Close > 1.095m && twoDaysBeforeYesterday.Close == twoDaysBeforeYesterday.High) || (threeDaysBeforeYesterday.Close / fourDaysBeforeYesterday.Close > 1.095m && threeDaysBeforeYesterday.Close == threeDaysBeforeYesterday.High) || (fourDaysBeforeYesterday.Close / fiveDaysBeforeYesterday.Close > 1.095m && fourDaysBeforeYesterday.Close == fourDaysBeforeYesterday.High);
-                        if (yesterday.Close / theDayBeforeYesterday.Close > 1.095m && yesterday.High == yesterday.Close && yesterday.Volume > 70000 && yesterday.Open < yesterday.Close)
+                        decimal turnoverRate = (decimal)yesterday.Volume * 1000 / issuedShares;
+                        if (yesterday.Close / theDayBeforeYesterday.Close > 1.095m && yesterday.High == yesterday.Close && yesterday.Open < yesterday.Close && turnoverRate > 0.4m)
                         {
                             bool isWin = today.Open > today.Close ? true : false;
                             decimal returnRate = isWin ? today.Open / today.Close : today.Close / today.Open;
-                            string result = $"{i.StockCode},{today.Date.ToShortDateString()},{returnRate.ToString("0.00")},{(yesterday.Close / yesterday.Open).ToString("0.00")},{today.Open > yesterday.Close},{yesterday.Close},{hasMovingAverageResistance},{hasPrevLimitUp}";
+                            string result = $"{i.StockCode},{today.Date.ToShortDateString()},{returnRate.ToString("0.00")},{yesterday.Volume},{issuedShares},{turnoverRate.ToString("0.00")},{today.Open},{today.Close}";
                             if (isWin)
                             {
                                 lock (_lockObject)
@@ -363,7 +383,7 @@ namespace TryNewSelector
 
             using (var writer = new StreamWriter(filePath, false, Encoding.UTF8))
             {
-                writer.WriteLine("StockCode,BuyDate,ReturnRate,紅K收盤價/開盤價,隔天是否開高,紅K收盤價,上方是否有均線壓力,前四天是否已經漲停過,Result");
+                writer.WriteLine("StockCode,BuyDate,ReturnRate,漲停當日成交量,發行股數,漲停當日周轉率,開盤價,收盤價,Result");
                 foreach (var i in results)
                 {
                     writer.WriteLine(i);
