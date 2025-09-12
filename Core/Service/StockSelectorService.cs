@@ -151,7 +151,11 @@ namespace Core.Service
                 StockTechData today = i.TechDataList[0];
                 StockTechData yesterday = i.TechDataList[1];
                 decimal turnoverRate = (decimal)today.Volume * 1000 / i.IssuedShare;
-                if (today.Close / yesterday.Close > 1.095 && turnoverRate > 0.4m)
+                if (today.Close / yesterday.Close > 1.095m && today.High == today.Close && today.Open < today.Close && turnoverRate > 0.4m)
+                {
+
+                }
+
             }
         }
         private async Task<List<StockCandidate>> SelectCandidateByMainPower(List<StockCandidate> candidateList)
