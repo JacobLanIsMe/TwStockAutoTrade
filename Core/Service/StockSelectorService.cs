@@ -11,6 +11,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Net.Http;
+using System.Text;
 using System.Threading.Tasks;
 using YuantaOneAPI;
 
@@ -20,15 +21,17 @@ namespace Core.Service
     {
         private HttpClient _httpClient;
         private readonly ICandidateRepository _candidateRepository;
+        private readonly ICandidateForShortRepository _candidateForShortRepository;
         private readonly ILogger _logger;
         private readonly IDateTimeService _dateTimeService;
         private readonly IDiscordService _discordService;
         private int _maxRetryCount = 10;
-        public StockSelectorService(ICandidateRepository candidateRepository, ILogger logger, IDateTimeService dateTimeService, IDiscordService discordService)
+        public StockSelectorService(ICandidateRepository candidateRepository, ICandidateForShortRepository candidateForShortRepository, ILogger logger, IDateTimeService dateTimeService, IDiscordService discordService)
         {
             SimpleHttpClientFactory httpClientFactory = new SimpleHttpClientFactory();
             _httpClient = httpClientFactory.CreateClient();
             _candidateRepository = candidateRepository;
+            _candidateForShortRepository = candidateForShortRepository;
             int maxConcurrency = Environment.ProcessorCount * 40;
             _logger = logger;
             _dateTimeService = dateTimeService;
@@ -36,12 +39,14 @@ namespace Core.Service
         }
         public async Task SelectStock()
         {
-            await RemoveStockCanNotIntraday(new List<StockCandidate>());
             List<StockCandidate> allStockInfoList = await GetStockCodeList();
             await SetIssuedShares(allStockInfoList);
             await SetExchangeReportFromSino(allStockInfoList);
             List<StockCandidate> candidateList = SelectCandidateForShortByTech(allStockInfoList);
-            
+            List<StockCandidate> filteredCandidateList = await RemoveStockCanNotIntraday(candidateList);
+            await SendCandidateForShortToDiscord(filteredCandidateList);
+            await _candidateForShortRepository.DeleteActiveCandidate();
+            await _candidateForShortRepository.Insert(filteredCandidateList);
             await UpSertTechDataToDb(allStockInfoList);
             //if (!doesNeedUpdate(allStockInfoList)) return;
             //List<StockCandidate> candidateList = SelectCandidateByTech(allStockInfoList);
@@ -64,7 +69,7 @@ namespace Core.Service
             List<StockCandidate> allStockInfoList = twseStockList.Concat(tpexStockList).ToList();
             return allStockInfoList;
         }
-        private async Task RemoveStockCanNotIntraday(List<StockCandidate> candidateList)
+        private async Task<List<StockCandidate>> RemoveStockCanNotIntraday(List<StockCandidate> candidateList)
         {
             // 抓出上市可當沖股票
             HttpResponseMessage twseIntradayResponse = await _httpClient.GetAsync("https://openapi.twse.com.tw/v1/exchangeReport/TWTB4U");
@@ -94,8 +99,24 @@ namespace Core.Service
             HashSet<string> twseSuspendedShortSellingStockCodeHashSet = new HashSet<string>(twseSuspendedShortSellingStockList.Select(x => x.Code.ToUpper()));
             HashSet<string> twotcSuspendedShortSellingStockCodeHashSet = new HashSet<string>(twotcSuspendedShortSellingStockList.Select(x => x.SecuritiesCompanyCode.ToUpper()));
             List<StockCandidate> filteredCandidateList = new List<StockCandidate>();
-            filteredCandidateList = candidateList.Where(x => (twseIntradayStockCodeHashSet.Contains(x.StockCode) || twotcIntradayStockCodeHashSet.Contains(x.StockCode)) ).ToList();
-
+            foreach (var i in candidateList)
+            {
+                if (i.Market == enumMarketType.TWSE)
+                {
+                    if (twseIntradayStockCodeHashSet.Contains(i.StockCode) && !twseSuspendedShortSellingStockCodeHashSet.Contains(i.StockCode))
+                    {
+                        filteredCandidateList.Add(i);
+                    }
+                }
+                else if (i.Market == enumMarketType.TWOTC)
+                {
+                    if (twotcIntradayStockCodeHashSet.Contains(i.StockCode) && !twotcSuspendedShortSellingStockCodeHashSet.Contains(i.StockCode))
+                    {
+                        filteredCandidateList.Add(i);
+                    }
+                }
+            }
+            return filteredCandidateList;
         }
         private async Task<List<StockCandidate>> GetTwseStockCode()
         {
@@ -168,6 +189,7 @@ namespace Core.Service
                 decimal turnoverRate = (decimal)today.Volume * 1000 / i.IssuedShare;
                 if (today.Close / yesterday.Close > 1.095m && today.High == today.Close && today.Open < today.Close && turnoverRate > 0.4m)
                 {
+                    i.SelectedDate = _dateTimeService.GetTaiwanTime();
                     candidateList.Add(i);
                 }
             }
@@ -468,7 +490,17 @@ namespace Core.Service
             }
             await _discordService.SendMessage(message);
         }
-
+        private async Task SendCandidateForShortToDiscord(List<StockCandidate> candidateList)
+        {
+            StringBuilder message = new StringBuilder();
+            message.AppendLine($"做空股票:");
+            foreach (var i in candidateList)
+            {
+                message.AppendLine($"{i.StockCode} {i.CompanyName}");
+            }
+            message.AppendLine($"總共 {candidateList.Count} 檔");
+            await _discordService.SendMessage(message.ToString());
+        }
         private async Task UpdateExRightsExDevidendDate()
         {
             List<ExRrightsExDividend> twseExRrightsExDividendList = await GetTwseExRightsExDevidendDate();

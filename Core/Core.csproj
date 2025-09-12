@@ -185,7 +185,9 @@
     <Compile Include="Model\TwseSuspendedShortSellingStockInfo.cs" />
     <Compile Include="Model\TwseTechData.cs" />
     <Compile Include="Model\YahooTechData.cs" />
+    <Compile Include="Repository\CandidateForShortRepository.cs" />
     <Compile Include="Repository\CandidateRepository.cs" />
+    <Compile Include="Repository\Interface\ICandidateForShortRepository.cs" />
     <Compile Include="Repository\Interface\ICandidateRepository.cs" />
     <Compile Include="Repository\Interface\ITradeRepository.cs" />
     <Compile Include="Repository\TradeRepository.cs" />

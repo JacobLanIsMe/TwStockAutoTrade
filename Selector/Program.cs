@@ -28,6 +28,7 @@ namespace Selector
                 .AddSingleton<IStockSelectorService, StockSelectorService>()
                 .AddSingleton<IDateTimeService, DateTimeService>()
                 .AddSingleton<ICandidateRepository, CandidateRepository>()
+                .AddSingleton<ICandidateForShortRepository, CandidateForShortRepository>()
                 .AddSingleton<ITradeRepository, TradeRepository>()
                 .AddSingleton<IDiscordService, DiscordService>()
                 .BuildServiceProvider();
