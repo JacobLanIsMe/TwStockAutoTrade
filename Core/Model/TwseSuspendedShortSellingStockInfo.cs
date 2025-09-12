@@ -1,4 +1,5 @@
-﻿using Newtonsoft.Json;
+﻿using Core.Service.Interface;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,11 +10,8 @@ namespace Core.Model
 {
     public class TwseSuspendedShortSellingStockInfo
     {
-        [JsonProperty("Code")]
-        public string StockCode { get; set; }
-        [JsonProperty("StartDate")]
-        public string _StartDate { get; set; }
-        [JsonProperty("EndDate")]
-        public string _EndDate { get; set; }
+        public string Code { get; set; }
+        public string StartDate { get; set; }
+        public string EndDate { get; set; }
     }
 }

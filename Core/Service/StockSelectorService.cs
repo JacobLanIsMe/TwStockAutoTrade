@@ -36,10 +36,12 @@ namespace Core.Service
         }
         public async Task SelectStock()
         {
+            await RemoveStockCanNotIntraday(new List<StockCandidate>());
             List<StockCandidate> allStockInfoList = await GetStockCodeList();
             await SetIssuedShares(allStockInfoList);
             await SetExchangeReportFromSino(allStockInfoList);
             List<StockCandidate> candidateList = SelectCandidateForShortByTech(allStockInfoList);
+            
             await UpSertTechDataToDb(allStockInfoList);
             //if (!doesNeedUpdate(allStockInfoList)) return;
             //List<StockCandidate> candidateList = SelectCandidateByTech(allStockInfoList);
@@ -62,7 +64,7 @@ namespace Core.Service
             List<StockCandidate> allStockInfoList = twseStockList.Concat(tpexStockList).ToList();
             return allStockInfoList;
         }
-        private async Task RemoveStockCanNotIntraday()
+        private async Task RemoveStockCanNotIntraday(List<StockCandidate> candidateList)
         {
             // 抓出上市可當沖股票
             HttpResponseMessage twseIntradayResponse = await _httpClient.GetAsync("https://openapi.twse.com.tw/v1/exchangeReport/TWTB4U");
@@ -76,11 +78,24 @@ namespace Core.Service
             HttpResponseMessage twotcIntradayResponse = await _httpClient.GetAsync("https://www.tpex.org.tw/www/zh-tw/intraday/list");
             string twotcIntradayResponseBody = await twotcIntradayResponse.Content.ReadAsStringAsync();
             TwotcIntradayStockInfo twotcIntradayStockList = JsonConvert.DeserializeObject<TwotcIntradayStockInfo>(twotcIntradayResponseBody);
+            
+            // 抓出上櫃暫時先賣後買的股票
+            HttpResponseMessage twotcSuspendedShortSellingResponse = await _httpClient.GetAsync("https://www.tpex.org.tw/openapi/v1/tpex_intraday_trading_pre");
+            string twotcSuspendedShortSellingResponseBody = await twotcSuspendedShortSellingResponse.Content.ReadAsStringAsync();
+            List<TwotcSuspendedShortSellingStockInfo> twotcSuspendedShortSellingStockList = JsonConvert.DeserializeObject<List<TwotcSuspendedShortSellingStockInfo>>(twotcSuspendedShortSellingResponseBody);
+
+
+            HashSet<string> twseIntradayStockCodeHashSet = new HashSet<string>(twseIntradayStockList.Select(x => x.Code.ToUpper()));
             HashSet<string> twotcIntradayStockCodeHashSet = new HashSet<string>();
             if (twotcIntradayStockList.Tables.Any())
             {
                 twotcIntradayStockCodeHashSet = new HashSet<string>(twotcIntradayStockList.Tables.First().Data.Select(x => x[0].ToUpper()));
             }
+            HashSet<string> twseSuspendedShortSellingStockCodeHashSet = new HashSet<string>(twseSuspendedShortSellingStockList.Select(x => x.Code.ToUpper()));
+            HashSet<string> twotcSuspendedShortSellingStockCodeHashSet = new HashSet<string>(twotcSuspendedShortSellingStockList.Select(x => x.SecuritiesCompanyCode.ToUpper()));
+            List<StockCandidate> filteredCandidateList = new List<StockCandidate>();
+            filteredCandidateList = candidateList.Where(x => (twseIntradayStockCodeHashSet.Contains(x.StockCode) || twotcIntradayStockCodeHashSet.Contains(x.StockCode)) ).ToList();
+
         }
         private async Task<List<StockCandidate>> GetTwseStockCode()
         {
@@ -153,10 +168,10 @@ namespace Core.Service
                 decimal turnoverRate = (decimal)today.Volume * 1000 / i.IssuedShare;
                 if (today.Close / yesterday.Close > 1.095m && today.High == today.Close && today.Open < today.Close && turnoverRate > 0.4m)
                 {
-
+                    candidateList.Add(i);
                 }
-
             }
+            return candidateList;
         }
         private async Task<List<StockCandidate>> SelectCandidateByMainPower(List<StockCandidate> candidateList)
         {

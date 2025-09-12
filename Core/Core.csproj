@@ -177,6 +177,7 @@
     <Compile Include="Model\TwotcCompanyInfo.cs" />
     <Compile Include="Model\TwotcExRrightsExDividend.cs" />
     <Compile Include="Model\TwotcIntradayStockInfo.cs" />
+    <Compile Include="Model\TwotcSuspendedShortSellingStockInfo.cs" />
     <Compile Include="Model\TwotcTechData.cs" />
     <Compile Include="Model\TwseCompanyInfo.cs" />
     <Compile Include="Model\TwseExRrightsExDividend.cs" />
