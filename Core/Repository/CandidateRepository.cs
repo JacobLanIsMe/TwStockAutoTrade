@@ -138,11 +138,12 @@ namespace Core.Repository
             var table = new DataTable();
             table.Columns.Add("StockCode", typeof(string));
             table.Columns.Add("CompanyName", typeof(string));
+            table.Columns.Add("IssuedShare", typeof(long));
             table.Columns.Add("TechData", typeof(string));
 
             foreach (var stock in stockList)
             {
-                table.Rows.Add(stock.StockCode, stock.CompanyName, stock.TechData);
+                table.Rows.Add(stock.StockCode, stock.CompanyName, stock.IssuedShare, stock.TechData);
             }
             using (var sqlConnection = new SqlConnection(_dbConnectionString))
             {

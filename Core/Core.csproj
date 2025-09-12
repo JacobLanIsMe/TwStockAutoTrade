@@ -181,6 +181,7 @@
     <Compile Include="Model\TwseCompanyInfo.cs" />
     <Compile Include="Model\TwseExRrightsExDividend.cs" />
     <Compile Include="Model\TwseIntradayStockInfo.cs" />
+    <Compile Include="Model\TwseSuspendedShortSellingStockInfo.cs" />
     <Compile Include="Model\TwseTechData.cs" />
     <Compile Include="Model\YahooTechData.cs" />
     <Compile Include="Repository\CandidateRepository.cs" />

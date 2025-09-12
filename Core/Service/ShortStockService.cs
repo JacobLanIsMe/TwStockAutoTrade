@@ -119,108 +119,108 @@ namespace Core.Service
         }
         private void StockOrder(string stockCode, decimal level1AskPrice, int level1AskSize)
         {
-            if (string.IsNullOrEmpty(stockCode) || level1AskPrice == 0 || level1AskSize == 0 || _trade != null) return;
-            if (!_stockCandidateDict.TryGetValue(stockCode, out StockCandidate candidate) || !candidate.IsTradingStarted) return;
-            if (candidate.PurchasedLot > 0)
-            {
-                if ((level1AskPrice / candidate.EntryPoint >= 1.1m) ||
-                    (level1AskPrice < candidate.StopLossPoint))
-                {
-                    StockOrder stockOrder = SetDefaultStockOrder();
-                    stockOrder.StkCode = stockCode;
-                    stockOrder.PriceFlag = "M";
-                    stockOrder.BuySell = EBuySellType.S.ToString();
-                    stockOrder.Time_in_force = "0";
-                    stockOrder.Price = Convert.ToInt64(0);
-                    stockOrder.OrderQty = candidate.PurchasedLot;
-                    ProcessStockOrder(stockOrder);
-                }
-            }
-            else
-            {
-                if (candidate.ExRrightsExDividendDateTime.HasValue && _now.AddDays(8).Date > candidate.ExRrightsExDividendDateTime.Value.Date) return;
-                int orderQty = (int)(tradeConfig.MaxAmountPerStock / (candidate.EntryPoint * 1000));
-                if (level1AskPrice == candidate.EntryPoint &&
-                    orderQty > 0 &&
-                    level1AskSize >= orderQty &&
-                    tradeConfig.MaxStockCount > _stockCandidateDict.Count(x => x.Value.PurchasedLot > 0))
-                {
-                    StockOrder stockOrder = SetDefaultStockOrder();
-                    stockOrder.StkCode = stockCode;   // 股票代號
-                    stockOrder.PriceFlag = "";   // 價格種類, H:漲停 -:平盤  L:跌停 " ":限價  M:市價單
-                    stockOrder.BuySell = EBuySellType.B.ToString();   // 買賣別, B:買  S:賣
-                    stockOrder.Time_in_force = "4";  // 委託效期, 0:ROD 3:IOC  4:FOK
-                    stockOrder.Price = Convert.ToInt64(level1AskPrice * 10000);  // 委託價格
-                    stockOrder.OrderQty = Convert.ToInt64(orderQty);    // 委託單位數
-                    ProcessStockOrder(stockOrder);
-                }
-            }
+            //if (string.IsNullOrEmpty(stockCode) || level1AskPrice == 0 || level1AskSize == 0 || _trade != null) return;
+            //if (!_stockCandidateDict.TryGetValue(stockCode, out StockCandidate candidate) || !candidate.IsTradingStarted) return;
+            //if (candidate.PurchasedLot > 0)
+            //{
+            //    if ((level1AskPrice / candidate.EntryPoint >= 1.1m) ||
+            //        (level1AskPrice < candidate.StopLossPoint))
+            //    {
+            //        StockOrder stockOrder = SetDefaultStockOrder();
+            //        stockOrder.StkCode = stockCode;
+            //        stockOrder.PriceFlag = "M";
+            //        stockOrder.BuySell = EBuySellType.S.ToString();
+            //        stockOrder.Time_in_force = "0";
+            //        stockOrder.Price = Convert.ToInt64(0);
+            //        stockOrder.OrderQty = candidate.PurchasedLot;
+            //        ProcessStockOrder(stockOrder);
+            //    }
+            //}
+            //else
+            //{
+            //    if (candidate.ExRrightsExDividendDateTime.HasValue && _now.AddDays(8).Date > candidate.ExRrightsExDividendDateTime.Value.Date) return;
+            //    int orderQty = (int)(tradeConfig.MaxAmountPerStock / (candidate.EntryPoint * 1000));
+            //    if (level1AskPrice == candidate.EntryPoint &&
+            //        orderQty > 0 &&
+            //        level1AskSize >= orderQty &&
+            //        tradeConfig.MaxStockCount > _stockCandidateDict.Count(x => x.Value.PurchasedLot > 0))
+            //    {
+            //        StockOrder stockOrder = SetDefaultStockOrder();
+            //        stockOrder.StkCode = stockCode;   // 股票代號
+            //        stockOrder.PriceFlag = "";   // 價格種類, H:漲停 -:平盤  L:跌停 " ":限價  M:市價單
+            //        stockOrder.BuySell = EBuySellType.B.ToString();   // 買賣別, B:買  S:賣
+            //        stockOrder.Time_in_force = "4";  // 委託效期, 0:ROD 3:IOC  4:FOK
+            //        stockOrder.Price = Convert.ToInt64(level1AskPrice * 10000);  // 委託價格
+            //        stockOrder.OrderQty = Convert.ToInt64(orderQty);    // 委託單位數
+            //        ProcessStockOrder(stockOrder);
+            //    }
+            //}
         }
         private void StockOrderHandler(string strResult)
         {
-            string[] resultArray = strResult.Split(',');
-            if (string.IsNullOrEmpty(resultArray[4].Trim()) ||
-                !DateTime.TryParse(resultArray[5], out DateTime orderTime) ||
-                !string.IsNullOrEmpty(resultArray[resultArray.Length - 2].Trim()) ||
-                !string.IsNullOrEmpty(resultArray[resultArray.Length - 1].Trim()))
-            {
-                _logger.Error($"SendStockOrder error. Error message: {resultArray[resultArray.Length - 2]}, {resultArray[resultArray.Length - 1]}");
-                _trade = null;
-            }
+            //string[] resultArray = strResult.Split(',');
+            //if (string.IsNullOrEmpty(resultArray[4].Trim()) ||
+            //    !DateTime.TryParse(resultArray[5], out DateTime orderTime) ||
+            //    !string.IsNullOrEmpty(resultArray[resultArray.Length - 2].Trim()) ||
+            //    !string.IsNullOrEmpty(resultArray[resultArray.Length - 1].Trim()))
+            //{
+            //    _logger.Error($"SendStockOrder error. Error message: {resultArray[resultArray.Length - 2]}, {resultArray[resultArray.Length - 1]}");
+            //    _trade = null;
+            //}
         }
         private void RealReportHandler(string strResult)
         {
-            string[] reportArray = strResult.Split(',');
-            if (!int.TryParse(reportArray[1].Split(':')[1].Trim(), out int reportType))
-            {
-                _logger.Error("Report type error");
-            }
-            if (!int.TryParse(reportArray[13].Trim(), out int purchasedShare))
-            {
-                _logger.Error("PurchasedLot error");
-            }
-            purchasedShare = purchasedShare / 1000;
-            string orderNo = reportArray[2].Trim().Substring(4); // 委託單號
-            string stockCode = reportArray[4].Trim();
-            if (reportType == 50)
-            {
-                string errorCode = reportArray[reportArray.Length - 1].Trim();
-                if (errorCode == "13048" || errorCode == "19348")
-                {
-                    _trade = null;
-                    _logger.Warning($"委託失效，FOK 委託未能成功, Stock code: {stockCode}");
-                }
-            }
-            else if (reportType == 51)
-            {
-                if (stockCode != _trade.StockCode) return;
-                if (!_stockCandidateDict.TryGetValue(stockCode, out StockCandidate candidate)) return;
-                if (reportArray[9].Trim() == EBuySellType.B.ToString())
-                {
-                    candidate.PurchasedLot = candidate.PurchasedLot + purchasedShare;
-                    if (candidate.PurchasedLot == _trade.OrderedLot)
-                    {
-                        _trade = null;
-                    }
-                }
-                else
-                {
-                    candidate.PurchasedLot = candidate.PurchasedLot - purchasedShare;
-                    if (candidate.PurchasedLot == 0)
-                    {
-                        _trade = null;
-                    }
-                }
-            }
+            //string[] reportArray = strResult.Split(',');
+            //if (!int.TryParse(reportArray[1].Split(':')[1].Trim(), out int reportType))
+            //{
+            //    _logger.Error("Report type error");
+            //}
+            //if (!int.TryParse(reportArray[13].Trim(), out int purchasedShare))
+            //{
+            //    _logger.Error("PurchasedLot error");
+            //}
+            //purchasedShare = purchasedShare / 1000;
+            //string orderNo = reportArray[2].Trim().Substring(4); // 委託單號
+            //string stockCode = reportArray[4].Trim();
+            //if (reportType == 50)
+            //{
+            //    string errorCode = reportArray[reportArray.Length - 1].Trim();
+            //    if (errorCode == "13048" || errorCode == "19348")
+            //    {
+            //        _trade = null;
+            //        _logger.Warning($"委託失效，FOK 委託未能成功, Stock code: {stockCode}");
+            //    }
+            //}
+            //else if (reportType == 51)
+            //{
+            //    if (stockCode != _trade.StockCode) return;
+            //    if (!_stockCandidateDict.TryGetValue(stockCode, out StockCandidate candidate)) return;
+            //    if (reportArray[9].Trim() == EBuySellType.B.ToString())
+            //    {
+            //        candidate.PurchasedLot = candidate.PurchasedLot + purchasedShare;
+            //        if (candidate.PurchasedLot == _trade.OrderedLot)
+            //        {
+            //            _trade = null;
+            //        }
+            //    }
+            //    else
+            //    {
+            //        candidate.PurchasedLot = candidate.PurchasedLot - purchasedShare;
+            //        if (candidate.PurchasedLot == 0)
+            //        {
+            //            _trade = null;
+            //        }
+            //    }
+            //}
         }
         private void WatchListHandler(string strResult)
         {
-            string[] watchListResult = strResult.Split(',');
-            string stockCode = watchListResult[1];
-            if (!decimal.TryParse(watchListResult[3], out decimal tradePrice)) return;
-            if (!_stockCandidateDict.TryGetValue(stockCode, out StockCandidate candidate)) return;
-            candidate.IsTradingStarted = true;
-            UnsubscribeWatchlist(candidate.Market, candidate.StockCode);
+            //string[] watchListResult = strResult.Split(',');
+            //string stockCode = watchListResult[1];
+            //if (!decimal.TryParse(watchListResult[3], out decimal tradePrice)) return;
+            //if (!_stockCandidateDict.TryGetValue(stockCode, out StockCandidate candidate)) return;
+            //candidate.IsTradingStarted = true;
+            //UnsubscribeWatchlist(candidate.Market, candidate.StockCode);
         }
         private void FiveTickHandler(string strResult, out string stockCode, out decimal level1AskPrice, out int level1AskSize)
         {
@@ -239,22 +239,22 @@ namespace Core.Service
         }
         private void Subscribe()
         {
-            List<FiveTickA> lstFiveTick = new List<FiveTickA>();
-            List<Watchlist> lstWatchlist = new List<Watchlist>();
-            foreach (var i in _stockCandidateDict)
-            {
-                FiveTickA fiveTickA = new FiveTickA();
-                fiveTickA.MarketNo = Convert.ToByte(i.Value.Market);
-                fiveTickA.StockCode = i.Value.StockCode;
-                lstFiveTick.Add(fiveTickA);
-                Watchlist watch = new Watchlist();
-                watch.IndexFlag = Convert.ToByte(7);    //填入訂閱索引值, 7: 成交價
-                watch.MarketNo = Convert.ToByte(i.Value.Market);      //填入查詢市場代碼
-                watch.StockCode = i.Value.StockCode;
-                lstWatchlist.Add(watch);
-            }
-            objYuantaOneAPI.SubscribeFiveTickA(lstFiveTick);
-            objYuantaOneAPI.SubscribeWatchlist(lstWatchlist);
+            //List<FiveTickA> lstFiveTick = new List<FiveTickA>();
+            //List<Watchlist> lstWatchlist = new List<Watchlist>();
+            //foreach (var i in _stockCandidateDict)
+            //{
+            //    FiveTickA fiveTickA = new FiveTickA();
+            //    fiveTickA.MarketNo = Convert.ToByte(i.Value.Market);
+            //    fiveTickA.StockCode = i.Value.StockCode;
+            //    lstFiveTick.Add(fiveTickA);
+            //    Watchlist watch = new Watchlist();
+            //    watch.IndexFlag = Convert.ToByte(7);    //填入訂閱索引值, 7: 成交價
+            //    watch.MarketNo = Convert.ToByte(i.Value.Market);      //填入查詢市場代碼
+            //    watch.StockCode = i.Value.StockCode;
+            //    lstWatchlist.Add(watch);
+            //}
+            //objYuantaOneAPI.SubscribeFiveTickA(lstFiveTick);
+            //objYuantaOneAPI.SubscribeWatchlist(lstWatchlist);
         }
     }
 }

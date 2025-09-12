@@ -39,13 +39,14 @@ namespace Core.Service
             List<StockCandidate> allStockInfoList = await GetStockCodeList();
             await SetIssuedShares(allStockInfoList);
             await SetExchangeReportFromSino(allStockInfoList);
-            if (!doesNeedUpdate(allStockInfoList)) return;
-            List<StockCandidate> candidateList = SelectCandidateByTech(allStockInfoList);
-            candidateList = await SelectCandidateByMainPower(candidateList);
-            Dictionary<string, StockCandidate> allStockInfoDict = allStockInfoList.ToDictionary(x => x.StockCode);
-            await UpdateCandidate(candidateList, allStockInfoDict);
-            await UpdateExRightsExDevidendDate();
+            List<StockCandidate> candidateList = SelectCandidateForShortByTech(allStockInfoList);
             await UpSertTechDataToDb(allStockInfoList);
+            //if (!doesNeedUpdate(allStockInfoList)) return;
+            //List<StockCandidate> candidateList = SelectCandidateByTech(allStockInfoList);
+            //candidateList = await SelectCandidateByMainPower(candidateList);
+            //Dictionary<string, StockCandidate> allStockInfoDict = allStockInfoList.ToDictionary(x => x.StockCode);
+            //await UpdateCandidate(candidateList, allStockInfoDict);
+            //await UpdateExRightsExDevidendDate();
             //List<StockCandidate> dailyExchangeReport = await GetDailyExchangeReportFromTwseAndTwotc();
             //await UpdateTrade(allStockInfoDict);
             //await UpdateCrazyCandidate(crazyCandidateList, allStockInfoDict);
@@ -61,7 +62,26 @@ namespace Core.Service
             List<StockCandidate> allStockInfoList = twseStockList.Concat(tpexStockList).ToList();
             return allStockInfoList;
         }
-
+        private async Task RemoveStockCanNotIntraday()
+        {
+            // 抓出上市可當沖股票
+            HttpResponseMessage twseIntradayResponse = await _httpClient.GetAsync("https://openapi.twse.com.tw/v1/exchangeReport/TWTB4U");
+            string twseIntradayResponseBody = await twseIntradayResponse.Content.ReadAsStringAsync();
+            List<TwseIntradayStockInfo> twseIntradayStockList = JsonConvert.DeserializeObject<List<TwseIntradayStockInfo>>(twseIntradayResponseBody);
+            // 抓出上市暫時先賣後買的股票
+            HttpResponseMessage twseSuspendedShortSellingResponse = await _httpClient.GetAsync("https://openapi.twse.com.tw/v1/exchangeReport/TWTBAU1");
+            string twseSuspendedShortSellingResponseBody = await twseSuspendedShortSellingResponse.Content.ReadAsStringAsync();
+            List<TwseSuspendedShortSellingStockInfo> twseSuspendedShortSellingStockList = JsonConvert.DeserializeObject<List<TwseSuspendedShortSellingStockInfo>>(twseSuspendedShortSellingResponseBody);
+            // 抓出上櫃可當沖股票
+            HttpResponseMessage twotcIntradayResponse = await _httpClient.GetAsync("https://www.tpex.org.tw/www/zh-tw/intraday/list");
+            string twotcIntradayResponseBody = await twotcIntradayResponse.Content.ReadAsStringAsync();
+            TwotcIntradayStockInfo twotcIntradayStockList = JsonConvert.DeserializeObject<TwotcIntradayStockInfo>(twotcIntradayResponseBody);
+            HashSet<string> twotcIntradayStockCodeHashSet = new HashSet<string>();
+            if (twotcIntradayStockList.Tables.Any())
+            {
+                twotcIntradayStockCodeHashSet = new HashSet<string>(twotcIntradayStockList.Tables.First().Data.Select(x => x[0].ToUpper()));
+            }
+        }
         private async Task<List<StockCandidate>> GetTwseStockCode()
         {
             _logger.Information("Get TWSE stock code started.");
@@ -74,11 +94,7 @@ namespace Core.Service
                     HttpResponseMessage response = await _httpClient.GetAsync("https://openapi.twse.com.tw/v1/opendata/t187ap03_L");
                     string responseBody = await response.Content.ReadAsStringAsync();
                     List<TwseStockInfo> stockInfoList = JsonConvert.DeserializeObject<List<TwseStockInfo>>(responseBody);
-                    HttpResponseMessage intradayResponse = await _httpClient.GetAsync("https://openapi.twse.com.tw/v1/exchangeReport/TWTB4U");
-                    string intradayResponseBody = await intradayResponse.Content.ReadAsStringAsync();
-                    List<TwseIntradayStockInfo> intradayStockInfoList = JsonConvert.DeserializeObject<List<TwseIntradayStockInfo>>(intradayResponseBody);
-                    HashSet<string> intradayStockCodeHashSet = new HashSet<string>(intradayStockInfoList.Select(x => x.Code.ToUpper()));
-                    stockList = stockInfoList.Where(x => intradayStockCodeHashSet.Contains(x.公司代號.ToUpper())).Select(x => new StockCandidate()
+                    stockList = stockInfoList.Select(x => new StockCandidate()
                     {
                         Market = enumMarketType.TWSE,
                         StockCode = x.公司代號.ToUpper(),
@@ -108,15 +124,7 @@ namespace Core.Service
                     HttpResponseMessage response = await _httpClient.GetAsync("https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O");
                     string responseBody = await response.Content.ReadAsStringAsync();
                     List<TwotcStockInfo> stockInfoList = JsonConvert.DeserializeObject<List<TwotcStockInfo>>(responseBody);
-                    HttpResponseMessage intradayResponse = await _httpClient.GetAsync("https://www.tpex.org.tw/www/zh-tw/intraday/list");
-                    string intradayResponseBody = await intradayResponse.Content.ReadAsStringAsync();
-                    TwotcIntradayStockInfo intradayStockInfoList = JsonConvert.DeserializeObject<TwotcIntradayStockInfo>(intradayResponseBody);
-                    HashSet<string> intradayStockCodeHashSet = new HashSet<string>();
-                    if (intradayStockInfoList.Tables.Any())
-                    {
-                        intradayStockCodeHashSet = new HashSet<string>(intradayStockInfoList.Tables.First().Data.Select(x => x[0].ToUpper()));
-                    }
-                    stockList = stockInfoList.Where(x => intradayStockCodeHashSet.Contains(x.SecuritiesCompanyCode.ToUpper())).Select(x => new StockCandidate()
+                    stockList = stockInfoList.Select(x => new StockCandidate()
                     {
                         Market = enumMarketType.TWOTC,
                         StockCode = x.SecuritiesCompanyCode.ToUpper(),
@@ -133,6 +141,18 @@ namespace Core.Service
             }
             _logger.Information("Get TWOTC stock code finished.");
             return stockList;
+        }
+        private List<StockCandidate> SelectCandidateForShortByTech(List<StockCandidate> allStockInfoList)
+        {
+            List<StockCandidate> candidateList = new List<StockCandidate>();
+            foreach (var i in allStockInfoList)
+            {
+                if (i.TechDataList.Count < 2) continue;
+                StockTechData today = i.TechDataList[0];
+                StockTechData yesterday = i.TechDataList[1];
+                decimal turnoverRate = (decimal)today.Volume * 1000 / i.IssuedShare;
+                if (today.Close / yesterday.Close > 1.095 && turnoverRate > 0.4m)
+            }
         }
         private async Task<List<StockCandidate>> SelectCandidateByMainPower(List<StockCandidate> candidateList)
         {
@@ -237,6 +257,7 @@ namespace Core.Service
             {
                 StockCode = x.StockCode,
                 CompanyName = x.CompanyName,
+                IssuedShare = x.IssuedShare,
                 TechData = JsonConvert.SerializeObject(x.TechDataList)
             }).ToList();
             await _candidateRepository.UpsertStockTech(stockTechList);
@@ -638,8 +659,30 @@ namespace Core.Service
             string twotcResponseBody = await twotcResponse.Content.ReadAsStringAsync();
             List<TwotcCompanyInfo> twotcCompanyInfoList = JsonConvert.DeserializeObject<List<TwotcCompanyInfo>>(twotcResponseBody);
             #endregion
-            Dictionary<string, long> stockCodeSharesDict = new Dictionary<string, long>();
-            
+            Dictionary<string, long> companyShareDict = new Dictionary<string, long>();
+            foreach (var i in twseCompanyInfoList)
+            {
+                string key = i.StockCode.ToUpper();
+                if (!companyShareDict.ContainsKey(key))
+                {
+                    companyShareDict.Add(key, i.IssuedShare);
+                }
+            }
+            foreach (var i in twotcCompanyInfoList)
+            {
+                string key = i.SecuritiesCompanyCode.ToUpper();
+                if (!companyShareDict.ContainsKey(key))
+                {
+                    companyShareDict.Add(key, i.IssuedShare);
+                }
+            }
+            foreach (var i in allStockInfoList)
+            {
+                if (companyShareDict.TryGetValue(i.StockCode, out long issuedShare))
+                {
+                    i.IssuedShare = issuedShare;
+                }
+            }   
         }
         //private async Task UpdateTrade(Dictionary<string, StockCandidate> allStockInfoDict)
         //{

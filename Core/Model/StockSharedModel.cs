@@ -20,5 +20,6 @@ namespace Core.Model
         public int PurchasedLot { get; set; }
         public decimal SumOfLast9Close { get; set; }
         public bool IsTradingStarted { get; set; }
+        public long IssuedShare { get; set; }
     }
 }

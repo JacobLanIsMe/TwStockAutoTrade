@@ -11,6 +11,7 @@ namespace Core.Model
     {
         public string StockCode { get; set; }
         public string CompanyName { get; set; } 
+        public long IssuedShare { get; set; }
         public string TechData { get; set; }
         public List<StockTechData> TechDataList
         {

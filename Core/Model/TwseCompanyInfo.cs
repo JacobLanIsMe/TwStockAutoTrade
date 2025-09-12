@@ -12,10 +12,10 @@ namespace Core.Model
         [JsonProperty("公司代號")]
         public string StockCode { get; set; }
         [JsonProperty("已發行普通股數或TDR原股發行股數")]
-        public string _IssuedShares { get; set; }
-        public long IssuedShares
+        public string _IssuedShare { get; set; }
+        public long IssuedShare
         {
-            get => long.TryParse(_IssuedShares, out long result) ? result : 0;
+            get => long.TryParse(_IssuedShare, out long result) ? result : 0;
         }
     }
 }
