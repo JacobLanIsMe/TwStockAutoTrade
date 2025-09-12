@@ -174,9 +174,11 @@
     <Compile Include="Model\StockTrade.cs" />
     <Compile Include="Model\StockTradeConfig.cs" />
     <Compile Include="Model\TaifexDailyMarketReport.cs" />
+    <Compile Include="Model\TwotcCompanyInfo.cs" />
     <Compile Include="Model\TwotcExRrightsExDividend.cs" />
     <Compile Include="Model\TwotcIntradayStockInfo.cs" />
     <Compile Include="Model\TwotcTechData.cs" />
+    <Compile Include="Model\TwseCompanyInfo.cs" />
     <Compile Include="Model\TwseExRrightsExDividend.cs" />
     <Compile Include="Model\TwseIntradayStockInfo.cs" />
     <Compile Include="Model\TwseTechData.cs" />

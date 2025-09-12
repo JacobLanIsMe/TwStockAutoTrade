@@ -37,6 +37,7 @@ namespace Core.Service
         public async Task SelectStock()
         {
             List<StockCandidate> allStockInfoList = await GetStockCodeList();
+            await SetIssuedShares(allStockInfoList);
             await SetExchangeReportFromSino(allStockInfoList);
             if (!doesNeedUpdate(allStockInfoList)) return;
             List<StockCandidate> candidateList = SelectCandidateByTech(allStockInfoList);
@@ -626,6 +627,19 @@ namespace Core.Service
         private string ConvertMarketFromYuantaToYahoo(enumMarketType enumMarketType)
         {
             return enumMarketType == enumMarketType.TWSE ? "TW" : "TWO";
+        }
+        private async Task SetIssuedShares(List<StockCandidate> allStockInfoList)
+        {
+            #region 抓上市櫃公司基本資料
+            HttpResponseMessage twseResponse = await _httpClient.GetAsync("https://openapi.twse.com.tw/v1/opendata/t187ap03_L");
+            string twseResponseBody = await twseResponse.Content.ReadAsStringAsync();
+            List<TwseCompanyInfo> twseCompanyInfoList = JsonConvert.DeserializeObject<List<TwseCompanyInfo>>(twseResponseBody);
+            HttpResponseMessage twotcResponse = await _httpClient.GetAsync("https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O");
+            string twotcResponseBody = await twotcResponse.Content.ReadAsStringAsync();
+            List<TwotcCompanyInfo> twotcCompanyInfoList = JsonConvert.DeserializeObject<List<TwotcCompanyInfo>>(twotcResponseBody);
+            #endregion
+            Dictionary<string, long> stockCodeSharesDict = new Dictionary<string, long>();
+            
         }
         //private async Task UpdateTrade(Dictionary<string, StockCandidate> allStockInfoDict)
         //{
