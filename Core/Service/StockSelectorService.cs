@@ -44,6 +44,7 @@ namespace Core.Service
             await SetExchangeReportFromSino(allStockInfoList);
             List<StockCandidate> candidateList = SelectCandidateForShortByTech(allStockInfoList);
             List<StockCandidate> filteredCandidateList = await RemoveStockCanNotIntraday(candidateList);
+            SetLimitUpPrice(filteredCandidateList);
             await SendCandidateForShortToDiscord(filteredCandidateList);
             await _candidateForShortRepository.DeleteActiveCandidate();
             await _candidateForShortRepository.Insert(filteredCandidateList);
@@ -59,7 +60,40 @@ namespace Core.Service
             //await UpdateCrazyCandidate(crazyCandidateList, allStockInfoDict);
             //List<StockCandidate> crazyCandidateList = SelectCrazyCandidate(allStockInfoList);
         }
+        private void SetLimitUpPrice(List<StockCandidate> candidateList)
+        {
+            foreach (var i in candidateList)
+            {
+                // 1. 計算理論上的 10% 漲停價
+                decimal theoreticalLimitUp = i.TechDataList.First().Close * 1.10m;
+                // 2.根據理論價格找到對應的升降單位，並向下取整，得到最終漲停價
+                decimal finalTickSize = GetTickSize(theoreticalLimitUp);
+                decimal limitUpPrice = Math.Floor(theoreticalLimitUp / finalTickSize) * finalTickSize;
+                // 3. 修正後的邏輯：
+                //    找到漲停價的前一個點位，並判斷該點位所屬的升降單位，
+                //    然後再進行減法運算。
+                //    我們用一個極小的數 (0.0001m) 來確保能跨越級距界線。
+                decimal previousTickSize = GetTickSize(limitUpPrice - 0.0001m);
+                decimal priceBeforeLimitUp = limitUpPrice - previousTickSize;
+                i.LimitUpPrice = limitUpPrice;
+                i.PriceBeforeLimitUp = priceBeforeLimitUp;
+            }
+        }
+        private decimal GetTickSize(decimal price)
+        {
+            if (price < 10m)
+                return 0.01m;
+            if (price < 50m)
+                return 0.05m;
+            if (price < 100m)
+                return 0.1m;
+            if (price < 500m)
+                return 0.5m;
+            if (price < 1000m)
+                return 1.0m;
 
+            return 5.0m;
+        }
         private async Task<List<StockCandidate>> GetStockCodeList()
         {
             var twseStockListTask = GetTwseStockCode();
@@ -496,7 +530,7 @@ namespace Core.Service
             message.AppendLine($"做空股票:");
             foreach (var i in candidateList)
             {
-                message.AppendLine($"{i.StockCode} {i.CompanyName}");
+                message.AppendLine($"{i.StockCode} {i.CompanyName}, 漲停價格: {i.LimitUpPrice}, 漲停前一檔價格: {i.PriceBeforeLimitUp}");
             }
             message.AppendLine($"總共 {candidateList.Count} 檔");
             await _discordService.SendMessage(message.ToString());

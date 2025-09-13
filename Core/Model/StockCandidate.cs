@@ -17,5 +17,7 @@ namespace Core.Model
         public DateTime SelectedDate { get; set; }
         public decimal EntryPoint { get; set; }
         public DateTime? ExRrightsExDividendDateTime { get; set; }
+        public decimal LimitUpPrice { get; set; }
+        public decimal PriceBeforeLimitUp { get;set; }
     }
 }
