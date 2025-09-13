@@ -1,5 +1,6 @@
 ﻿using Core.Enum;
 using Core.Model;
+using Core.Repository.Interface;
 using Core.Service.Interface;
 using Microsoft.Extensions.Configuration;
 using Serilog;
@@ -23,7 +24,10 @@ namespace Core.Service
         private readonly ILogger _logger;
         private readonly IYuantaService _yuantaService;
         private CancellationTokenSource _cts = new CancellationTokenSource();
-        public ShortStockService(IConfiguration config, ILogger logger, IYuantaService yuantaService) 
+        private readonly ICandidateForShortRepository _candidateForShortRepository;
+        private Dictionary<string, StockCandidate> _stockCandidateDict = new Dictionary<string, StockCandidate>(); // Key: StockCode
+        private readonly IDiscordService _discordService;
+        public ShortStockService(IConfiguration config, ILogger logger, IYuantaService yuantaService, ICandidateForShortRepository candidateForShortRepository, IDiscordService discordService) 
         {
             string environment = config.GetValue<string>("Environment").ToUpper();
             _enumEnvironmentMode = environment == "PROD" ? enumEnvironmentMode.PROD : enumEnvironmentMode.UAT;
@@ -32,11 +36,17 @@ namespace Core.Service
             _logger = logger;
             objYuantaOneAPI.OnResponse += new OnResponseEventHandler(objApi_OnResponse);
             _yuantaService = yuantaService;
+            _candidateForShortRepository = candidateForShortRepository;
+            _discordService = discordService;
         }
         public async Task Trade()
         {
             try
             {
+                List<StockCandidate> stockCandidateList = await _candidateForShortRepository.GetActiveCandidate();
+                await SendCandidateToDiscord(stockCandidateList);
+                if (!stockCandidateList.Any()) return;
+                _stockCandidateDict = stockCandidateList.ToDictionary(x => x.StockCode);
                 objYuantaOneAPI.Open(_enumEnvironmentMode);
                 await Task.Delay(-1, _cts.Token);
             }
@@ -95,7 +105,7 @@ namespace Core.Service
                             case "210.10.60.10":    //訂閱五檔報價
                                 string fivetickResult = _yuantaService.FunRealFivetick_Out((byte[])objValue);
                                 FiveTickHandler(fivetickResult, out string stockCode, out decimal level1AskPrice, out int level1AskSize);
-                                StockOrder(stockCode, level1AskPrice, level1AskSize);
+                                //StockOrder(stockCode, level1AskPrice, level1AskSize);
                                 break;
                             default:
                                 strResult = $"{strIndex},{objValue}";
@@ -213,14 +223,22 @@ namespace Core.Service
             //    }
             //}
         }
+        private void UnsubscribeWatchlist(enumMarketType enumMarketNo, string stockCode)
+        {
+            Watchlist watch = new Watchlist();
+            watch.IndexFlag = Convert.ToByte(7);    //填入定閱索引值, 7: 成交價
+            watch.MarketNo = Convert.ToByte(enumMarketNo);      //填入查詢市場代碼
+            watch.StockCode = stockCode;                     //填入查詢股票代碼
+            objYuantaOneAPI.UnsubscribeWatchlist(new List<Watchlist>() { watch });
+        }
         private void WatchListHandler(string strResult)
         {
-            //string[] watchListResult = strResult.Split(',');
-            //string stockCode = watchListResult[1];
-            //if (!decimal.TryParse(watchListResult[3], out decimal tradePrice)) return;
-            //if (!_stockCandidateDict.TryGetValue(stockCode, out StockCandidate candidate)) return;
-            //candidate.IsTradingStarted = true;
-            //UnsubscribeWatchlist(candidate.Market, candidate.StockCode);
+            string[] watchListResult = strResult.Split(',');
+            string stockCode = watchListResult[1];
+            if (!decimal.TryParse(watchListResult[3], out decimal tradePrice)) return;
+            if (!_stockCandidateDict.TryGetValue(stockCode, out StockCandidate candidate)) return;
+            candidate.IsTradingStarted = true;
+            UnsubscribeWatchlist(candidate.Market, candidate.StockCode);
         }
         private void FiveTickHandler(string strResult, out string stockCode, out decimal level1AskPrice, out int level1AskSize)
         {
@@ -239,22 +257,35 @@ namespace Core.Service
         }
         private void Subscribe()
         {
-            //List<FiveTickA> lstFiveTick = new List<FiveTickA>();
-            //List<Watchlist> lstWatchlist = new List<Watchlist>();
-            //foreach (var i in _stockCandidateDict)
-            //{
-            //    FiveTickA fiveTickA = new FiveTickA();
-            //    fiveTickA.MarketNo = Convert.ToByte(i.Value.Market);
-            //    fiveTickA.StockCode = i.Value.StockCode;
-            //    lstFiveTick.Add(fiveTickA);
-            //    Watchlist watch = new Watchlist();
-            //    watch.IndexFlag = Convert.ToByte(7);    //填入訂閱索引值, 7: 成交價
-            //    watch.MarketNo = Convert.ToByte(i.Value.Market);      //填入查詢市場代碼
-            //    watch.StockCode = i.Value.StockCode;
-            //    lstWatchlist.Add(watch);
-            //}
-            //objYuantaOneAPI.SubscribeFiveTickA(lstFiveTick);
-            //objYuantaOneAPI.SubscribeWatchlist(lstWatchlist);
+            List<FiveTickA> lstFiveTick = new List<FiveTickA>();
+            List<Watchlist> lstWatchlist = new List<Watchlist>();
+            foreach (var i in _stockCandidateDict)
+            {
+                FiveTickA fiveTickA = new FiveTickA();
+                fiveTickA.MarketNo = Convert.ToByte(i.Value.Market);
+                fiveTickA.StockCode = i.Value.StockCode;
+                lstFiveTick.Add(fiveTickA);
+                Watchlist watch = new Watchlist();
+                watch.IndexFlag = Convert.ToByte(7);    //填入訂閱索引值, 7: 成交價
+                watch.MarketNo = Convert.ToByte(i.Value.Market);      //填入查詢市場代碼
+                watch.StockCode = i.Value.StockCode;
+                lstWatchlist.Add(watch);
+            }
+            objYuantaOneAPI.SubscribeFiveTickA(lstFiveTick);
+            objYuantaOneAPI.SubscribeWatchlist(lstWatchlist);
+        }
+        private async Task SendCandidateToDiscord(List<StockCandidate> stockCandidateList)
+        {
+            string message = "Trader started.\n";
+            message += $"Candidate for short count: {stockCandidateList.Count}\n";
+            if (stockCandidateList.Any())
+            {
+                foreach (var i in stockCandidateList)
+                {
+                    message += $"{i.StockCode} {i.CompanyName} 漲停價格: {i.LimitUpPrice}, 漲停前一檔價格: {i.PriceBeforeLimitUp}\n";
+                }
+            }
+            await _discordService.SendMessage(message);
         }
     }
 }

@@ -1,4 +1,6 @@
-﻿using Core.Service;
+﻿using Core.Repository;
+using Core.Repository.Interface;
+using Core.Service;
 using Core.Service.Interface;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -26,6 +28,8 @@ namespace ShortStock
                 .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
                 .Build())
                 .AddSingleton<ILogger>(Log.Logger)
+                .AddSingleton<ICandidateForShortRepository, CandidateForShortRepository>()
+                .AddSingleton<IShortStockService, ShortStockService>()
                 .AddSingleton<IYuantaService, YuantaService>()
                 .AddSingleton<IDiscordService, DiscordService>()
                 .BuildServiceProvider();

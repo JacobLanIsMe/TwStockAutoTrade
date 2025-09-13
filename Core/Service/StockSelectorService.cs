@@ -64,8 +64,9 @@ namespace Core.Service
         {
             foreach (var i in candidateList)
             {
+                StockTechData today = i.TechDataList.First();
                 // 1. 計算理論上的 10% 漲停價
-                decimal theoreticalLimitUp = i.TechDataList.First().Close * 1.10m;
+                decimal theoreticalLimitUp = today.Close * 1.10m;
                 // 2.根據理論價格找到對應的升降單位，並向下取整，得到最終漲停價
                 decimal finalTickSize = GetTickSize(theoreticalLimitUp);
                 decimal limitUpPrice = Math.Floor(theoreticalLimitUp / finalTickSize) * finalTickSize;
@@ -77,6 +78,7 @@ namespace Core.Service
                 decimal priceBeforeLimitUp = limitUpPrice - previousTickSize;
                 i.LimitUpPrice = limitUpPrice;
                 i.PriceBeforeLimitUp = priceBeforeLimitUp;
+                i.ClosePrice = today.Close;
             }
         }
         private decimal GetTickSize(decimal price)
@@ -530,7 +532,7 @@ namespace Core.Service
             message.AppendLine($"做空股票:");
             foreach (var i in candidateList)
             {
-                message.AppendLine($"{i.StockCode} {i.CompanyName}, 漲停價格: {i.LimitUpPrice}, 漲停前一檔價格: {i.PriceBeforeLimitUp}");
+                message.AppendLine($"{i.StockCode} {i.CompanyName}, 今天收盤價: {i.ClosePrice}, 漲停價格: {i.LimitUpPrice}, 漲停前一檔價格: {i.PriceBeforeLimitUp}");
             }
             message.AppendLine($"總共 {candidateList.Count} 檔");
             await _discordService.SendMessage(message.ToString());

@@ -34,12 +34,24 @@ namespace Core.Repository
         public async Task Insert(List<StockCandidate> candidateList)
         {
             _logger.Information($"Insert candidate started.");
-            string sqlCommand = @"INSERT INTO [dbo].[CandidateForShort] (StockCode, CompanyName, SelectedDate, LimitUpPrice, PriceBeforeLimitUp) VALUES (@StockCode, @CompanyName, @SelectedDate, @LimitUpPrice, @PriceBeforeLimitUp)";
+            string sqlCommand = @"INSERT INTO [dbo].[CandidateForShort] (StockCode, CompanyName, SelectedDate, LimitUpPrice, PriceBeforeLimitUp, ClosePrice) VALUES (@StockCode, @CompanyName, @SelectedDate, @LimitUpPrice, @PriceBeforeLimitUp, @ClosePrice)";
             using (SqlConnection sqlConnection = new SqlConnection(_dbConnectionString))
             {
                 await sqlConnection.ExecuteAsync(sqlCommand, candidateList);
             }
             _logger.Information($"Insert candidate completed.");
+        }
+        public async Task<List<StockCandidate>> GetActiveCandidate()
+        {
+            _logger.Information($"Get active candidate started.");
+            string sqlCommand = @"SELECT * FROM [dbo].[CandidateForShort] WHERE IsDeleted = 0";
+            IEnumerable<StockCandidate> candidateList;
+            using (SqlConnection sqlConnection = new SqlConnection(_dbConnectionString))
+            {
+                candidateList = await sqlConnection.QueryAsync<StockCandidate>(sqlCommand);
+            }
+            _logger.Information($"Get active candidate completed.");
+            return candidateList.ToList();
         }
     }
 }

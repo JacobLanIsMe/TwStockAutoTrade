@@ -11,5 +11,6 @@ namespace Core.Repository.Interface
     {
         Task DeleteActiveCandidate();
         Task Insert(List<StockCandidate> candidateList);
+        Task<List<StockCandidate>> GetActiveCandidate();
     }
 }
