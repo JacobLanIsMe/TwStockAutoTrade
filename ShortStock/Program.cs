@@ -32,6 +32,7 @@ namespace ShortStock
                 .AddSingleton<IShortStockService, ShortStockService>()
                 .AddSingleton<IYuantaService, YuantaService>()
                 .AddSingleton<IDiscordService, DiscordService>()
+                .AddSingleton<IDateTimeService, DateTimeService>()
                 .BuildServiceProvider();
             var shortStockService = serviceProvider.GetRequiredService<IShortStockService>();
             try

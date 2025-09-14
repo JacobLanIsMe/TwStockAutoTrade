@@ -27,7 +27,11 @@ namespace Core.Service
         private readonly ICandidateForShortRepository _candidateForShortRepository;
         private Dictionary<string, StockCandidate> _stockCandidateDict = new Dictionary<string, StockCandidate>(); // Key: StockCode
         private readonly IDiscordService _discordService;
-        public ShortStockService(IConfiguration config, ILogger logger, IYuantaService yuantaService, ICandidateForShortRepository candidateForShortRepository, IDiscordService discordService) 
+        private readonly int _maxAmountPerStock;
+        private readonly string _todayDate;
+        private readonly DateTime _exitTime;
+        private readonly IDateTimeService _dateTimeService;
+        public ShortStockService(IConfiguration config, ILogger logger, IYuantaService yuantaService, ICandidateForShortRepository candidateForShortRepository, IDiscordService discordService, IDateTimeService dateTimeService) 
         {
             string environment = config.GetValue<string>("Environment").ToUpper();
             _enumEnvironmentMode = environment == "PROD" ? enumEnvironmentMode.PROD : enumEnvironmentMode.UAT;
@@ -38,6 +42,11 @@ namespace Core.Service
             _yuantaService = yuantaService;
             _candidateForShortRepository = candidateForShortRepository;
             _discordService = discordService;
+            _maxAmountPerStock = config.GetValue<int>("MaxAmountPerStock");
+            _dateTimeService = dateTimeService;
+            DateTime now = _dateTimeService.GetTaiwanTime();
+            _todayDate = now.ToString("yyyy/MM/dd");
+            _exitTime = now.Date.AddHours(13).AddMinutes(24);
         }
         public async Task Trade()
         {
@@ -105,7 +114,7 @@ namespace Core.Service
                             case "210.10.60.10":    //訂閱五檔報價
                                 string fivetickResult = _yuantaService.FunRealFivetick_Out((byte[])objValue);
                                 FiveTickHandler(fivetickResult, out string stockCode, out decimal level1AskPrice, out int level1AskSize);
-                                //StockOrder(stockCode, level1AskPrice, level1AskSize);
+                                StockOrder(stockCode, level1AskPrice, level1AskSize);
                                 break;
                             default:
                                 strResult = $"{strIndex},{objValue}";
@@ -129,99 +138,120 @@ namespace Core.Service
         }
         private void StockOrder(string stockCode, decimal level1AskPrice, int level1AskSize)
         {
-            //if (string.IsNullOrEmpty(stockCode) || level1AskPrice == 0 || level1AskSize == 0 || _trade != null) return;
-            //if (!_stockCandidateDict.TryGetValue(stockCode, out StockCandidate candidate) || !candidate.IsTradingStarted) return;
-            //if (candidate.PurchasedLot > 0)
-            //{
-            //    if ((level1AskPrice / candidate.EntryPoint >= 1.1m) ||
-            //        (level1AskPrice < candidate.StopLossPoint))
-            //    {
-            //        StockOrder stockOrder = SetDefaultStockOrder();
-            //        stockOrder.StkCode = stockCode;
-            //        stockOrder.PriceFlag = "M";
-            //        stockOrder.BuySell = EBuySellType.S.ToString();
-            //        stockOrder.Time_in_force = "0";
-            //        stockOrder.Price = Convert.ToInt64(0);
-            //        stockOrder.OrderQty = candidate.PurchasedLot;
-            //        ProcessStockOrder(stockOrder);
-            //    }
-            //}
-            //else
-            //{
-            //    if (candidate.ExRrightsExDividendDateTime.HasValue && _now.AddDays(8).Date > candidate.ExRrightsExDividendDateTime.Value.Date) return;
-            //    int orderQty = (int)(tradeConfig.MaxAmountPerStock / (candidate.EntryPoint * 1000));
-            //    if (level1AskPrice == candidate.EntryPoint &&
-            //        orderQty > 0 &&
-            //        level1AskSize >= orderQty &&
-            //        tradeConfig.MaxStockCount > _stockCandidateDict.Count(x => x.Value.PurchasedLot > 0))
-            //    {
-            //        StockOrder stockOrder = SetDefaultStockOrder();
-            //        stockOrder.StkCode = stockCode;   // 股票代號
-            //        stockOrder.PriceFlag = "";   // 價格種類, H:漲停 -:平盤  L:跌停 " ":限價  M:市價單
-            //        stockOrder.BuySell = EBuySellType.B.ToString();   // 買賣別, B:買  S:賣
-            //        stockOrder.Time_in_force = "4";  // 委託效期, 0:ROD 3:IOC  4:FOK
-            //        stockOrder.Price = Convert.ToInt64(level1AskPrice * 10000);  // 委託價格
-            //        stockOrder.OrderQty = Convert.ToInt64(orderQty);    // 委託單位數
-            //        ProcessStockOrder(stockOrder);
-            //    }
-            //}
+            if (string.IsNullOrEmpty(stockCode) || level1AskPrice == 0 || level1AskSize == 0) return;
+            if (!_stockCandidateDict.TryGetValue(stockCode, out StockCandidate candidate) || !candidate.IsTradingStarted) return;
+            if (candidate.PurchasedLot > 0)
+            {
+                if (level1AskPrice == candidate.PriceBeforeLimitUp || level1AskPrice == candidate.LimitUpPrice)
+                {
+                    StockOrder stockOrder = SetDefaultStockOrder();
+                    stockOrder.StkCode = stockCode;
+                    stockOrder.PriceFlag = "M";
+                    stockOrder.BuySell = EBuySellType.B.ToString();
+                    stockOrder.Time_in_force = "0";
+                    stockOrder.Price = Convert.ToInt64(0);
+                    stockOrder.OrderQty = candidate.PurchasedLot;
+                    ProcessStockOrder(stockOrder);
+                }
+            }
+            else
+            {
+                int orderQty = (int)(_maxAmountPerStock / (level1AskPrice * 1000));
+                orderQty = orderQty == 0 ? 1 : orderQty;
+                if (!candidate.IsOrdered &&
+                    level1AskPrice < candidate.PriceBeforeLimitUp &&
+                    level1AskPrice > candidate.ClosePrice*0.93m)
+                {
+                    candidate.IsOrdered = true;
+                    candidate.OrderedLot = orderQty;
+                    StockOrder stockOrder = SetDefaultStockOrder();
+                    stockOrder.StkCode = stockCode;   // 股票代號
+                    stockOrder.PriceFlag = "M";   // 價格種類, H:漲停 -:平盤  L:跌停 " ":限價  M:市價單
+                    stockOrder.BuySell = EBuySellType.S.ToString();   // 買賣別, B:買  S:賣
+                    stockOrder.Time_in_force = "0";  // 委託效期, 0:ROD 3:IOC  4:FOK
+                    stockOrder.Price = Convert.ToInt64(0);  // 委託價格
+                    stockOrder.OrderQty = Convert.ToInt64(orderQty);    // 委託單位數
+                    ProcessStockOrder(stockOrder);
+                }
+            }
+        }
+        private StockOrder SetDefaultStockOrder()
+        {
+            StockOrder stockOrder = new StockOrder();
+            stockOrder.Identify = Convert.ToInt32(001); // 識別碼
+            stockOrder.Account = _stockAccount; // 現貨帳號
+            stockOrder.APCode = Convert.ToInt16(0);    // 交易市場別, 0:一般 2:盤後零股 4:盤中零股 7:盤後
+            stockOrder.TradeKind = Convert.ToInt16(0);  // 交易性質, 0:委託單 3:改量 4:取消 7:改價
+            stockOrder.OrderType = "9";   // 委託種類, 0:現貨 3:融資 4:融券 5借券(賣出) 6:借券(賣出) 9:現股當沖
+            stockOrder.TradeDate = _todayDate;
+            stockOrder.SellerNo = Convert.ToInt16(0); // Convert.ToInt16(this.txtSellerNo.Text.Trim());    // 營業員代碼
+            stockOrder.OrderNo = ""; // this.txtOrderNo.Text.Trim();   // 委託書編號
+            stockOrder.BasketNo = ""; // this.txtBasketNo.Text.Trim(); // BasketNo
+            return stockOrder;
+        }
+        private void ProcessStockOrder(StockOrder stockOrder)
+        {
+            bool bResult = objYuantaOneAPI.SendStockOrder(_stockAccount, new List<StockOrder>() { stockOrder });
+            if (bResult)
+            {
+
+            }
+            else
+            {
+                _logger.Error($"SendStockOrder error. Stock code: {stockOrder.StkCode}, Buy or Sell: {stockOrder.BuySell}");
+            }
         }
         private void StockOrderHandler(string strResult)
         {
-            //string[] resultArray = strResult.Split(',');
-            //if (string.IsNullOrEmpty(resultArray[4].Trim()) ||
-            //    !DateTime.TryParse(resultArray[5], out DateTime orderTime) ||
-            //    !string.IsNullOrEmpty(resultArray[resultArray.Length - 2].Trim()) ||
-            //    !string.IsNullOrEmpty(resultArray[resultArray.Length - 1].Trim()))
-            //{
-            //    _logger.Error($"SendStockOrder error. Error message: {resultArray[resultArray.Length - 2]}, {resultArray[resultArray.Length - 1]}");
-            //    _trade = null;
-            //}
+            string[] resultArray = strResult.Split(',');
+            if (string.IsNullOrEmpty(resultArray[4].Trim()) ||
+                !DateTime.TryParse(resultArray[5], out DateTime orderTime) ||
+                !string.IsNullOrEmpty(resultArray[resultArray.Length - 2].Trim()) ||
+                !string.IsNullOrEmpty(resultArray[resultArray.Length - 1].Trim()))
+            {
+                _logger.Error($"SendStockOrder error. Error message: {resultArray[resultArray.Length - 2]}, {resultArray[resultArray.Length - 1]}");
+            }
         }
         private void RealReportHandler(string strResult)
         {
-            //string[] reportArray = strResult.Split(',');
-            //if (!int.TryParse(reportArray[1].Split(':')[1].Trim(), out int reportType))
-            //{
-            //    _logger.Error("Report type error");
-            //}
-            //if (!int.TryParse(reportArray[13].Trim(), out int purchasedShare))
-            //{
-            //    _logger.Error("PurchasedLot error");
-            //}
-            //purchasedShare = purchasedShare / 1000;
-            //string orderNo = reportArray[2].Trim().Substring(4); // 委託單號
-            //string stockCode = reportArray[4].Trim();
-            //if (reportType == 50)
-            //{
-            //    string errorCode = reportArray[reportArray.Length - 1].Trim();
-            //    if (errorCode == "13048" || errorCode == "19348")
-            //    {
-            //        _trade = null;
-            //        _logger.Warning($"委託失效，FOK 委託未能成功, Stock code: {stockCode}");
-            //    }
-            //}
-            //else if (reportType == 51)
-            //{
-            //    if (stockCode != _trade.StockCode) return;
-            //    if (!_stockCandidateDict.TryGetValue(stockCode, out StockCandidate candidate)) return;
-            //    if (reportArray[9].Trim() == EBuySellType.B.ToString())
-            //    {
-            //        candidate.PurchasedLot = candidate.PurchasedLot + purchasedShare;
-            //        if (candidate.PurchasedLot == _trade.OrderedLot)
-            //        {
-            //            _trade = null;
-            //        }
-            //    }
-            //    else
-            //    {
-            //        candidate.PurchasedLot = candidate.PurchasedLot - purchasedShare;
-            //        if (candidate.PurchasedLot == 0)
-            //        {
-            //            _trade = null;
-            //        }
-            //    }
-            //}
+            string[] reportArray = strResult.Split(',');
+            if (!int.TryParse(reportArray[1].Split(':')[1].Trim(), out int reportType))
+            {
+                _logger.Error("Report type error");
+            }
+            if (!int.TryParse(reportArray[13].Trim(), out int purchasedShare))
+            {
+                _logger.Error("PurchasedLot error");
+            }
+            purchasedShare = purchasedShare / 1000;
+            string orderNo = reportArray[2].Trim().Substring(4); // 委託單號
+            string stockCode = reportArray[4].Trim();
+            if (reportType == 50)
+            {
+                string errorCode = reportArray[reportArray.Length - 1].Trim();
+                if (errorCode == "13048" || errorCode == "19348")
+                {
+                    _logger.Warning($"委託失效，FOK 委託未能成功, Stock code: {stockCode}");
+                }
+            }
+            else if (reportType == 51)
+            {
+                if (!_stockCandidateDict.TryGetValue(stockCode, out StockCandidate candidate)) return;
+                if (reportArray[9].Trim() == EBuySellType.B.ToString())
+                {
+                    candidate.PurchasedLot -= purchasedShare;
+                    _logger.Information($"StockCode: {stockCode}, 成功買回 {purchasedShare} 張股票 ");
+                    if (candidate.PurchasedLot == 0)
+                    {
+                        _logger.Information($"StockCode: {stockCode}, 已全部買回");
+                    }
+                }
+                else
+                {
+                    candidate.PurchasedLot += purchasedShare;
+                    _logger.Information($"StockCode: {stockCode}, 成功賣出 {purchasedShare} 張股票 ");
+                }
+            }
         }
         private void UnsubscribeWatchlist(enumMarketType enumMarketNo, string stockCode)
         {
