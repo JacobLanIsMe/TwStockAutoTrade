@@ -44,7 +44,7 @@ namespace Core.Service
             await SetExchangeReportFromSino(allStockInfoList);
             List<StockCandidate> candidateList = SelectCandidateForShortByTech(allStockInfoList);
             List<StockCandidate> filteredCandidateList = await RemoveStockCanNotIntraday(candidateList);
-            SetLimitUpPrice(filteredCandidateList);
+            SetLimitUpAndLimitDownPrice(filteredCandidateList);
             await SendCandidateForShortToDiscord(filteredCandidateList);
             await _candidateForShortRepository.DeleteActiveCandidate();
             await _candidateForShortRepository.Insert(filteredCandidateList);
@@ -60,7 +60,7 @@ namespace Core.Service
             //await UpdateCrazyCandidate(crazyCandidateList, allStockInfoDict);
             //List<StockCandidate> crazyCandidateList = SelectCrazyCandidate(allStockInfoList);
         }
-        private void SetLimitUpPrice(List<StockCandidate> candidateList)
+        private void SetLimitUpAndLimitDownPrice(List<StockCandidate> candidateList)
         {
             foreach (var i in candidateList)
             {
@@ -68,17 +68,24 @@ namespace Core.Service
                 // 1. 計算理論上的 10% 漲停價
                 decimal theoreticalLimitUp = today.Close * 1.10m;
                 // 2.根據理論價格找到對應的升降單位，並向下取整，得到最終漲停價
-                decimal finalTickSize = GetTickSize(theoreticalLimitUp);
-                decimal limitUpPrice = Math.Floor(theoreticalLimitUp / finalTickSize) * finalTickSize;
+                decimal finalTickSizeForLimitUp = GetTickSize(theoreticalLimitUp);
+                decimal limitUpPrice = Math.Floor(theoreticalLimitUp / finalTickSizeForLimitUp) * finalTickSizeForLimitUp;
                 // 3. 修正後的邏輯：
                 //    找到漲停價的前一個點位，並判斷該點位所屬的升降單位，
                 //    然後再進行減法運算。
                 //    我們用一個極小的數 (0.0001m) 來確保能跨越級距界線。
                 decimal previousTickSize = GetTickSize(limitUpPrice - 0.0001m);
                 decimal priceBeforeLimitUp = limitUpPrice - previousTickSize;
+                // 1. 計算理論上的 10% 跌停價
+                decimal theoreticalLimitDown = today.Close * 0.90m;
+                // 2. 根據理論價格找到對應的升降單位，並向上取整，得到最終跌停價
+                decimal finalTickSizeForLimitDown = GetTickSize(theoreticalLimitDown);
+                decimal limitDownPrice = Math.Ceiling(theoreticalLimitDown / finalTickSizeForLimitDown) * finalTickSizeForLimitDown;
+
                 i.LimitUpPrice = limitUpPrice;
                 i.PriceBeforeLimitUp = priceBeforeLimitUp;
                 i.ClosePrice = today.Close;
+                i.LimitDownPrice = limitDownPrice;
             }
         }
         private decimal GetTickSize(decimal price)
@@ -532,7 +539,7 @@ namespace Core.Service
             message.AppendLine($"做空股票:");
             foreach (var i in candidateList)
             {
-                message.AppendLine($"{i.StockCode} {i.CompanyName}, 今天收盤價: {i.ClosePrice}, 漲停價格: {i.LimitUpPrice}, 漲停前一檔價格: {i.PriceBeforeLimitUp}");
+                message.AppendLine($"{i.StockCode} {i.CompanyName}, 今天收盤價: {i.ClosePrice}, 漲停價格: {i.LimitUpPrice}, 漲停前一檔價格: {i.PriceBeforeLimitUp}, 跌停價格: {i.LimitDownPrice}");
             }
             message.AppendLine($"總共 {candidateList.Count} 檔");
             await _discordService.SendMessage(message.ToString());
