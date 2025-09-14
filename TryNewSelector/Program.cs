@@ -354,7 +354,7 @@ namespace TryNewSelector
                         {
                             bool isWin = today.Open > today.Close ? true : false;
                             decimal returnRate = isWin ? today.Open / today.Close : today.Close / today.Open;
-                            string result = $"{i.StockCode},{today.Date.ToShortDateString()},{returnRate.ToString("0.00")},{yesterday.Volume},{issuedShares},{turnoverRate.ToString("0.00")},{today.Open},{today.Close}";
+                            string result = $"{i.StockCode},{today.Date.ToShortDateString()},{returnRate.ToString("0.00")},{yesterday.Volume},{issuedShares},{turnoverRate.ToString("0.00")},{today.Open},{today.Close},{(yesterday.Close/yesterday.Open).ToString("0.00")}";
                             if (isWin)
                             {
                                 lock (_lockObject)
@@ -383,7 +383,7 @@ namespace TryNewSelector
 
             using (var writer = new StreamWriter(filePath, false, Encoding.UTF8))
             {
-                writer.WriteLine("StockCode,BuyDate,ReturnRate,漲停當日成交量,發行股數,漲停當日周轉率,開盤價,收盤價,Result");
+                writer.WriteLine("StockCode,BuyDate,ReturnRate,漲停當日成交量,發行股數,漲停當日周轉率,開盤價,收盤價,紅K大小,Result");
                 foreach (var i in results)
                 {
                     writer.WriteLine(i);
