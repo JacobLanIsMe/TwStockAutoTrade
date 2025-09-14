@@ -142,7 +142,10 @@ namespace Core.Service
             if (!_stockCandidateDict.TryGetValue(stockCode, out StockCandidate candidate) || !candidate.IsTradingStarted) return;
             if (candidate.PurchasedLot > 0)
             {
-                if (level1AskPrice == candidate.PriceBeforeLimitUp || level1AskPrice == candidate.LimitUpPrice)
+                if (level1AskPrice == candidate.PriceBeforeLimitUp || 
+                    level1AskPrice == candidate.LimitUpPrice ||
+                    level1AskPrice == candidate.LimitDownPrice ||
+                    _dateTimeService.GetTaiwanTime() > _exitTime)
                 {
                     StockOrder stockOrder = SetDefaultStockOrder();
                     stockOrder.StkCode = stockCode;
@@ -162,8 +165,6 @@ namespace Core.Service
                     level1AskPrice < candidate.PriceBeforeLimitUp &&
                     level1AskPrice > candidate.ClosePrice*0.93m)
                 {
-                    candidate.IsOrdered = true;
-                    candidate.OrderedLot = orderQty;
                     StockOrder stockOrder = SetDefaultStockOrder();
                     stockOrder.StkCode = stockCode;   // 股票代號
                     stockOrder.PriceFlag = "M";   // 價格種類, H:漲停 -:平盤  L:跌停 " ":限價  M:市價單
@@ -173,6 +174,8 @@ namespace Core.Service
                     stockOrder.OrderQty = Convert.ToInt64(orderQty);    // 委託單位數
                     ProcessStockOrder(stockOrder);
                 }
+                candidate.IsOrdered = true;
+                candidate.OrderedLot = orderQty;
             }
         }
         private StockOrder SetDefaultStockOrder()
