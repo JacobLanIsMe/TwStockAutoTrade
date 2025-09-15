@@ -39,6 +39,7 @@ namespace Core.Service
         }
         public async Task SelectStock()
         {
+            await _candidateForShortRepository.DeleteActiveCandidate();
             List<StockCandidate> allStockInfoList = await GetStockCodeList();
             await SetIssuedShares(allStockInfoList);
             await SetExchangeReportFromSino(allStockInfoList);
@@ -46,7 +47,6 @@ namespace Core.Service
             List<StockCandidate> filteredCandidateList = await RemoveStockCanNotIntraday(candidateList);
             SetLimitUpAndLimitDownPrice(filteredCandidateList);
             await SendCandidateForShortToDiscord(filteredCandidateList);
-            await _candidateForShortRepository.DeleteActiveCandidate();
             await _candidateForShortRepository.Insert(filteredCandidateList);
             await UpSertTechDataToDb(allStockInfoList);
             //if (!doesNeedUpdate(allStockInfoList)) return;

@@ -324,7 +324,7 @@ namespace Core.Service
             {
                 foreach (var i in stockCandidateList)
                 {
-                    message += $"{i.StockCode} {i.CompanyName} 漲停價格: {i.LimitUpPrice}, 漲停前一檔價格: {i.PriceBeforeLimitUp}\n";
+                    message += $"{i.StockCode} {i.CompanyName}, 昨天收盤價: {i.ClosePrice}, 漲停價格: {i.LimitUpPrice}, 漲停前一檔價格: {i.PriceBeforeLimitUp}, 跌停價格: {i.LimitDownPrice}\n";
                 }
             }
             await _discordService.SendMessage(message);
