@@ -45,7 +45,6 @@ namespace Core.Service
             await SetExchangeReportFromSino(allStockInfoList);
             List<StockCandidate> candidateList = SelectCandidateForShortByTech(allStockInfoList);
             List<StockCandidate> filteredCandidateList = await RemoveStockCanNotIntraday(candidateList);
-            SetLimitUpAndLimitDownPrice(filteredCandidateList);
             await SendCandidateForShortToDiscord(filteredCandidateList);
             await _candidateForShortRepository.Insert(filteredCandidateList);
             await UpSertTechDataToDb(allStockInfoList);
@@ -60,33 +59,30 @@ namespace Core.Service
             //await UpdateCrazyCandidate(crazyCandidateList, allStockInfoDict);
             //List<StockCandidate> crazyCandidateList = SelectCrazyCandidate(allStockInfoList);
         }
-        private void SetLimitUpAndLimitDownPrice(List<StockCandidate> candidateList)
+        private StockLimitPrice GetLimitPrice(decimal price)
         {
-            foreach (var i in candidateList)
+            // 1. 計算理論上的 10% 漲停價
+            decimal theoreticalLimitUp = price * 1.10m;
+            // 2.根據理論價格找到對應的升降單位，並向下取整，得到最終漲停價
+            decimal finalTickSizeForLimitUp = GetTickSize(theoreticalLimitUp);
+            decimal limitUpPrice = Math.Floor(theoreticalLimitUp / finalTickSizeForLimitUp) * finalTickSizeForLimitUp;
+            // 3. 修正後的邏輯：
+            //    找到漲停價的前一個點位，並判斷該點位所屬的升降單位，
+            //    然後再進行減法運算。
+            //    我們用一個極小的數 (0.0001m) 來確保能跨越級距界線。
+            decimal previousTickSize = GetTickSize(limitUpPrice - 0.0001m);
+            decimal priceBeforeLimitUp = limitUpPrice - previousTickSize;
+            // 1. 計算理論上的 10% 跌停價
+            decimal theoreticalLimitDown = price * 0.90m;
+            // 2. 根據理論價格找到對應的升降單位，並向上取整，得到最終跌停價
+            decimal finalTickSizeForLimitDown = GetTickSize(theoreticalLimitDown);
+            decimal limitDownPrice = Math.Ceiling(theoreticalLimitDown / finalTickSizeForLimitDown) * finalTickSizeForLimitDown;
+            return new StockLimitPrice()
             {
-                StockTechData today = i.TechDataList.First();
-                // 1. 計算理論上的 10% 漲停價
-                decimal theoreticalLimitUp = today.Close * 1.10m;
-                // 2.根據理論價格找到對應的升降單位，並向下取整，得到最終漲停價
-                decimal finalTickSizeForLimitUp = GetTickSize(theoreticalLimitUp);
-                decimal limitUpPrice = Math.Floor(theoreticalLimitUp / finalTickSizeForLimitUp) * finalTickSizeForLimitUp;
-                // 3. 修正後的邏輯：
-                //    找到漲停價的前一個點位，並判斷該點位所屬的升降單位，
-                //    然後再進行減法運算。
-                //    我們用一個極小的數 (0.0001m) 來確保能跨越級距界線。
-                decimal previousTickSize = GetTickSize(limitUpPrice - 0.0001m);
-                decimal priceBeforeLimitUp = limitUpPrice - previousTickSize;
-                // 1. 計算理論上的 10% 跌停價
-                decimal theoreticalLimitDown = today.Close * 0.90m;
-                // 2. 根據理論價格找到對應的升降單位，並向上取整，得到最終跌停價
-                decimal finalTickSizeForLimitDown = GetTickSize(theoreticalLimitDown);
-                decimal limitDownPrice = Math.Ceiling(theoreticalLimitDown / finalTickSizeForLimitDown) * finalTickSizeForLimitDown;
-
-                i.LimitUpPrice = limitUpPrice;
-                i.PriceBeforeLimitUp = priceBeforeLimitUp;
-                i.ClosePrice = today.Close;
-                i.LimitDownPrice = limitDownPrice;
-            }
+                LimitUpPrice = limitUpPrice,
+                PriceBeforeLimitUp = priceBeforeLimitUp,
+                LimitDownPrice = limitDownPrice
+            };
         }
         private decimal GetTickSize(decimal price)
         {
@@ -126,7 +122,7 @@ namespace Core.Service
             HttpResponseMessage twotcIntradayResponse = await _httpClient.GetAsync("https://www.tpex.org.tw/www/zh-tw/intraday/list");
             string twotcIntradayResponseBody = await twotcIntradayResponse.Content.ReadAsStringAsync();
             TwotcIntradayStockInfo twotcIntradayStockList = JsonConvert.DeserializeObject<TwotcIntradayStockInfo>(twotcIntradayResponseBody);
-            
+
             // 抓出上櫃暫時先賣後買的股票
             HttpResponseMessage twotcSuspendedShortSellingResponse = await _httpClient.GetAsync("https://www.tpex.org.tw/openapi/v1/tpex_intraday_trading_pre");
             string twotcSuspendedShortSellingResponseBody = await twotcSuspendedShortSellingResponse.Content.ReadAsStringAsync();
@@ -181,7 +177,7 @@ namespace Core.Service
                     }).ToList();
                     break;
                 }
-                catch(Exception ex)
+                catch (Exception ex)
                 {
                     _logger.Error($"Error occurs while retrieving TWSE stock code. Error message: {ex.Message}");
                     if (retryCount >= _maxRetryCount) throw;
@@ -229,10 +225,16 @@ namespace Core.Service
                 if (i.TechDataList.Count < 2) continue;
                 StockTechData today = i.TechDataList[0];
                 StockTechData yesterday = i.TechDataList[1];
+                StockLimitPrice todayLimitPrice = GetLimitPrice(yesterday.Close);
                 decimal turnoverRate = (decimal)today.Volume * 1000 / i.IssuedShare;
-                if (today.Close / yesterday.Close > 1.095m && today.High == today.Close && today.Open < today.Close && turnoverRate > 0.4m)
+                if (today.Close == todayLimitPrice.LimitUpPrice && today.Open < today.Close && turnoverRate > 0.4m)
                 {
-                    i.SelectedDate = _dateTimeService.GetTaiwanTime();
+                    StockLimitPrice tomorrowLimitPrice = GetLimitPrice(today.Close);
+                    i.SelectedDate = today.Date;
+                    i.ClosePrice = today.Close;
+                    i.LimitUpPrice = tomorrowLimitPrice.LimitUpPrice;
+                    i.PriceBeforeLimitUp = tomorrowLimitPrice.PriceBeforeLimitUp;
+                    i.LimitDownPrice = tomorrowLimitPrice.LimitDownPrice;
                     candidateList.Add(i);
                 }
             }
@@ -484,12 +486,12 @@ namespace Core.Service
                         candidateToDeleteList.Add(i);
                         continue;
                     }
-                    if (!hasLatestStockInfo || stock.TechDataList.Count < 9) 
+                    if (!hasLatestStockInfo || stock.TechDataList.Count < 9)
                     {
                         errorCandidateList.Add(i);
                         _logger.Error($"Can not retrieve last 9 tech data of stock code {i.StockCode}.");
                         continue;
-                    } 
+                    }
                     decimal todayClose = stock.TechDataList.First().Close;
                     if (todayClose < i.GapUpLow || (todayClose > i.EntryPoint && todayClose < stock.TechDataList.Take(20).Average(x => x.Close)))
                     {
@@ -776,7 +778,7 @@ namespace Core.Service
                 {
                     i.IssuedShare = issuedShare;
                 }
-            }   
+            }
         }
         //private async Task UpdateTrade(Dictionary<string, StockCandidate> allStockInfoDict)
         //{

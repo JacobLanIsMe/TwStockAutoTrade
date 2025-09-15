@@ -167,6 +167,7 @@
     <Compile Include="Model\FutureTechData.cs" />
     <Compile Include="Model\FutureTrade.cs" />
     <Compile Include="Model\KBarRecord.cs" />
+    <Compile Include="Model\StockLimitPrice.cs" />
     <Compile Include="Model\StockMainPower.cs" />
     <Compile Include="Model\StockSharedModel.cs" />
     <Compile Include="Model\StockTech.cs" />
