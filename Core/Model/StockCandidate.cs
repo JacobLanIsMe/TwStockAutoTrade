@@ -21,5 +21,6 @@ namespace Core.Model
         public decimal PriceBeforeLimitUp { get;set; }
         public decimal ClosePrice { get; set; }
         public decimal LimitDownPrice { get; set; }
+
     }
 }

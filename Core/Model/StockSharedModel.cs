@@ -23,5 +23,6 @@ namespace Core.Model
         public long IssuedShare { get; set; }
         public bool IsOrdered { get; set; }
         public int OrderedLot { get; set; }
+        public bool IsProcessing { get; set; }
     }
 }

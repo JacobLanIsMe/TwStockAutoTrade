@@ -20,7 +20,7 @@ namespace ShortStock
         {
             Log.Logger = new LoggerConfiguration()
             .WriteTo.Console()
-            .WriteTo.File("C://Logs/StockTrader/log-.log", rollingInterval: RollingInterval.Day, retainedFileCountLimit: 250)
+            .WriteTo.File("C://Logs/ShortStock/log-.log", rollingInterval: RollingInterval.Day, retainedFileCountLimit: 250)
             .CreateLogger();
             var serviceProvider = new ServiceCollection()
                 .AddSingleton<IConfiguration>(new ConfigurationBuilder()
