@@ -349,8 +349,11 @@ namespace TryNewSelector
                         StockTechData yesterday = i.TechDataList[j + 1]; // 紅 K 漲停
                         StockTechData theDayBeforeYesterday = i.TechDataList[j + 2];
 
+                        decimal theoreticalLimitUp = theDayBeforeYesterday.Close * 1.10m;
+                        decimal finalTickSize = GetTickSize(theoreticalLimitUp);
+                        decimal limitUpPrice = Math.Floor(theoreticalLimitUp / finalTickSize) * finalTickSize;
                         decimal turnoverRate = (decimal)yesterday.Volume * 1000 / issuedShares;
-                        if (yesterday.Close / theDayBeforeYesterday.Close > 1.095m && yesterday.High == yesterday.Close && yesterday.Open < yesterday.Close && turnoverRate > 0.4m)
+                        if (yesterday.Close == limitUpPrice && yesterday.Open < yesterday.Close && turnoverRate > 0.4m)
                         {
                             bool isWin = today.Open > today.Close ? true : false;
                             decimal returnRate = isWin ? today.Open / today.Close : today.Close / today.Open;
@@ -391,9 +394,21 @@ namespace TryNewSelector
             }
             Console.WriteLine($"Win: {winCount}, Lose: {loseCount}, Total Return Rate: {totalReturnRate.ToString("0.00")}%");
 
+        }
+        private static decimal GetTickSize(decimal price)
+        {
+            if (price < 10m)
+                return 0.01m;
+            if (price < 50m)
+                return 0.05m;
+            if (price < 100m)
+                return 0.1m;
+            if (price < 500m)
+                return 0.5m;
+            if (price < 1000m)
+                return 1.0m;
 
-
-
+            return 5.0m;
         }
     }
 }
