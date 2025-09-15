@@ -148,7 +148,9 @@ namespace Core.Service
                 if (candidate.IsProcessing) return;
                 if (level1AskPrice == candidate.PriceBeforeLimitUp || 
                     level1AskPrice == candidate.LimitUpPrice ||
+                    level1AskPrice == 0 ||
                     level1AskPrice == candidate.LimitDownPrice ||
+                    level1AskPrice == -999999999 ||
                     _dateTimeService.GetTaiwanTime() > _exitTime)
                 {
                     StockOrder stockOrder = SetDefaultStockOrder();
