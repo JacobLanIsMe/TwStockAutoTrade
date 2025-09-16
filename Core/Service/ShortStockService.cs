@@ -57,7 +57,11 @@ namespace Core.Service
             {
                 List<StockCandidate> stockCandidateList = await _candidateForShortRepository.GetActiveCandidate();
                 await SendCandidateToDiscord(stockCandidateList);
-                if (!stockCandidateList.Any()) return;
+                if (!stockCandidateList.Any())
+                {
+                    _logger.Information("No candidate for short.");
+                    return;
+                }
                 _stockCandidateDict = stockCandidateList.ToDictionary(x => x.StockCode);
                 objYuantaOneAPI.Open(_enumEnvironmentMode);
                 await Task.Delay(-1, _cts.Token);
