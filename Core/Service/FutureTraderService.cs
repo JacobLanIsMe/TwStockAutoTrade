@@ -9,6 +9,7 @@ using Serilog;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Net.Http;
 using System.Runtime.InteropServices;
@@ -415,15 +416,46 @@ namespace Core.Service
             HttpResponseMessage response = await httpClient.GetAsync("https://openapi.taifex.com.tw/v1/DailyMarketReportFut");
             string responseBody = await response.Content.ReadAsStringAsync();
             List<TaifexDailyMarketReport> futureReportList = JsonConvert.DeserializeObject<List<TaifexDailyMarketReport>>(responseBody);
-            var prevFutureReport = futureReportList.Where(x => x.Contract == _targetFutureConfig.FutureCode.Substring(0, 3) && x.TradingSession == "一般" && x.ContractMonth == _settlementMonth).FirstOrDefault();
-            if (prevFutureReport == null || 
-                !int.TryParse(prevFutureReport.Volume, out _prevVolume) || 
-                _prevVolume == 0 || 
-                !int.TryParse(prevFutureReport.SettlementPrice, out _settlementPrice) || 
-                _settlementPrice == 0)
+            futureReportList = futureReportList.Where(x => x.Contract == _targetFutureConfig.FutureCode.Substring(0, 3) && x.TradingSession == "一般").ToList();
+            if (!futureReportList.Any())
             {
                 await _discordService.SendMessage("取得前一個交易日的交易資訊出現錯誤");
                 _logger.Error("取得前一個交易日的交易資訊出現錯誤");
+                _cts.Cancel();
+            }
+            // 求出 SettlementPrice
+            var settlementPriceReference = futureReportList.Where(x => x.ContractMonth == _settlementMonth).FirstOrDefault();
+            if (settlementPriceReference == null)
+            {
+                await _discordService.SendMessage("無法取得當月契約的參考價格");
+                _logger.Error("無法取得當月契約的參考價格");
+                _cts.Cancel();
+            }
+            if (!int.TryParse(settlementPriceReference.SettlementPrice, out _settlementPrice) || _settlementPrice == 0)
+            {
+                await _discordService.SendMessage("無法取得 SettlementPrice");
+                _logger.Error("無法取得 SettlementPrice");
+                _cts.Cancel();
+            }
+            // 求出 previous volume
+            if (!DateTime.TryParseExact(futureReportList.First().Date, "yyyyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime prevTradingDay))
+            {
+                await _discordService.SendMessage("取得前一個交易日的日期出現錯誤");
+                _logger.Error("取得前一個交易日的日期出現錯誤");
+                _cts.Cancel();
+            }
+            string volumeRefSettelmentMonth = GetSettlementMonth(prevTradingDay);
+            var prevVolumeReference = futureReportList.Where(x => x.ContractMonth == volumeRefSettelmentMonth).FirstOrDefault();
+            if (prevVolumeReference == null)
+            {
+                await _discordService.SendMessage("無法取得前一個交易日的成交量參考");
+                _logger.Error("無法取得前一個交易日的成交量參考");
+                _cts.Cancel();
+            }
+            if (!int.TryParse(prevVolumeReference.Volume, out _prevVolume) || _prevVolume == 0)
+            {
+                await _discordService.SendMessage("無法取得前一個交易日的成交量");
+                _logger.Error("無法取得前一個交易日的成交量");
                 _cts.Cancel();
             }
         }
