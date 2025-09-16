@@ -425,16 +425,10 @@ namespace Core.Service
             }
             // 求出 SettlementPrice
             var settlementPriceReference = futureReportList.Where(x => x.ContractMonth == _settlementMonth).FirstOrDefault();
-            if (settlementPriceReference == null)
+            if (settlementPriceReference == null || !int.TryParse(settlementPriceReference.SettlementPrice, out _settlementPrice) || _settlementPrice == 0)
             {
-                await _discordService.SendMessage("無法取得當月契約的參考價格");
-                _logger.Error("無法取得當月契約的參考價格");
-                _cts.Cancel();
-            }
-            if (!int.TryParse(settlementPriceReference.SettlementPrice, out _settlementPrice) || _settlementPrice == 0)
-            {
-                await _discordService.SendMessage("無法取得 SettlementPrice");
-                _logger.Error("無法取得 SettlementPrice");
+                await _discordService.SendMessage("無法取得當天的參考價格");
+                _logger.Error("無法取得當天的參考價格");
                 _cts.Cancel();
             }
             // 求出 previous volume
@@ -446,13 +440,7 @@ namespace Core.Service
             }
             string volumeRefSettelmentMonth = GetSettlementMonth(prevTradingDay);
             var prevVolumeReference = futureReportList.Where(x => x.ContractMonth == volumeRefSettelmentMonth).FirstOrDefault();
-            if (prevVolumeReference == null)
-            {
-                await _discordService.SendMessage("無法取得前一個交易日的成交量參考");
-                _logger.Error("無法取得前一個交易日的成交量參考");
-                _cts.Cancel();
-            }
-            if (!int.TryParse(prevVolumeReference.Volume, out _prevVolume) || _prevVolume == 0)
+            if (prevVolumeReference == null || !int.TryParse(prevVolumeReference.Volume, out _prevVolume) || _prevVolume == 0)
             {
                 await _discordService.SendMessage("無法取得前一個交易日的成交量");
                 _logger.Error("無法取得前一個交易日的成交量");
