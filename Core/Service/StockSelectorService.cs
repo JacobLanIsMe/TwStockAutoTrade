@@ -45,6 +45,9 @@ namespace Core.Service
             await SetExchangeReportFromSino(allStockInfoList);
             List<StockCandidate> candidateList = SelectCandidateForShortByTech(allStockInfoList);
             List<StockCandidate> filteredCandidateList = await RemoveStockCanNotIntraday(candidateList);
+            filteredCandidateList = filteredCandidateList.Any() ? 
+                                    new List<StockCandidate>() { filteredCandidateList.OrderByDescending(x => x.TurnoverRate).First() } :
+                                    filteredCandidateList;
             await SendCandidateForShortToDiscord(filteredCandidateList);
             await _candidateForShortRepository.Insert(filteredCandidateList);
             await UpSertTechDataToDb(allStockInfoList);
@@ -223,11 +226,12 @@ namespace Core.Service
             foreach (var i in allStockInfoList)
             {
                 if (i.TechDataList.Count < 2) continue;
+                if (i.IssuedShare == 0) continue;
                 StockTechData today = i.TechDataList[0];
                 StockTechData yesterday = i.TechDataList[1];
                 StockLimitPrice todayLimitPrice = GetLimitPrice(yesterday.Close);
                 decimal turnoverRate = (decimal)today.Volume * 1000 / i.IssuedShare;
-                if (today.Close == todayLimitPrice.LimitUpPrice && today.Open < today.Close && turnoverRate > 0.4m)
+                if (today.Close == todayLimitPrice.LimitUpPrice && today.Open < today.Close && turnoverRate > 0.3m)
                 {
                     StockLimitPrice tomorrowLimitPrice = GetLimitPrice(today.Close);
                     i.SelectedDate = today.Date;
@@ -235,6 +239,7 @@ namespace Core.Service
                     i.LimitUpPrice = tomorrowLimitPrice.LimitUpPrice;
                     i.PriceBeforeLimitUp = tomorrowLimitPrice.PriceBeforeLimitUp;
                     i.LimitDownPrice = tomorrowLimitPrice.LimitDownPrice;
+                    i.TurnoverRate = turnoverRate;
                     candidateList.Add(i);
                 }
             }
