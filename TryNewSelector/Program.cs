@@ -88,6 +88,7 @@ namespace TryNewSelector
                     {
                         return;
                     }
+                    i.TechDataList = i.TechDataList.OrderBy(x => x.Date).ToList();
                     #region 大量上漲後，隔天小漲，再隔天開盤做多。
                     //for (var j = 0; j < techDataListCount - 3; j++)
                     //{
@@ -343,46 +344,105 @@ namespace TryNewSelector
                     //}
                     #endregion
                     #region 紅 K 漲停後隔天做空
-                    for (int j = 0; j < i.TechDataList.Count - 2; j++)
-                    {
-                        StockTechData today = i.TechDataList[j];
-                        StockTechData yesterday = i.TechDataList[j + 1]; // 紅 K 漲停
-                        StockTechData theDayBeforeYesterday = i.TechDataList[j + 2];
+                    //for (int j = 0; j < i.TechDataList.Count - 2; j++)
+                    //{
+                    //    StockTechData today = i.TechDataList[j];
+                    //    StockTechData yesterday = i.TechDataList[j + 1]; // 紅 K 漲停
+                    //    StockTechData theDayBeforeYesterday = i.TechDataList[j + 2];
 
-                        decimal theoreticalLimitUp = theDayBeforeYesterday.Close * 1.10m;
-                        decimal finalTickSize = GetTickSize(theoreticalLimitUp);
-                        decimal limitUpPrice = Math.Floor(theoreticalLimitUp / finalTickSize) * finalTickSize;
-                        decimal turnoverRate = (decimal)yesterday.Volume * 1000 / issuedShares;
-                        if (yesterday.Close == limitUpPrice && yesterday.Open < yesterday.Close && turnoverRate > 0.4m)
-                        {
-                            bool isWin = today.Open > today.Close ? true : false;
-                            decimal returnRate = isWin ? today.Open / today.Close : today.Close / today.Open;
-                            string result = $"{i.StockCode},{today.Date.ToShortDateString()},{returnRate.ToString("0.00")},{yesterday.Volume},{issuedShares},{turnoverRate.ToString("0.00")},{today.Open},{today.Close},{(yesterday.Close/yesterday.Open).ToString("0.00")}";
-                            if (isWin)
-                            {
-                                lock (_lockObject)
-                                {
-                                    totalReturnRate += returnRate;
-                                    winCount++;
-                                }
-                                result += ",WIN";
-                            }
-                            else
-                            {
-                                lock (_lockObject)
-                                {
-                                    totalReturnRate -= returnRate;
-                                    loseCount++;
-                                }
-                                result += ",LOSE";
-                            }
-                            Console.WriteLine(result);
-                            results.Add(result);
-                        }
-                    }
+                    //    decimal theoreticalLimitUp = theDayBeforeYesterday.Close * 1.10m;
+                    //    decimal finalTickSize = GetTickSize(theoreticalLimitUp);
+                    //    decimal limitUpPrice = Math.Floor(theoreticalLimitUp / finalTickSize) * finalTickSize;
+                    //    decimal turnoverRate = (decimal)yesterday.Volume * 1000 / issuedShares;
+                    //    if (yesterday.Close == limitUpPrice && yesterday.Open < yesterday.Close && turnoverRate > 0.4m)
+                    //    {
+                    //        bool isWin = today.Open > today.Close ? true : false;
+                    //        decimal returnRate = isWin ? today.Open / today.Close : today.Close / today.Open;
+                    //        string result = $"{i.StockCode},{today.Date.ToShortDateString()},{returnRate.ToString("0.00")},{yesterday.Volume},{issuedShares},{turnoverRate.ToString("0.00")},{today.Open},{today.Close},{(yesterday.Close/yesterday.Open).ToString("0.00")}";
+                    //        if (isWin)
+                    //        {
+                    //            lock (_lockObject)
+                    //            {
+                    //                totalReturnRate += returnRate;
+                    //                winCount++;
+                    //            }
+                    //            result += ",WIN";
+                    //        }
+                    //        else
+                    //        {
+                    //            lock (_lockObject)
+                    //            {
+                    //                totalReturnRate -= returnRate;
+                    //                loseCount++;
+                    //            }
+                    //            result += ",LOSE";
+                    //        }
+                    //        Console.WriteLine(result);
+                    //        results.Add(result);
+                    //    }
+                    //}
                     #endregion
                 }));
             await Task.WhenAll(tasks);
+
+            List<DateTime> tradingDayList = stockTech.First().TechDataList.Select(x => x.Date).ToList();
+            for (int i = 2; i < tradingDayList.Count; i++)
+            {
+                DateTime todayDate = tradingDayList[i];
+                DateTime yesterdayDate = tradingDayList[i - 1];
+                DateTime theDayBeforeYesterdayDate = tradingDayList[i - 2];
+                List<(string, int)> limitUpList = new List<(string, int)>();
+                foreach (var j in stockTech)
+                {
+                    var today = j.TechDataList.FirstOrDefault(x => x.Date == todayDate);
+                    var yesterday = j.TechDataList.FirstOrDefault(x => x.Date == yesterdayDate);
+                    var theDayBeforeYesterday = j.TechDataList.FirstOrDefault(x => x.Date == theDayBeforeYesterdayDate);
+                    if (today == null || yesterday == null || theDayBeforeYesterday == null) continue;
+                    decimal theoreticalLimitUp = theDayBeforeYesterday.Close * 1.10m;
+                    decimal finalTickSize = GetTickSize(theoreticalLimitUp);
+                    decimal limitUpPrice = Math.Floor(theoreticalLimitUp / finalTickSize) * finalTickSize;
+                    if (yesterday.Close == limitUpPrice)
+                    {
+                        limitUpList.Add((j.StockCode, yesterday.Volume));
+                    }
+                }
+                List<(string, decimal)> turnoverRateList = new List<(string, decimal)>();
+                foreach (var j in limitUpList)
+                {
+                    if (companyShareDict.TryGetValue(j.Item1, out long issuedShares))
+                    {
+
+                        turnoverRateList.Add((j.Item1, (decimal)j.Item2 * 1000 / issuedShares));
+                    }
+                }
+                var highestTurnoverRateStock = turnoverRateList.Where(x => x.Item2 > 0.3m).OrderByDescending(x => x.Item2).FirstOrDefault();
+                if (!string.IsNullOrEmpty(highestTurnoverRateStock.Item1))
+                {
+                    StockTech stock = stockTech.First(x => x.StockCode == highestTurnoverRateStock.Item1);
+
+                    var today = stock.TechDataList.First(x => x.Date == todayDate);
+                    var yesterday = stock.TechDataList.First(x => x.Date == yesterdayDate);
+                    var theDayBeforeYesterday = stock.TechDataList.First(x => x.Date == theDayBeforeYesterdayDate);
+                    decimal returnRate = 0;
+                    if (today.Close < today.Open)
+                    {
+                        returnRate = today.Open / today.Close;
+                        totalReturnRate += returnRate;
+                        winCount++;
+                    }
+                    else
+                    {
+                        returnRate = today.Close / today.Open;
+                        totalReturnRate -= returnRate;
+                        loseCount++;
+                    }
+                    companyShareDict.TryGetValue(stock.StockCode, out long issuedShares);
+                    string result = $"{stock.StockCode},{today.Date.ToShortDateString()},{returnRate.ToString("0.00")},{yesterday.Volume},{issuedShares},{highestTurnoverRateStock.Item2.ToString("0.00")},{today.Open},{today.Close},{(yesterday.Close / yesterday.Open).ToString("0.00")}";
+                    result += today.Close < today.Open ? ",WIN" : ",LOSE";
+                    results.Add(result);
+                }
+            }
+
 
             using (var writer = new StreamWriter(filePath, false, Encoding.UTF8))
             {
