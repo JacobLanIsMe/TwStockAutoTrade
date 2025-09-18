@@ -424,7 +424,17 @@ namespace TryNewSelector
                     var yesterday = stock.TechDataList.First(x => x.Date == yesterdayDate);
                     var theDayBeforeYesterday = stock.TechDataList.First(x => x.Date == theDayBeforeYesterdayDate);
                     decimal returnRate = 0;
-                    if (today.Close < today.Open)
+                    decimal theoreticalLimitUp = yesterday.Close * 1.10m;
+                    decimal finalTickSize = GetTickSize(theoreticalLimitUp);
+                    decimal limitUpPrice = Math.Floor(theoreticalLimitUp / finalTickSize) * finalTickSize;
+                    if (today.High == limitUpPrice)
+                    {
+                        returnRate = today.High / today.Open;
+                        totalReturnRate -= returnRate;
+                        loseCount++;
+                        Console.WriteLine($"StockCode: {stock.StockCode}, Buy Date: {today.Date.ToShortDateString()}, Sell Date: {today.Date.ToShortDateString()}, LOSE, {returnRate.ToString("0.00")}%");
+                    }
+                    else if (today.Close < today.Open)
                     {
                         returnRate = today.Open / today.Close;
                         totalReturnRate += returnRate;
