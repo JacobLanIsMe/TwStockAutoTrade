@@ -68,6 +68,7 @@ namespace TryNewSelector
             }
             int winCount = 0;
             int loseCount = 0;
+            int reachLimitUpCount = 0;
             decimal totalReturnRate = 0;
             object _lockObject = new object();
             string filePath = "C:\\Users\\Administrator\\Downloads\\result.csv";
@@ -354,12 +355,29 @@ namespace TryNewSelector
                     //    decimal finalTickSize = GetTickSize(theoreticalLimitUp);
                     //    decimal limitUpPrice = Math.Floor(theoreticalLimitUp / finalTickSize) * finalTickSize;
                     //    decimal turnoverRate = (decimal)yesterday.Volume * 1000 / issuedShares;
-                    //    if (yesterday.Close == limitUpPrice && yesterday.Open < yesterday.Close && turnoverRate > 0.4m)
+                    //    if (yesterday.Close == limitUpPrice && yesterday.Open < yesterday.Close && turnoverRate > 0.2m)
                     //    {
+                    //        decimal todayTheoreticalLimitUp = yesterday.Close * 1.10m;
+                    //        decimal todayFinalTickSize = GetTickSize(todayTheoreticalLimitUp);
+                    //        decimal todayLimitUpPrice = Math.Floor(todayTheoreticalLimitUp / todayFinalTickSize) * todayFinalTickSize;
+                    //        decimal previousTickSize = GetTickSize(todayLimitUpPrice - 0.0001m);
+                    //        decimal todayPriceBeforeLimitUp = todayLimitUpPrice - previousTickSize;
                     //        bool isWin = today.Open > today.Close ? true : false;
                     //        decimal returnRate = isWin ? today.Open / today.Close : today.Close / today.Open;
-                    //        string result = $"{i.StockCode},{today.Date.ToShortDateString()},{returnRate.ToString("0.00")},{yesterday.Volume},{issuedShares},{turnoverRate.ToString("0.00")},{today.Open},{today.Close},{(yesterday.Close/yesterday.Open).ToString("0.00")}";
-                    //        if (isWin)
+                    //        string result = $"{i.StockCode},{today.Date.ToShortDateString()},{returnRate.ToString("0.00")},{yesterday.Volume},{issuedShares},{turnoverRate.ToString("0.00")},{today.Open},{today.Close},{(yesterday.Close / yesterday.Open).ToString("0.00")}";
+                    //        if (today.High >= todayPriceBeforeLimitUp)
+                    //        {
+                    //            returnRate = today.High / today.Open;
+                    //            lock (_lockObject)
+                    //            {
+                    //                totalReturnRate -= returnRate;
+                    //                loseCount++;
+                    //            }
+                    //            result += ",LOSE";
+                    //            reachLimitUpCount++;
+                    //            Console.WriteLine($"StockCode: {i.StockCode}, Buy Date: {today.Date.ToShortDateString()}, ReachLimitUp");
+                    //        }
+                    //        else if (isWin)
                     //        {
                     //            lock (_lockObject)
                     //            {
@@ -384,7 +402,7 @@ namespace TryNewSelector
                     #endregion
                 }));
             await Task.WhenAll(tasks);
-
+            #region 每天從漲停股選出周轉率最高的一檔，且周轉率大於 20%，隔天做空,若高點碰到漲停前一檔停損
             List<DateTime> tradingDayList = stockTech.First().TechDataList.Select(x => x.Date).ToList();
             for (int i = 2; i < tradingDayList.Count; i++)
             {
@@ -415,7 +433,7 @@ namespace TryNewSelector
                         turnoverRateList.Add((j.Item1, (decimal)j.Item2 * 1000 / issuedShares));
                     }
                 }
-                var highestTurnoverRateStock = turnoverRateList.Where(x => x.Item2 > 0.3m).OrderByDescending(x => x.Item2).FirstOrDefault();
+                var highestTurnoverRateStock = turnoverRateList.Where(x => x.Item2 > 0.2m).OrderByDescending(x => x.Item2).FirstOrDefault();
                 if (!string.IsNullOrEmpty(highestTurnoverRateStock.Item1))
                 {
                     StockTech stock = stockTech.First(x => x.StockCode == highestTurnoverRateStock.Item1);
@@ -427,18 +445,31 @@ namespace TryNewSelector
                     decimal theoreticalLimitUp = yesterday.Close * 1.10m;
                     decimal finalTickSize = GetTickSize(theoreticalLimitUp);
                     decimal limitUpPrice = Math.Floor(theoreticalLimitUp / finalTickSize) * finalTickSize;
-                    if (today.High == limitUpPrice)
+                    decimal previousTickSize = GetTickSize(limitUpPrice - 0.0001m);
+                    decimal priceBeforeLimitUp = limitUpPrice - previousTickSize;
+                    bool isWin = false;
+                    if (today.High >= priceBeforeLimitUp)
                     {
                         returnRate = today.High / today.Open;
                         totalReturnRate -= returnRate;
                         loseCount++;
+                        reachLimitUpCount++;
                         Console.WriteLine($"StockCode: {stock.StockCode}, Buy Date: {today.Date.ToShortDateString()}, Sell Date: {today.Date.ToShortDateString()}, LOSE, {returnRate.ToString("0.00")}%");
                     }
                     else if (today.Close < today.Open)
                     {
                         returnRate = today.Open / today.Close;
-                        totalReturnRate += returnRate;
-                        winCount++;
+                        if (returnRate < 1.015m)
+                        {
+                            loseCount++;
+                        }
+                        else
+                        {
+                            totalReturnRate += returnRate;
+                            winCount++;
+                            isWin = true;
+                        }
+                            
                     }
                     else
                     {
@@ -448,11 +479,11 @@ namespace TryNewSelector
                     }
                     companyShareDict.TryGetValue(stock.StockCode, out long issuedShares);
                     string result = $"{stock.StockCode},{today.Date.ToShortDateString()},{returnRate.ToString("0.00")},{yesterday.Volume},{issuedShares},{highestTurnoverRateStock.Item2.ToString("0.00")},{today.Open},{today.Close},{(yesterday.Close / yesterday.Open).ToString("0.00")}";
-                    result += today.Close < today.Open ? ",WIN" : ",LOSE";
+                    result += isWin ? ",WIN" : ",LOSE";
                     results.Add(result);
                 }
             }
-
+            #endregion
 
             using (var writer = new StreamWriter(filePath, false, Encoding.UTF8))
             {
@@ -462,7 +493,7 @@ namespace TryNewSelector
                     writer.WriteLine(i);
                 }
             }
-            Console.WriteLine($"Win: {winCount}, Lose: {loseCount}, Total Return Rate: {totalReturnRate.ToString("0.00")}%");
+            Console.WriteLine($"Win: {winCount}, Lose: {loseCount}, Total Return Rate: {totalReturnRate.ToString("0.00")}%, ReachLimitUpCount: {reachLimitUpCount}");
 
         }
         private static decimal GetTickSize(decimal price)
