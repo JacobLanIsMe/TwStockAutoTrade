@@ -231,7 +231,7 @@ namespace Core.Service
                 StockTechData yesterday = i.TechDataList[1];
                 StockLimitPrice todayLimitPrice = GetLimitPrice(yesterday.Close);
                 decimal turnoverRate = (decimal)today.Volume * 1000 / i.IssuedShare;
-                if (today.Close == todayLimitPrice.LimitUpPrice && today.Open < today.Close && turnoverRate > 0.3m)
+                if (today.Close == todayLimitPrice.LimitUpPrice && today.Open < today.Close && turnoverRate > 0.2m)
                 {
                     StockLimitPrice tomorrowLimitPrice = GetLimitPrice(today.Close);
                     i.SelectedDate = today.Date;
