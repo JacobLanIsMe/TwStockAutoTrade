@@ -14,7 +14,7 @@ namespace FutureTrader
 {
     class Program
     {
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
             Log.Logger = new LoggerConfiguration()
             .WriteTo.Console()
@@ -32,6 +32,7 @@ namespace FutureTrader
                 .AddSingleton<IDiscordService, DiscordService>()
                 .BuildServiceProvider();
             var futureTraderService = serviceProvider.GetRequiredService<IFutureTraderService>();
+            var discordService = serviceProvider.GetRequiredService<IDiscordService>();
             try
             {
                 Task.Run(async () => await futureTraderService.Trade()).Wait();
@@ -39,6 +40,10 @@ namespace FutureTrader
             catch (Exception ex)
             {
                 Log.Error(ex.ToString());
+            }
+            finally
+            {
+                await discordService.SendMessage("FutureTrader has terminated.");
             }
         }
     }
