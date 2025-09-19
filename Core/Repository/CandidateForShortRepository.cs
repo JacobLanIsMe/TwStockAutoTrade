@@ -34,7 +34,7 @@ namespace Core.Repository
         public async Task Insert(List<StockCandidate> candidateList)
         {
             _logger.Information($"Insert candidate started.");
-            string sqlCommand = @"INSERT INTO [dbo].[CandidateForShort] (StockCode, CompanyName, SelectedDate, LimitUpPrice, PriceBeforeLimitUp, ClosePrice, LimitDownPrice) VALUES (@StockCode, @CompanyName, @SelectedDate, @LimitUpPrice, @PriceBeforeLimitUp, @ClosePrice, @LimitDownPrice)";
+            string sqlCommand = @"INSERT INTO [dbo].[CandidateForShort] (StockCode, CompanyName, SelectedDate, LimitUpPrice, PriceBeforeLimitUp, ClosePrice, LimitDownPrice, Market) VALUES (@StockCode, @CompanyName, @SelectedDate, @LimitUpPrice, @PriceBeforeLimitUp, @ClosePrice, @LimitDownPrice, @Market)";
             using (SqlConnection sqlConnection = new SqlConnection(_dbConnectionString))
             {
                 await sqlConnection.ExecuteAsync(sqlCommand, candidateList);
