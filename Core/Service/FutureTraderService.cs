@@ -32,7 +32,7 @@ namespace Core.Service
         private FutureTrade _trade = new FutureTrade();
         private bool _hasFutureOrder = false;
         private bool _isTradingStarted = false;
-        private readonly TimeSpan _beforeMarketClose5Minute;
+        private readonly TimeSpan _beforeMarketClose2Minute;
         private readonly TimeSpan _lastEntryTime;
         private readonly ILogger _logger;
         private readonly string _futureAccount;
@@ -62,7 +62,7 @@ namespace Core.Service
             DateTime now = _dateTimeService.GetTaiwanTime();
             _settlementMonth = GetSettlementMonth(now);
             _targetFutureConfig = SetFutureConfig(config);
-            _beforeMarketClose5Minute = _targetFutureConfig.MarketCloseTime.Subtract(TimeSpan.FromMinutes(5));
+            _beforeMarketClose2Minute = _targetFutureConfig.MarketCloseTime.Subtract(TimeSpan.FromMinutes(2));
             _lastEntryTime = _targetFutureConfig.MarketCloseTime.Subtract(TimeSpan.FromHours(1));
             _discordService = discordService;
         }
@@ -70,7 +70,7 @@ namespace Core.Service
         {
             try
             {
-                _cts.CancelAfter(TimeSpan.FromHours(8));
+                _cts.CancelAfter(TimeSpan.FromHours(6));
                 await SetPrevVolume();
                 await PrintConfig();
                 //await SetLimitPoint();
@@ -215,7 +215,7 @@ namespace Core.Service
             if (!_isTradingStarted || tickTime == TimeSpan.Zero || tickPrice == 0 || _hasFutureOrder) return;
             if (_trade.OpenOffsetKind == EOpenOffsetKind.新倉)
             {
-                if (tickPrice > _stopLossPoint || tickTime > _beforeMarketClose5Minute)
+                if (tickPrice > _stopLossPoint || tickTime > _beforeMarketClose2Minute)
                 {
                     ProcessFutureOrder(SetFutureOrder(EBuySellType.B));
                 }
@@ -477,7 +477,7 @@ namespace Core.Service
         {
             _logger.Information($"開盤時間: {_targetFutureConfig.MarketOpenTime}");
             _logger.Information($"收盤時間: {_targetFutureConfig.MarketCloseTime}");
-            _logger.Information($"收盤前五分鐘時間: {_beforeMarketClose5Minute}");
+            _logger.Information($"收盤前五分鐘時間: {_beforeMarketClose2Minute}");
             _logger.Information($"最後進場時間: {_lastEntryTime}");
             _logger.Information($"商品代碼: {_targetFutureConfig.FutureCode}");
             _logger.Information($"商品名稱: {_targetFutureConfig.CommodityId}");
@@ -486,7 +486,7 @@ namespace Core.Service
             _logger.Information($"前一天的成交量: {_prevVolume}");
             string message = $"開盤時間: {_targetFutureConfig.MarketOpenTime}\n";
             message += $"收盤時間: {_targetFutureConfig.MarketCloseTime}\n";
-            message += $"收盤前五分鐘時間: {_beforeMarketClose5Minute}\n";
+            message += $"收盤前五分鐘時間: {_beforeMarketClose2Minute}\n";
             message += $"最後進場時間: {_lastEntryTime}\n";
             message += $"商品代碼: {_targetFutureConfig.FutureCode}\n";
             message += $"商品名稱: {_targetFutureConfig.CommodityId}\n";

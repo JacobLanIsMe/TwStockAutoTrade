@@ -47,7 +47,7 @@ namespace Core.Service
             DateTime now = _dateTimeService.GetTaiwanTime();
             _todayDate = now.ToString("yyyy/MM/dd");
             _exitTime = now.Date.AddHours(13).AddMinutes(24);
-            DateTime stopTime = now.Date.AddHours(13).AddMinutes(26);
+            DateTime stopTime = now.Date.AddHours(13).AddMinutes(30);
             TimeSpan delayTime = stopTime - now;
             _cts = delayTime > TimeSpan.Zero ? new CancellationTokenSource(delayTime) : new CancellationTokenSource();
         }
