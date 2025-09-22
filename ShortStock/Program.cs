@@ -16,7 +16,7 @@ namespace ShortStock
 {
     class Program
     {
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
             Log.Logger = new LoggerConfiguration()
             .WriteTo.Console()
@@ -35,6 +35,7 @@ namespace ShortStock
                 .AddSingleton<IDateTimeService, DateTimeService>()
                 .BuildServiceProvider();
             var shortStockService = serviceProvider.GetRequiredService<IShortStockService>();
+            var discordService = serviceProvider.GetRequiredService<IDiscordService>();
             try
             {
                 Task.Run(async () => await shortStockService.Trade()).Wait();
@@ -42,6 +43,10 @@ namespace ShortStock
             catch (Exception ex)
             {
                 Log.Error(ex.ToString());
+            }
+            finally
+            {
+                await discordService.SendMessage("ShortStock has terminated.");
             }
         }
     }
