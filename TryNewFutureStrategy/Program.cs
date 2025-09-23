@@ -17,6 +17,7 @@ namespace TryNewFutureStrategy
 
             var startTime = TimeSpan.Parse("08:46:00");
             var cutoffTime = TimeSpan.Parse("09:30:00");
+            var lastEntryTime = TimeSpan.Parse("12:45:00");
             var endTime = TimeSpan.Parse("13:45:00");
 
             List<FutureCollection> selectedFutures = futures
@@ -34,13 +35,25 @@ namespace TryNewFutureStrategy
                 .ToList();
             for (int i = 1; i < selectedFutures.Count; i++)
             {
+                FutureCollection today = selectedFutures[i];
                 int yesterdayVolume = selectedFutures[i - 1].FutureList.Sum(x => x.TotalVolume);
-                var cutoff = selectedFutures[i].FutureList.Where(x => x.Time >= startTime && x.Time <= cutoffTime);
+                var cutoff = today.FutureList.Where(x => x.Time >= startTime && x.Time <= cutoffTime);
                 int todayHigh = cutoff.Max(x => x.High);
                 int todayLow = cutoff.Min(x => x.Low);
                 int todayVolume = cutoff.Sum(x => x.TotalVolume);
                 if (todayHigh - todayLow <= 100 || todayVolume <= yesterdayVolume * 0.3) continue;
-                List<Future> today = selectedFutures[i].FutureList;
+                List<Future> todayTech = selectedFutures[i].FutureList.Where(x => x.Time > cutoffTime).ToList();
+                TradeHistory trade = new TradeHistory();
+                foreach (var j in todayTech)
+                {
+                    if (j.Low < todayLow && j.Time <= lastEntryTime)
+                    {
+                        trade.EntryTime = j.Time;
+                        trade.EntryPoint = todayLow;
+                        trade.Operation = "Short";
+
+                    }
+                }
                 
             }
         }
