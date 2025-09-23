@@ -13,16 +13,39 @@ namespace TryNewFutureStrategy
         static void Main(string[] args)
         {
             string filePath = "C:\\Users\\Administrator\\Downloads\\台指1分K_2006-2020.csv";
-            List<Future> futures = ReadFuturesFromCsv(filePath);
+            List<FutureCollection> futures = ReadFuturesFromCsv(filePath);
 
-            // Example: Print the first Future object
-            if (futures.Count > 0)
+            var startTime = TimeSpan.Parse("08:46:00");
+            var cutoffTime = TimeSpan.Parse("09:30:00");
+            var endTime = TimeSpan.Parse("13:45:00");
+
+            List<FutureCollection> selectedFutures = futures
+                .Where(fc => fc.FutureList.All(f => f.TotalVolume != 0))
+                .Select(fc => new FutureCollection
+                {
+                    Date = fc.Date,
+                    FutureList = fc.FutureList
+                        .Where(f => f.Time >= startTime && f.Time <= endTime)
+                        .OrderBy(f => f.Time)
+                        .ToList()
+                })
+                .Where(fc => fc.FutureList.Count > 0) // Ensure FutureList is not empty after filtering
+                .OrderBy(fc => fc.Date)
+                .ToList();
+            for (int i = 1; i < selectedFutures.Count; i++)
             {
-                Console.WriteLine($"Date: {futures[0].Date}, Time: {futures[0].Time}, Open: {futures[0].Open}, High: {futures[0].High}, Low: {futures[0].Low}, Close: {futures[0].Close}, TotalVolume: {futures[0].TotalVolume}");
+                int yesterdayVolume = selectedFutures[i - 1].FutureList.Sum(x => x.TotalVolume);
+                var cutoff = selectedFutures[i].FutureList.Where(x => x.Time >= startTime && x.Time <= cutoffTime);
+                int todayHigh = cutoff.Max(x => x.High);
+                int todayLow = cutoff.Min(x => x.Low);
+                int todayVolume = cutoff.Sum(x => x.TotalVolume);
+                if (todayHigh - todayLow <= 100 || todayVolume <= yesterdayVolume * 0.3) continue;
+                List<Future> today = selectedFutures[i].FutureList;
+                
             }
         }
 
-        static List<Future> ReadFuturesFromCsv(string filePath)
+        static List<FutureCollection> ReadFuturesFromCsv(string filePath)
         {
             var futures = new List<Future>();
 
@@ -57,7 +80,17 @@ namespace TryNewFutureStrategy
                 }
             }
 
-            return futures;
+            // Group futures by Date and create FutureCollection objects
+            var futureCollections = futures
+                .GroupBy(f => f.Date)
+                .Select(group => new FutureCollection
+                {
+                    Date = group.Key,
+                    FutureList = group.ToList()
+                })
+                .ToList();
+
+            return futureCollections;
         }
 
         static DateTime ParseDate(string dateString)
