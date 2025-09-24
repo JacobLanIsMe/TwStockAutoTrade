@@ -41,6 +41,7 @@ namespace Core.Service
         private readonly int _maxOrderQuantity;
         private readonly IYuantaService _yuantaService;
         private readonly IDateTimeService _dateTimeService;
+        private readonly DateTime _now;
         private readonly string _settlementMonth;
         private int _settlementPrice = 0;
         private int _stopLossPoint = 0;
@@ -59,8 +60,8 @@ namespace Core.Service
             _futureAccount = _enumEnvironmentMode == enumEnvironmentMode.PROD ? Environment.GetEnvironmentVariable("FutureAccount", EnvironmentVariableTarget.Machine) : "S98875005091";
             _futurePassword = _enumEnvironmentMode == enumEnvironmentMode.PROD ? Environment.GetEnvironmentVariable("StockPassword", EnvironmentVariableTarget.Machine) : "1234";
             _maxOrderQuantity = config.GetValue<int>("MaxOrderQuantity");
-            DateTime now = _dateTimeService.GetTaiwanTime();
-            _settlementMonth = GetSettlementMonth(now);
+            _now = _dateTimeService.GetTaiwanTime();
+            _settlementMonth = GetSettlementMonth(_now);
             _targetFutureConfig = SetFutureConfig(config);
             _beforeMarketClose2Minute = _targetFutureConfig.MarketCloseTime.Subtract(TimeSpan.FromMinutes(2));
             _lastEntryTime = _targetFutureConfig.MarketCloseTime.Subtract(TimeSpan.FromHours(1));
@@ -72,6 +73,7 @@ namespace Core.Service
             {
                 _cts.CancelAfter(TimeSpan.FromHours(6));
                 await SetPrevVolume();
+                await SetSettlementPrice();
                 await PrintConfig();
                 //await SetLimitPoint();
                 objYuantaOneAPI.Open(_enumEnvironmentMode);
@@ -412,7 +414,30 @@ namespace Core.Service
 
             return thirdWednesday;
         }
-        private async Task SetPrevVolume()
+        /// <summary>
+        /// 取得前一個交易日加權指數的成交量
+        /// </summary>
+        /// <returns></returns>
+        private async Task SetPrevVolume() 
+        {
+            SimpleHttpClientFactory httpClientFactory = new SimpleHttpClientFactory();
+            HttpClient httpClient = httpClientFactory.CreateClient();
+            HttpResponseMessage response = await httpClient.GetAsync("https://tw.stock.yahoo.com/_td-stock/api/resource/FinanceChartService.ApacLibraCharts;period=d;symbols=%5B%22%5ETWII%22%5D?bkt=%5B%22tw-stock-desktop-future-rampup%22%2C%22TW-Stock-Desktop-CG-Rampup%22%2C%22t3-stock-bts-related%22%2C%22stock-inarticle-recommend%22%5D&device=desktop&ecma=modern&feature=enableGAMAds%2CenableGAMEdgeToEdge%2CenableEvPlayer%2CenableSystexDT%2CuseCGStream&intl=tw&lang=zh-Hant-TW&partner=none&prid=6mips3tkd808g&region=TW&site=finance&tz=Asia%2FTaipei&ver=1.4.735&returnMeta=true");
+            string responseBody = await response.Content.ReadAsStringAsync();
+            YahooTechData taiex = JsonConvert.DeserializeObject<YahooTechData>(responseBody);
+            long todayTimestamp = _dateTimeService.ConvertDateToTimestamp(_now);
+            long yesterdayTimestamp = taiex.Data.First().Chart.Timestamp.Where(x => x < todayTimestamp).Max();
+            int yesterdayIndex = taiex.Data.First().Chart.Timestamp.IndexOf(yesterdayTimestamp);
+            _prevVolume = taiex.Data.First().Chart.Indicators.Quote.First().Volume[yesterdayIndex];
+            if (_prevVolume == 0)
+            {
+                await _discordService.SendMessage("無法取得前一個交易日的成交量");
+                _logger.Error("無法取得前一個交易日的成交量");
+                _cts.Cancel();
+            }
+        }
+
+        private async Task SetSettlementPrice()
         {
             SimpleHttpClientFactory httpClientFactory = new SimpleHttpClientFactory();
             HttpClient httpClient = httpClientFactory.CreateClient();
@@ -432,21 +457,6 @@ namespace Core.Service
             {
                 await _discordService.SendMessage("無法取得當天的參考價格");
                 _logger.Error("無法取得當天的參考價格");
-                _cts.Cancel();
-            }
-            // 求出 previous volume
-            if (!DateTime.TryParseExact(futureReportList.First().Date, "yyyyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime prevTradingDay))
-            {
-                await _discordService.SendMessage("取得前一個交易日的日期出現錯誤");
-                _logger.Error("取得前一個交易日的日期出現錯誤");
-                _cts.Cancel();
-            }
-            string volumeRefSettelmentMonth = GetSettlementMonth(prevTradingDay);
-            var prevVolumeReference = futureReportList.Where(x => x.ContractMonth == volumeRefSettelmentMonth).FirstOrDefault();
-            if (prevVolumeReference == null || !int.TryParse(prevVolumeReference.Volume, out _prevVolume) || _prevVolume == 0)
-            {
-                await _discordService.SendMessage("無法取得前一個交易日的成交量");
-                _logger.Error("無法取得前一個交易日的成交量");
                 _cts.Cancel();
             }
         }
@@ -480,22 +490,22 @@ namespace Core.Service
         {
             _logger.Information($"開盤時間: {_targetFutureConfig.MarketOpenTime}");
             _logger.Information($"收盤時間: {_targetFutureConfig.MarketCloseTime}");
-            _logger.Information($"收盤前五分鐘時間: {_beforeMarketClose2Minute}");
+            _logger.Information($"收盤前兩分鐘時間: {_beforeMarketClose2Minute}");
             _logger.Information($"最後進場時間: {_lastEntryTime}");
             _logger.Information($"商品代碼: {_targetFutureConfig.FutureCode}");
             _logger.Information($"商品名稱: {_targetFutureConfig.CommodityId}");
             _logger.Information($"商品年月: {_settlementMonth}");
             _logger.Information($"前一個交易日的結算價格: {_settlementPrice}");
-            _logger.Information($"前一天的成交量: {_prevVolume}");
+            _logger.Information($"前一個交易日加權指數的成交量: {_prevVolume}");
             string message = $"開盤時間: {_targetFutureConfig.MarketOpenTime}\n";
             message += $"收盤時間: {_targetFutureConfig.MarketCloseTime}\n";
-            message += $"收盤前五分鐘時間: {_beforeMarketClose2Minute}\n";
+            message += $"收盤前兩分鐘時間: {_beforeMarketClose2Minute}\n";
             message += $"最後進場時間: {_lastEntryTime}\n";
             message += $"商品代碼: {_targetFutureConfig.FutureCode}\n";
             message += $"商品名稱: {_targetFutureConfig.CommodityId}\n";
             message += $"商品年月: {_settlementMonth}\n";
             message += $"前一個交易日的結算價格: {_settlementPrice}\n";
-            message += $"前一個交易日的成交量: {_prevVolume}\n";
+            message += $"前一個交易日加權指數的成交量: {_prevVolume}\n";
             await _discordService.SendMessage(message);
         }
     }

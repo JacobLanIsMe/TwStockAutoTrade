@@ -23,7 +23,7 @@ namespace Core.Model
     }
     public class ChartModel
     {
-        public List<int> Timestamp { get; set; }
+        public List<long> Timestamp { get; set; }
         public IndicatorModel Indicators { get; set; }
     }
     public class IndicatorModel
