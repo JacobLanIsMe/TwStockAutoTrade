@@ -33,29 +33,73 @@ namespace TryNewFutureStrategy
                 .Where(fc => fc.FutureList.Count > 0) // Ensure FutureList is not empty after filtering
                 .OrderBy(fc => fc.Date)
                 .ToList();
+            List<TradeHistory> tradeList = new List<TradeHistory>();
             for (int i = 1; i < selectedFutures.Count; i++)
             {
                 FutureCollection today = selectedFutures[i];
-                int yesterdayVolume = selectedFutures[i - 1].FutureList.Sum(x => x.TotalVolume);
+                FutureCollection yesterday = selectedFutures[i - 1];
+                int yesterdayVolume = yesterday.FutureList.Sum(x => x.TotalVolume);
                 var cutoff = today.FutureList.Where(x => x.Time >= startTime && x.Time <= cutoffTime);
                 int todayHigh = cutoff.Max(x => x.High);
                 int todayLow = cutoff.Min(x => x.Low);
                 int todayVolume = cutoff.Sum(x => x.TotalVolume);
                 if (todayHigh - todayLow <= 100 || todayVolume <= yesterdayVolume * 0.3) continue;
-                List<Future> todayTech = selectedFutures[i].FutureList.Where(x => x.Time > cutoffTime).ToList();
+                int stopLossPoint = (int)(todayHigh - today.FutureList.First().Open * 0.004);
+                List<Future> todayTech = today.FutureList.Where(x => x.Time > cutoffTime).ToList();
                 TradeHistory trade = new TradeHistory();
                 foreach (var j in todayTech)
                 {
-                    if (j.Low < todayLow && j.Time <= lastEntryTime)
+                    if (trade.EntryTime == TimeSpan.Zero)
                     {
-                        trade.EntryTime = j.Time;
-                        trade.EntryPoint = todayLow;
-                        trade.Operation = "Short";
-
+                        if (j.High > todayHigh && j.Time <= lastEntryTime)
+                        {
+                            if (j.Low < stopLossPoint) break;
+                            trade.Date = j.Date;
+                            trade.EntryTime = j.Time;
+                            trade.EntryPoint = todayHigh;
+                            trade.Operation = "Long";
+                        }
+                    }
+                    else
+                    {
+                        if (j.Low < stopLossPoint)
+                        {
+                            trade.ExitTime = j.Time;
+                            trade.ExitPoint = stopLossPoint;
+                        }
                     }
                 }
-                
+                if (trade.EntryTime == TimeSpan.Zero) continue;
+                if (trade.ExitTime == TimeSpan.Zero)
+                {
+                    var last = today.FutureList.Last();
+                    trade.ExitTime = last.Time;
+                    trade.ExitPoint = last.Close;
+                }
+                trade.ProfitLossPoint = trade.ExitPoint - trade.EntryPoint;
+                trade.Result = trade.ProfitLossPoint > 0 ? "Win" : "Lose";
+                tradeList.Add(trade);
             }
+            int winCount = tradeList.Count(x => x.Result == "Win");
+            int loseCount = tradeList.Count(x => x.Result == "Lose");
+            int totalProfitLoss = tradeList.Sum(x => x.ProfitLossPoint);
+            Console.WriteLine($"Total Trades: {tradeList.Count}, Wins: {winCount}, Losses: {loseCount}, Total P/L Points: {totalProfitLoss}");
+            #region 寫入交易明細
+            string outputFilePath = "C:\\Users\\Administrator\\Downloads\\result1.csv";
+
+            using (var writer = new StreamWriter(outputFilePath))
+            {
+                // Write header
+                writer.WriteLine("Date,EntryTime,EntryPoint,Operation,ExitTime,ExitPoint,Result,ProfitLossPoint");
+
+                // Write trade details
+                foreach (var trade in tradeList)
+                {
+                    writer.WriteLine($"{trade.Date:yyyy-MM-dd},{trade.EntryTime},{trade.EntryPoint},{trade.Operation},{trade.ExitTime},{trade.ExitPoint},{trade.Result},{trade.ProfitLossPoint}");
+                    Console.WriteLine($"{trade.Date:yyyy-MM-dd},{trade.EntryTime},{trade.EntryPoint},{trade.Operation},{trade.ExitTime},{trade.ExitPoint},{trade.Result},{trade.ProfitLossPoint}");
+                }
+            }
+            #endregion
         }
 
         static List<FutureCollection> ReadFuturesFromCsv(string filePath)
