@@ -126,6 +126,9 @@ namespace Core.Service
                                 strResult = _yuantaService.FunRealReport_Out((byte[])objValue);
                                 RealReportHandler(strResult);
                                 break;
+                            case "200.10.10.27":    //逐筆即時回報彙總
+                                strResult = _yuantaService.FunRealReportMerge_Out((byte[])objValue);
+                                break;
                             case "210.10.40.10":    //訂閱個股分時明細
                                 string tickResult = _yuantaService.FunRealStocktick_Out((byte[])objValue);
                                 TickHandler(tickResult, out TimeSpan tickTime, out int tickPrice);

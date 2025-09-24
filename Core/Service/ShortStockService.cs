@@ -114,6 +114,9 @@ namespace Core.Service
                                 strResult = _yuantaService.FunRealReport_Out((byte[])objValue);
                                 RealReportHandler(strResult);
                                 break;
+                            case "200.10.10.27":    //逐筆即時回報彙總
+                                strResult = _yuantaService.FunRealReportMerge_Out((byte[])objValue);
+                                break;
                             case "210.10.70.11":    //Watchlist報價表(指定欄位)
                                 strResult = _yuantaService.FunRealWatchlist_Out((byte[])objValue);
                                 WatchListHandler(strResult);
