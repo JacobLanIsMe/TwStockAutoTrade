@@ -222,7 +222,7 @@ namespace Core.Service
                 }
                 else
                 {
-                    _logger.Information("開盤後成交量小於前一個交易日成交量的30%或是高低點差小於100點，未達進場條件");
+                    _logger.Information($"開盤後成交量({_volume})小於前一個交易日成交量的30%或是高低點差小於100點，未達進場條件");
                     _cts.Cancel();
                 }
             }
@@ -438,14 +438,12 @@ namespace Core.Service
             int targetIndex = taiex.Data.First().Chart.Timestamp.IndexOf(volumeTimestamp);
             if (targetIndex == -1)
             {
-                await _discordService.SendMessage("無法取得9:30前的大盤成交量");
                 _logger.Error("無法取得9:30前的大盤成交量");
                 _cts.Cancel();
             }
             _volume = taiex.Data.First().Chart.Indicators.Quote.First().Volume[targetIndex];
             if (_volume == 0)
             {
-                await _discordService.SendMessage("無法取得9:30前的大盤成交量");
                 _logger.Error("無法取得9:30前的大盤成交量");
                 _cts.Cancel();
             }
@@ -466,14 +464,12 @@ namespace Core.Service
             int yesterdayIndex = taiex.Data.First().Chart.Timestamp.IndexOf(yesterdayTimestamp);
             if (yesterdayIndex == -1)
             {
-                await _discordService.SendMessage("無法取得前一個交易日的成交量");
                 _logger.Error("無法取得前一個交易日的成交量");
                 _cts.Cancel();
             }
             _prevVolume = taiex.Data.First().Chart.Indicators.Quote.First().Volume[yesterdayIndex];
             if (_prevVolume == 0)
             {
-                await _discordService.SendMessage("無法取得前一個交易日的成交量");
                 _logger.Error("無法取得前一個交易日的成交量");
                 _cts.Cancel();
             }
@@ -490,7 +486,6 @@ namespace Core.Service
             futureReportList = futureReportList.Where(x => x.Contract == _targetFutureConfig.FutureCode.Substring(0, 3) && x.TradingSession == "一般").ToList();
             if (!futureReportList.Any())
             {
-                await _discordService.SendMessage("取得前一個交易日的交易資訊出現錯誤");
                 _logger.Error("取得前一個交易日的交易資訊出現錯誤");
                 _cts.Cancel();
             }
@@ -498,7 +493,6 @@ namespace Core.Service
             var settlementPriceReference = futureReportList.Where(x => x.ContractMonth == _settlementMonth).FirstOrDefault();
             if (settlementPriceReference == null || !int.TryParse(settlementPriceReference.SettlementPrice, out _settlementPrice) || _settlementPrice == 0)
             {
-                await _discordService.SendMessage("無法取得當天的參考價格");
                 _logger.Error("無法取得當天的參考價格");
                 _cts.Cancel();
             }
