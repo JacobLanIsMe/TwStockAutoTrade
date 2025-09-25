@@ -71,7 +71,21 @@ namespace Core.Service
         {
             try
             {
-                await GetTodayVolume();
+                // 啟動非同步任務，延遲到 9:30 執行 GetTodayVolume()
+                _ = Task.Run(async () =>
+                {
+                    DateTime now = _dateTimeService.GetTaiwanTime();
+                    DateTime targetTime = new DateTime(now.Year, now.Month, now.Day, 9, 30, 0);
+                    TimeSpan delay = targetTime - now;
+
+                    if (delay > TimeSpan.Zero)
+                    {
+                        _logger.Information($"等待 {delay.TotalMinutes} 分鐘後執行 GetTodayVolume()");
+                        await Task.Delay(delay); // 延遲到 9:30
+                    }
+
+                    await GetTodayVolume();
+                });
                 _cts.CancelAfter(TimeSpan.FromHours(6));
                 await SetPrevVolume();
                 await SetSettlementPrice();
@@ -194,14 +208,11 @@ namespace Core.Service
                         _low = tickPrice;
                     }
                 }
-                if (int.TryParse(tickInfo[7], out int tickVolume))
-                {
-                    _volume += tickVolume;
-                }
             }
             else
             {
                 if (_isTradingStarted) return;
+                if (_volume == 0) return;
                 if (_volume > _prevVolume * 0.3m && _high != 0 && _low != 0 && _high - _low > 100 && _low <= (_settlementPrice + (_settlementPrice * 0.09)))
                 {
                     _stopLossPoint = (int)((double)_low + _settlementPrice * 0.004);
