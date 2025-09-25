@@ -38,12 +38,9 @@ namespace Core.Service
         }
         public long ConvertDateToTimestamp(DateTime date)
         {
-            // Reset the time to 00:00:00
-            DateTime dateOnly = new DateTime(date.Year, date.Month, date.Day, 0, 0, 0, DateTimeKind.Utc);
-
             // Convert to Unix timestamp
             DateTime epoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-            return ((long)(dateOnly - epoch).TotalSeconds) - 28800;
+            return ((long)(date - epoch).TotalSeconds) - 28800;
         }
 
         public DateTime GetUtcNow()

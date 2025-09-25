@@ -27,8 +27,8 @@ namespace Core.Service
         private CancellationTokenSource _cts = new CancellationTokenSource();
         private int _high = 0;
         private int _low = 0;
-        private int _volume = 0;
-        private int _prevVolume = 0;
+        private decimal _volume = 0;
+        private decimal _prevVolume = 0;
         private FutureTrade _trade = new FutureTrade();
         private bool _hasFutureOrder = false;
         private bool _isTradingStarted = false;
@@ -71,6 +71,7 @@ namespace Core.Service
         {
             try
             {
+                await GetTodayVolume();
                 _cts.CancelAfter(TimeSpan.FromHours(6));
                 await SetPrevVolume();
                 await SetSettlementPrice();
@@ -201,7 +202,7 @@ namespace Core.Service
             else
             {
                 if (_isTradingStarted) return;
-                if (_volume > _prevVolume * 0.3 && _high != 0 && _low != 0 && _high - _low > 100 && _low <= (_settlementPrice + (_settlementPrice * 0.09)))
+                if (_volume > _prevVolume * 0.3m && _high != 0 && _low != 0 && _high - _low > 100 && _low <= (_settlementPrice + (_settlementPrice * 0.09)))
                 {
                     _stopLossPoint = (int)((double)_low + _settlementPrice * 0.004);
                     _logger.Information($"開盤後成交量達({_volume})前一個交易日成交量({_prevVolume})的30%，高低點差大於100點(High: {_high}, Low: {_low})，達進場條件");
@@ -414,6 +415,30 @@ namespace Core.Service
 
             return thirdWednesday;
         }
+        private async Task GetTodayVolume()
+        {
+            SimpleHttpClientFactory httpClientFactory = new SimpleHttpClientFactory();
+            HttpClient httpClient = httpClientFactory.CreateClient();
+            HttpResponseMessage response = await httpClient.GetAsync("https://tw.stock.yahoo.com/_td-stock/api/resource/FinanceChartService.ApacLibraCharts;period=30m;symbols=%5B%22%5ETWII%22%5D?bkt=%5B%22tw-stock-desktop-future-rampup%22%2C%22TW-Stock-Desktop-CG-Rampup%22%2C%22stock-inarticle-recommend%22%5D&device=desktop&ecma=modern&feature=enableGAMAds%2CenableGAMEdgeToEdge%2CenableEvPlayer%2CenableSystexDT%2CuseCGStream&intl=tw&lang=zh-Hant-TW&partner=none&prid=6p7qj9hkd9f55&region=TW&site=finance&tz=Asia%2FTaipei&ver=1.4.735&returnMeta=true");
+            string responseBody = await response.Content.ReadAsStringAsync();
+            YahooTechData taiex = JsonConvert.DeserializeObject<YahooTechData>(responseBody);
+            var now = _dateTimeService.ConvertTimestampToDateTime(taiex.Data.First().Chart.Timestamp.Last());
+            long volumeTimestamp = _dateTimeService.ConvertDateToTimestamp(new DateTime(_now.Year, _now.Month, _now.Day, 9, 30, 0));
+            int targetIndex = taiex.Data.First().Chart.Timestamp.IndexOf(volumeTimestamp);
+            if (targetIndex == -1)
+            {
+                await _discordService.SendMessage("無法取得9:30前的大盤成交量");
+                _logger.Error("無法取得9:30前的大盤成交量");
+                _cts.Cancel();
+            }
+            _volume = taiex.Data.First().Chart.Indicators.Quote.First().Volume[targetIndex];
+            if (_volume == 0)
+            {
+                await _discordService.SendMessage("無法取得9:30前的大盤成交量");
+                _logger.Error("無法取得9:30前的大盤成交量");
+                _cts.Cancel();
+            }
+        }
         /// <summary>
         /// 取得前一個交易日加權指數的成交量
         /// </summary>
@@ -425,9 +450,15 @@ namespace Core.Service
             HttpResponseMessage response = await httpClient.GetAsync("https://tw.stock.yahoo.com/_td-stock/api/resource/FinanceChartService.ApacLibraCharts;period=d;symbols=%5B%22%5ETWII%22%5D?bkt=%5B%22tw-stock-desktop-future-rampup%22%2C%22TW-Stock-Desktop-CG-Rampup%22%2C%22t3-stock-bts-related%22%2C%22stock-inarticle-recommend%22%5D&device=desktop&ecma=modern&feature=enableGAMAds%2CenableGAMEdgeToEdge%2CenableEvPlayer%2CenableSystexDT%2CuseCGStream&intl=tw&lang=zh-Hant-TW&partner=none&prid=6mips3tkd808g&region=TW&site=finance&tz=Asia%2FTaipei&ver=1.4.735&returnMeta=true");
             string responseBody = await response.Content.ReadAsStringAsync();
             YahooTechData taiex = JsonConvert.DeserializeObject<YahooTechData>(responseBody);
-            long todayTimestamp = _dateTimeService.ConvertDateToTimestamp(_now);
+            long todayTimestamp = _dateTimeService.ConvertDateToTimestamp(new DateTime(_now.Year, _now.Month, _now.Day, 0, 0, 0));
             long yesterdayTimestamp = taiex.Data.First().Chart.Timestamp.Where(x => x < todayTimestamp).Max();
             int yesterdayIndex = taiex.Data.First().Chart.Timestamp.IndexOf(yesterdayTimestamp);
+            if (yesterdayIndex == -1)
+            {
+                await _discordService.SendMessage("無法取得前一個交易日的成交量");
+                _logger.Error("無法取得前一個交易日的成交量");
+                _cts.Cancel();
+            }
             _prevVolume = taiex.Data.First().Chart.Indicators.Quote.First().Volume[yesterdayIndex];
             if (_prevVolume == 0)
             {
@@ -435,6 +466,7 @@ namespace Core.Service
                 _logger.Error("無法取得前一個交易日的成交量");
                 _cts.Cancel();
             }
+            _prevVolume = _prevVolume / 100;
         }
 
         private async Task SetSettlementPrice()

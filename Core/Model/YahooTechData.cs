@@ -36,6 +36,6 @@ namespace Core.Model
         public List<decimal> High { get; set; }
         public List<decimal> Low { get; set; }
         public List<decimal> Open { get; set; }
-        public List<int> Volume { get; set; }
+        public List<decimal> Volume { get; set; }
     }
 }
