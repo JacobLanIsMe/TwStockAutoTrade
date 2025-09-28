@@ -16,12 +16,12 @@ namespace TryNewFutureStrategy
             List<FutureCollection> futures = ReadFuturesFromCsv(filePath);
 
             var startTime = TimeSpan.Parse("08:46:00");
-            var cutoffTime = TimeSpan.Parse("09:30:00");
+            var cutoffTime = TimeSpan.Parse("09:15:00");
             var lastEntryTime = TimeSpan.Parse("12:45:00");
             var endTime = TimeSpan.Parse("13:45:00");
 
             List<FutureCollection> selectedFutures = futures
-                .Where(fc => fc.FutureList.All(f => f.TotalVolume != 0))
+                //.Where(fc => fc.FutureList.All(f => f.TotalVolume != 0))
                 .Select(fc => new FutureCollection
                 {
                     Date = fc.Date,
@@ -34,51 +34,88 @@ namespace TryNewFutureStrategy
                 .OrderBy(fc => fc.Date)
                 .ToList();
             List<TradeHistory> tradeList = new List<TradeHistory>();
-            for (int i = 1; i < selectedFutures.Count; i++)
+            for (int i = 0; i < selectedFutures.Count; i++)
             {
                 FutureCollection today = selectedFutures[i];
-                FutureCollection yesterday = selectedFutures[i - 1];
-                int yesterdayVolume = yesterday.FutureList.Sum(x => x.TotalVolume);
+                int todayOpen = today.FutureList.First().Open;
+                //FutureCollection yesterday = selectedFutures[i - 1];
+                //int yesterdayVolume = yesterday.FutureList.Sum(x => x.TotalVolume);
+                //int yesterdayClose = yesterday.FutureList.Last().Close;
                 var cutoff = today.FutureList.Where(x => x.Time >= startTime && x.Time <= cutoffTime);
                 int todayHigh = cutoff.Max(x => x.High);
                 int todayLow = cutoff.Min(x => x.Low);
-                int todayVolume = cutoff.Sum(x => x.TotalVolume);
-                if (todayHigh - todayLow <= 100 || todayVolume <= yesterdayVolume * 0.3) continue;
-                int stopLossPoint = (int)(todayHigh - today.FutureList.First().Open * 0.004);
-                List<Future> todayTech = today.FutureList.Where(x => x.Time > cutoffTime).ToList();
-                TradeHistory trade = new TradeHistory();
+                //int todayVolume = cutoff.Sum(x => x.TotalVolume);
+                int stopLossPoint = (int)(todayOpen * 0.004);
+                if (todayHigh - todayLow <= stopLossPoint) continue;
+                Dictionary<int, List<Future>> todayTech = today.FutureList.Where(x => x.Time > cutoffTime).GroupBy(ts => (int)(ts.Time.TotalMinutes / 15)).ToDictionary(g => g.Key, g => g.ToList());
+                TradeHistory tradeHistory = new TradeHistory();
                 foreach (var j in todayTech)
                 {
-                    if (trade.EntryTime == TimeSpan.Zero)
+                    if (tradeHistory.EntryTime == TimeSpan.Zero)
                     {
-                        if (j.High > todayHigh && j.Time <= lastEntryTime)
+                        foreach (var k in j.Value)
                         {
-                            if (j.Low < stopLossPoint) break;
-                            trade.Date = j.Date;
-                            trade.EntryTime = j.Time;
-                            trade.EntryPoint = todayHigh;
-                            trade.Operation = "Long";
+                            if (tradeHistory.EntryTime == TimeSpan.Zero)
+                            {
+                                if (k.Time > lastEntryTime) break;
+
+                                if (k.Low < todayLow)
+                                {
+                                    tradeHistory.Date = k.Date;
+                                    tradeHistory.EntryTime = k.Time;
+                                    tradeHistory.EntryPoint = todayLow;
+                                    tradeHistory.Operation = "Short";
+                                }
+                                else if (k.High > todayHigh)
+                                {
+                                    tradeHistory.Date = k.Date;
+                                    tradeHistory.EntryTime = k.Time;
+                                    tradeHistory.EntryPoint = todayHigh;
+                                    tradeHistory.Operation = "Long";
+                                }
+                            }
+                            else
+                            {
+                                if (tradeHistory.Operation == "Short" && k.High > tradeHistory.EntryPoint + stopLossPoint)
+                                {
+                                    tradeHistory.ExitTime = k.Time;
+                                    tradeHistory.ExitPoint = tradeHistory.EntryPoint + stopLossPoint;
+                                }
+                                else if (tradeHistory.Operation == "Long" && k.Low < tradeHistory.EntryPoint - stopLossPoint)
+                                {
+                                    tradeHistory.ExitTime = k.Time;
+                                    tradeHistory.ExitPoint = tradeHistory.EntryPoint - stopLossPoint;
+                                }
+                            }
                         }
                     }
                     else
                     {
-                        if (j.Low < stopLossPoint)
+                        if (tradeHistory.Operation == "Short" && j.Value.Any(x => x.High > tradeHistory.EntryPoint + stopLossPoint))
                         {
-                            trade.ExitTime = j.Time;
-                            trade.ExitPoint = stopLossPoint;
+                            var exit = j.Value.First(x => x.High > tradeHistory.EntryPoint + stopLossPoint);
+                            tradeHistory.ExitTime = exit.Time;
+                            tradeHistory.ExitPoint = tradeHistory.EntryPoint + stopLossPoint;
+                        }
+                        else if (tradeHistory.Operation == "Long" && j.Value.Any(x => x.Low < tradeHistory.EntryPoint - stopLossPoint))
+                        {
+                            var exit = j.Value.First(x => x.Low < tradeHistory.EntryPoint - stopLossPoint);
+                            tradeHistory.ExitTime = exit.Time;
+                            tradeHistory.ExitPoint = tradeHistory.EntryPoint - stopLossPoint;
                         }
                     }
+                    if (tradeHistory.ExitTime != TimeSpan.Zero) break;
                 }
-                if (trade.EntryTime == TimeSpan.Zero) continue;
-                if (trade.ExitTime == TimeSpan.Zero)
+                if (tradeHistory.EntryTime == TimeSpan.Zero) continue;
+                if (tradeHistory.ExitTime == TimeSpan.Zero)
                 {
                     var last = today.FutureList.Last();
-                    trade.ExitTime = last.Time;
-                    trade.ExitPoint = last.Close;
+                    tradeHistory.ExitTime = last.Time;
+                    tradeHistory.ExitPoint = last.Close;
                 }
-                trade.ProfitLossPoint = trade.ExitPoint - trade.EntryPoint;
-                trade.Result = trade.ProfitLossPoint > 0 ? "Win" : "Lose";
-                tradeList.Add(trade);
+                tradeHistory.ProfitLossPoint = tradeHistory.Operation == "Short" ? tradeHistory.EntryPoint - tradeHistory.ExitPoint : tradeHistory.ExitPoint - tradeHistory.EntryPoint;
+                tradeHistory.Result = tradeHistory.ProfitLossPoint > 0 ? "Win" : "Lose";
+                tradeList.Add(tradeHistory);
             }
             int winCount = tradeList.Count(x => x.Result == "Win");
             int loseCount = tradeList.Count(x => x.Result == "Lose");
