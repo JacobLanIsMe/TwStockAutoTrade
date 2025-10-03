@@ -118,13 +118,13 @@ namespace Core.Service
                                 strResult = _yuantaService.FunRealReportMerge_Out((byte[])objValue);
                                 break;
                             case "210.10.70.11":    //Watchlist報價表(指定欄位)
-                                strResult = _yuantaService.FunRealWatchlist_Out((byte[])objValue);
-                                WatchListHandler(strResult);
+                                string watchResult = _yuantaService.FunRealWatchlist_Out((byte[])objValue);
+                                WatchListHandler(watchResult, out string stockCode, out decimal tradePrice);
+                                StockOrder(stockCode, tradePrice);
                                 break;
                             case "210.10.60.10":    //訂閱五檔報價
-                                string fivetickResult = _yuantaService.FunRealFivetick_Out((byte[])objValue);
-                                FiveTickHandler(fivetickResult, out string stockCode, out decimal level1AskPrice);
-                                StockOrder(stockCode, level1AskPrice);
+                                strResult = _yuantaService.FunRealFivetick_Out((byte[])objValue);
+                                //FiveTickHandler(fivetickResult, out string stockCode, out decimal level1AskPrice);
                                 break;
                             default:
                                 strResult = $"{strIndex},{objValue}";
@@ -146,18 +146,15 @@ namespace Core.Service
                 _logger.Error(strResult);
             }
         }
-        private void StockOrder(string stockCode, decimal level1AskPrice)
+        private void StockOrder(string stockCode, decimal tradePrice)
         {
-            if (string.IsNullOrEmpty(stockCode)) return;
+            if (string.IsNullOrEmpty(stockCode) || tradePrice == 0) return;
             if (!_stockCandidateDict.TryGetValue(stockCode, out StockCandidate candidate) || !candidate.IsTradingStarted) return;
             if (candidate.PurchasedLot > 0)
             {
                 if (candidate.IsProcessing) return;
-                if (level1AskPrice == candidate.PriceBeforeLimitUp || 
-                    level1AskPrice == candidate.LimitUpPrice ||
-                    level1AskPrice == 0 ||
-                    level1AskPrice == candidate.LimitDownPrice ||
-                    level1AskPrice == -999999999 ||
+                if (tradePrice > candidate.ClosePrice * 1.08m || 
+                    tradePrice < candidate.ClosePrice * 0.92m ||
                     _dateTimeService.GetTaiwanTime() > _exitTime)
                 {
                     StockOrder stockOrder = SetDefaultStockOrder();
@@ -172,11 +169,11 @@ namespace Core.Service
             }
             else
             {
-                int orderQty = (int)(_maxAmountPerStock / (level1AskPrice * 1000));
+                int orderQty = (int)(_maxAmountPerStock / (tradePrice * 1000));
                 orderQty = orderQty == 0 ? 1 : orderQty;
                 if (!candidate.IsOrdered &&
-                    level1AskPrice < candidate.PriceBeforeLimitUp &&
-                    level1AskPrice > candidate.ClosePrice*0.93m)
+                    tradePrice <= candidate.ClosePrice*1.07m &&
+                    tradePrice > candidate.ClosePrice*0.95m)
                 {
                     StockOrder stockOrder = SetDefaultStockOrder();
                     stockOrder.StkCode = stockCode;   // 股票代號
@@ -281,14 +278,16 @@ namespace Core.Service
             watch.StockCode = stockCode;                     //填入查詢股票代碼
             objYuantaOneAPI.UnsubscribeWatchlist(new List<Watchlist>() { watch });
         }
-        private void WatchListHandler(string strResult)
+        private void WatchListHandler(string strResult, out string stockCode, out decimal tradePrice)
         {
+            stockCode = string.Empty;
+            tradePrice = 0;
             string[] watchListResult = strResult.Split(',');
-            string stockCode = watchListResult[1];
-            if (!decimal.TryParse(watchListResult[3], out decimal tradePrice)) return;
+            stockCode = watchListResult[1];
+            if (!decimal.TryParse(watchListResult[3], out tradePrice)) return;
+            tradePrice = tradePrice / 10000;
             if (!_stockCandidateDict.TryGetValue(stockCode, out StockCandidate candidate)) return;
             candidate.IsTradingStarted = true;
-            UnsubscribeWatchlist(candidate.Market, candidate.StockCode);
         }
         private void FiveTickHandler(string strResult, out string stockCode, out decimal level1AskPrice)
         {
@@ -306,21 +305,15 @@ namespace Core.Service
         }
         private void Subscribe()
         {
-            List<FiveTickA> lstFiveTick = new List<FiveTickA>();
             List<Watchlist> lstWatchlist = new List<Watchlist>();
             foreach (var i in _stockCandidateDict)
             {
-                FiveTickA fiveTickA = new FiveTickA();
-                fiveTickA.MarketNo = Convert.ToByte(i.Value.Market);
-                fiveTickA.StockCode = i.Value.StockCode;
-                lstFiveTick.Add(fiveTickA);
                 Watchlist watch = new Watchlist();
                 watch.IndexFlag = Convert.ToByte(7);    //填入訂閱索引值, 7: 成交價
                 watch.MarketNo = Convert.ToByte(i.Value.Market);      //填入查詢市場代碼
                 watch.StockCode = i.Value.StockCode;
                 lstWatchlist.Add(watch);
             }
-            objYuantaOneAPI.SubscribeFiveTickA(lstFiveTick);
             objYuantaOneAPI.SubscribeWatchlist(lstWatchlist);
         }
         private async Task SendCandidateToDiscord(List<StockCandidate> stockCandidateList)
