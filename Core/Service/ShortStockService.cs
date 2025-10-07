@@ -153,7 +153,7 @@ namespace Core.Service
             if (candidate.PurchasedLot > 0)
             {
                 if (candidate.IsProcessing) return;
-                if (tradePrice > candidate.ClosePrice * 1.08m || 
+                if (tradePrice >= candidate.ClosePrice * 1.085m || 
                     tradePrice < candidate.ClosePrice * 0.92m ||
                     _dateTimeService.GetTaiwanTime() > _exitTime)
                 {
@@ -172,7 +172,7 @@ namespace Core.Service
                 int orderQty = (int)(_maxAmountPerStock / (tradePrice * 1000));
                 orderQty = orderQty == 0 ? 1 : orderQty;
                 if (!candidate.IsOrdered &&
-                    tradePrice <= candidate.ClosePrice*1.07m &&
+                    tradePrice <= candidate.ClosePrice*1.075m &&
                     tradePrice > candidate.ClosePrice*0.95m)
                 {
                     StockOrder stockOrder = SetDefaultStockOrder();
