@@ -31,6 +31,7 @@ namespace Selector
                 .AddSingleton<ICandidateForShortRepository, CandidateForShortRepository>()
                 .AddSingleton<ITradeRepository, TradeRepository>()
                 .AddSingleton<IDiscordService, DiscordService>()
+                .AddSingleton<IStockMainPowerRepository, StockMainPowerRepository>()
                 .BuildServiceProvider();
             var getStockInfoService = serviceProvider.GetRequiredService<IStockSelectorService>();
             try

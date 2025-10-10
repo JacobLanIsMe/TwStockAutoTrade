@@ -167,6 +167,7 @@
     <Compile Include="Model\FutureTechData.cs" />
     <Compile Include="Model\FutureTrade.cs" />
     <Compile Include="Model\KBarRecord.cs" />
+    <Compile Include="Model\MainInOutDetailResponse.cs" />
     <Compile Include="Model\StockLimitPrice.cs" />
     <Compile Include="Model\StockMainPower.cs" />
     <Compile Include="Model\StockSharedModel.cs" />
@@ -190,7 +191,9 @@
     <Compile Include="Repository\CandidateRepository.cs" />
     <Compile Include="Repository\Interface\ICandidateForShortRepository.cs" />
     <Compile Include="Repository\Interface\ICandidateRepository.cs" />
+    <Compile Include="Repository\Interface\IStockMainPowerRepository.cs" />
     <Compile Include="Repository\Interface\ITradeRepository.cs" />
+    <Compile Include="Repository\StockMainPowerRepository.cs" />
     <Compile Include="Repository\TradeRepository.cs" />
     <Compile Include="Service\CrazyTraderService.cs" />
     <Compile Include="Service\DiscordService.cs" />

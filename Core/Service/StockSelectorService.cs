@@ -25,8 +25,9 @@ namespace Core.Service
         private readonly ILogger _logger;
         private readonly IDateTimeService _dateTimeService;
         private readonly IDiscordService _discordService;
+        private readonly IStockMainPowerRepository _stockMainPowerRepository;
         private int _maxRetryCount = 10;
-        public StockSelectorService(ICandidateRepository candidateRepository, ICandidateForShortRepository candidateForShortRepository, ILogger logger, IDateTimeService dateTimeService, IDiscordService discordService)
+        public StockSelectorService(ICandidateRepository candidateRepository, ICandidateForShortRepository candidateForShortRepository, ILogger logger, IDateTimeService dateTimeService, IDiscordService discordService, IStockMainPowerRepository stockMainPowerRepository)
         {
             SimpleHttpClientFactory httpClientFactory = new SimpleHttpClientFactory();
             _httpClient = httpClientFactory.CreateClient();
@@ -36,6 +37,7 @@ namespace Core.Service
             _logger = logger;
             _dateTimeService = dateTimeService;
             _discordService = discordService;
+            _stockMainPowerRepository = stockMainPowerRepository;
         }
         public async Task SelectStock()
         {
@@ -51,6 +53,8 @@ namespace Core.Service
             await SendCandidateForShortToDiscord(filteredCandidateList);
             await _candidateForShortRepository.Insert(filteredCandidateList);
             await UpSertTechDataToDb(allStockInfoList);
+            await TrackMainPower(allStockInfoList);
+            
             //if (!doesNeedUpdate(allStockInfoList)) return;
             //List<StockCandidate> candidateList = SelectCandidateByTech(allStockInfoList);
             //candidateList = await SelectCandidateByMainPower(candidateList);
@@ -62,6 +66,7 @@ namespace Core.Service
             //await UpdateCrazyCandidate(crazyCandidateList, allStockInfoDict);
             //List<StockCandidate> crazyCandidateList = SelectCrazyCandidate(allStockInfoList);
         }
+        
         private StockLimitPrice GetLimitPrice(decimal price)
         {
             // 1. 計算理論上的 10% 漲停價
@@ -799,5 +804,76 @@ namespace Core.Service
         //    }
         //    await _tradeRepository.UpdateLast9TechData(stockHoldingList);
         //}
+        private async Task TrackMainPower(List<StockCandidate> allStockInfoList)
+        {
+            var stockInfoDict = allStockInfoList.ToDictionary(stock => stock.StockCode);
+
+            List<StockMainPower> stockMainPowerToUpdate = await _stockMainPowerRepository.GetRecordsWithNullTomorrowTechData();
+            foreach (var i in stockMainPowerToUpdate)
+            {
+                if (!stockInfoDict.ContainsKey(i.StockCode) || 
+                    stockInfoDict[i.StockCode].TechDataList.Count == 0 || 
+                    stockInfoDict[i.StockCode].TechDataList.Max(x => x.Date) <= i.SelectedDate) continue;
+
+                StockTechData tomorrowTechData = stockInfoDict[i.StockCode].TechDataList.Skip(1).First();
+                i.TomorrowTechData = JsonConvert.SerializeObject(tomorrowTechData);
+            }
+
+            List<StockCandidate> limitUpStockList = GetLimitUpStocks(allStockInfoList);
+            List<StockMainPower> stockMainPowerListToInsert = new List<StockMainPower>();
+            foreach (var i in limitUpStockList)
+            {
+                MainInOutDetailResponse mainInOutDetailResponse = await GetMainInOutDetailsAsync(i.StockCode);
+                if (mainInOutDetailResponse == null) continue;
+                StockMainPower stockMainPower = new StockMainPower()
+                {
+                    StockCode = i.StockCode,
+                    CompanyName = i.CompanyName,
+                    MainPowerData = JsonConvert.SerializeObject(mainInOutDetailResponse),
+                    SelectedDate = i.TechDataList.First().Date,
+                    TodayTechData = JsonConvert.SerializeObject(i.TechDataList.First())
+                };
+                stockMainPowerListToInsert.Add(stockMainPower);
+            }
+
+        }
+        public List<StockCandidate> GetLimitUpStocks(List<StockCandidate> allStockInfoList)
+        {
+            List<StockCandidate> limitUpStocks = new List<StockCandidate>();
+
+            foreach (var stock in allStockInfoList)
+            {
+                if (stock.TechDataList.Count < 2) continue;
+
+                StockTechData today = stock.TechDataList.First();
+                StockTechData yesterday = stock.TechDataList.Skip(1).First();
+                StockLimitPrice todayLimitPrice = GetLimitPrice(yesterday.Close);
+
+                if (today.Close == todayLimitPrice.LimitUpPrice)
+                {
+                    limitUpStocks.Add(stock);
+                }
+            }
+
+            return limitUpStocks;
+        }
+        public async Task<MainInOutDetailResponse> GetMainInOutDetailsAsync(string stockCode)
+        {
+            string url = $"https://ytdf.yuanta.com.tw/prod/yesidmz/api/chipanalysis/maininoutdetail?symbol={stockCode}&dayRange=1";
+
+            try
+            {
+                HttpResponseMessage response = await _httpClient.GetAsync(url);
+                response.EnsureSuccessStatusCode();
+
+                string responseBody = await response.Content.ReadAsStringAsync();
+                return JsonConvert.DeserializeObject<MainInOutDetailResponse>(responseBody);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Error fetching main in/out details for stock code {stockCode}. Exception: {ex.Message}");
+                throw;
+            }
+        }
     }
 }
