@@ -41,7 +41,30 @@ namespace TryNewSelector
             List<StockTech> stockTech = await candidateRepository.GetStockTech();
             SimpleHttpClientFactory simpleHttpClientFactory = new SimpleHttpClientFactory();
             var httpClient = simpleHttpClientFactory.CreateClient();
-
+            List<StockTech> candidateList = new List<StockTech>();
+            foreach (var i in stockTech)
+            {
+                var techDataList = JsonConvert.DeserializeObject<List<StockTechData>>(i.TechData);
+                var today = techDataList.First();
+                var yesterday = techDataList.Skip(1).First();
+                ApiResponse mainPower = await FetchMainInOutDetailsAsync(i.StockCode, 1, httpClient);
+                if (mainPower != null && 
+                    mainPower.Data != null && 
+                    mainPower.Data.MainInDetails != null && 
+                    mainPower.Data.MainInDetails.Any() && 
+                    mainPower.Data.MainInDetails.First().SecuritiesCompSymbol == "9268" &&
+                    today.Close / yesterday.Close > 1.095m &&
+                    today.Close == today.High)
+                {
+                    Console.WriteLine($"StockCode: {i.StockCode}, Name: {i.CompanyName}");
+                    candidateList.Add(i);
+                }
+            }
+            foreach (var i in candidateList)
+            {
+                Console.WriteLine($"Candidate: {i.StockCode}");
+            }
+            Console.WriteLine($"Total Candidate: {candidateList.Count}");
             #region 抓上市櫃公司基本資料
             HttpResponseMessage twseResponse = await httpClient.GetAsync("https://openapi.twse.com.tw/v1/opendata/t187ap03_L");
             string twseResponseBody = await twseResponse.Content.ReadAsStringAsync();
@@ -90,6 +113,9 @@ namespace TryNewSelector
                         return;
                     }
                     i.TechDataList = i.TechDataList.OrderBy(x => x.Date).ToList();
+                    #region
+
+                    #endregion
                     #region 綠 K 周轉率 > 40%，隔天做空
                     for (int j = 3; j < techDataListCount; j++)
                     {
@@ -573,6 +599,52 @@ namespace TryNewSelector
                 return 1.0m;
 
             return 5.0m;
+        }
+
+        public class ApiResponse
+        {
+            public Data Data { get; set; }
+            public int Status { get; set; }
+        }
+
+        public class Data
+        {
+            public List<MainDetail> MainInDetails { get; set; }
+            public List<MainDetail> MainOutDetails { get; set; }
+            public int Summary { get; set; }
+            public string UpdateDate { get; set; }
+        }
+
+        public class MainDetail
+        {
+            public string SecuritiesCompName { get; set; }
+            public string SecuritiesCompSymbol { get; set; }
+            public double Count { get; set; }
+            public double Price { get; set; }
+            public double BuyCount { get; set; }
+            public double SellCount { get; set; }
+            public double TradeRatio { get; set; }
+        }
+
+        public static async Task<ApiResponse> FetchMainInOutDetailsAsync(string symbol, int dayRange, HttpClient client)
+        {
+            Console.WriteLine($"Fetch {symbol} started");
+            string url = $"https://ytdf.yuanta.com.tw/prod/yesidmz/api/chipanalysis/maininoutdetail?symbol={symbol}&dayRange={dayRange}";
+            try
+            {
+                HttpResponseMessage response = await client.GetAsync(url);
+                response.EnsureSuccessStatusCode();
+
+                string responseBody = await response.Content.ReadAsStringAsync();
+                var a = JsonConvert.DeserializeObject<ApiResponse>(responseBody);
+                Console.WriteLine($"Fetch {symbol} finished");
+                return a;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error fetching data for {symbol}: {ex.Message}");
+                return null;
+            }
         }
     }
 }

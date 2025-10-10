@@ -15,7 +15,7 @@ namespace TryNewFutureStrategy
             string filePath = "C:\\Users\\Administrator\\Downloads\\台指1分K_2006-2020.csv";
             List<FutureCollection> futures = ReadFuturesFromCsv(filePath);
 
-            var startTime = TimeSpan.Parse("08:46:00");
+            var startTime = TimeSpan.Parse("09:00:00");
             var cutoffTime = TimeSpan.Parse("09:15:00");
             var lastEntryTime = TimeSpan.Parse("12:45:00");
             var endTime = TimeSpan.Parse("13:45:00");
@@ -34,9 +34,10 @@ namespace TryNewFutureStrategy
                 .OrderBy(fc => fc.Date)
                 .ToList();
             List<TradeHistory> tradeList = new List<TradeHistory>();
-            for (int i = 0; i < selectedFutures.Count; i++)
+            for (int i = 1; i < selectedFutures.Count; i++)
             {
                 FutureCollection today = selectedFutures[i];
+                FutureCollection yesterday = selectedFutures[i - 1];
                 int todayOpen = today.FutureList.First().Open;
                 //FutureCollection yesterday = selectedFutures[i - 1];
                 //int yesterdayVolume = yesterday.FutureList.Sum(x => x.TotalVolume);
@@ -47,8 +48,73 @@ namespace TryNewFutureStrategy
                 //int todayVolume = cutoff.Sum(x => x.TotalVolume);
                 int stopLossPoint = (int)(todayOpen * 0.004);
                 if (todayHigh - todayLow <= stopLossPoint) continue;
-                Dictionary<int, List<Future>> todayTech = today.FutureList.Where(x => x.Time > cutoffTime).GroupBy(ts => (int)(ts.Time.TotalMinutes / 15)).ToDictionary(g => g.Key, g => g.ToList());
+                Dictionary<int, List<Future>> todayTech = today.FutureList
+                    .Where(x => x.Time > cutoffTime)
+                    .GroupBy(ts => (int)(ts.Time.TotalMinutes / 15))
+                    .Select((group, index) => new { Index = index, Group = group }) // Add index to start keys from 0
+                    .ToDictionary(g => g.Index, g => g.Group.ToList());
                 TradeHistory tradeHistory = new TradeHistory();
+                #region
+                //for (int j = 0; j < todayTech.Count; j++)
+                //{
+                //    if (j == 0)
+                //    {
+                //        foreach (var k in todayTech[j])
+                //        {
+                //            if (tradeHistory.EntryTime == TimeSpan.Zero)
+                //            {
+                //                if (k.High > todayHigh)
+                //                {
+                //                    tradeHistory.Date = k.Date;
+                //                    tradeHistory.EntryTime = k.Time;
+                //                    tradeHistory.EntryPoint = todayHigh;
+                //                    tradeHistory.Operation = "Long";
+                //                }
+                //                else if (k.Low < todayLow)
+                //                {
+                //                    tradeHistory.Date = k.Date;
+                //                    tradeHistory.EntryTime = k.Time;
+                //                    tradeHistory.EntryPoint = todayLow;
+                //                    tradeHistory.Operation = "Short";
+                //                }
+                //            }
+                //            else
+                //            {
+                //                if (tradeHistory.Operation == "Long" && k.Low < tradeHistory.EntryPoint - stopLossPoint)
+                //                {
+                //                    tradeHistory.ExitTime = k.Time;
+                //                    tradeHistory.ExitPoint = tradeHistory.EntryPoint - stopLossPoint;
+                //                }
+                //                else if (tradeHistory.Operation == "Short" && k.High > tradeHistory.EntryPoint + stopLossPoint)
+                //                {
+                //                    tradeHistory.ExitTime = k.Time;
+                //                    tradeHistory.ExitPoint = tradeHistory.EntryPoint + stopLossPoint;
+                //                }
+                //            }
+                //            if (tradeHistory.ExitTime != TimeSpan.Zero) break;
+                //        }
+                //    }
+                //    else
+                //    {
+                //        int previousHigh = todayTech[j - 1].Max(x => x.High);
+                //        int previousLow = todayTech[j - 1].Min(x => x.Low);
+                //        if (tradeHistory.Operation == "Long" && todayTech[j].Any(x => x.Low < previousLow))
+                //        {
+                //            var exit = todayTech[j].First(x => x.Low < previousLow);
+                //            tradeHistory.ExitTime = exit.Time;
+                //            tradeHistory.ExitPoint = previousLow;
+                //        }
+                //        else if (tradeHistory.Operation == "Short" && todayTech[j].Any(x => x.High > previousHigh))
+                //        {
+                //            var exit = todayTech[j].First(x => x.High > previousHigh);
+                //            tradeHistory.ExitTime = exit.Time;
+                //            tradeHistory.ExitPoint = previousHigh;
+                //        }
+                //    }
+                //    if (tradeHistory.EntryTime == TimeSpan.Zero || tradeHistory.ExitTime != TimeSpan.Zero) break;
+                //}
+                #endregion
+                #region
                 foreach (var j in todayTech)
                 {
                     if (tradeHistory.EntryTime == TimeSpan.Zero)
@@ -80,11 +146,13 @@ namespace TryNewFutureStrategy
                                 {
                                     tradeHistory.ExitTime = k.Time;
                                     tradeHistory.ExitPoint = tradeHistory.EntryPoint + stopLossPoint;
+                                    break;
                                 }
                                 else if (tradeHistory.Operation == "Long" && k.Low < tradeHistory.EntryPoint - stopLossPoint)
                                 {
                                     tradeHistory.ExitTime = k.Time;
                                     tradeHistory.ExitPoint = tradeHistory.EntryPoint - stopLossPoint;
+                                    break;
                                 }
                             }
                         }
@@ -106,6 +174,7 @@ namespace TryNewFutureStrategy
                     }
                     if (tradeHistory.ExitTime != TimeSpan.Zero) break;
                 }
+                #endregion
                 if (tradeHistory.EntryTime == TimeSpan.Zero) continue;
                 if (tradeHistory.ExitTime == TimeSpan.Zero)
                 {
