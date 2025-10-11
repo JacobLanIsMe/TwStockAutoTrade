@@ -809,7 +809,6 @@ namespace Core.Service
             var stockInfoDict = allStockInfoList.ToDictionary(stock => stock.StockCode);
 
             List<StockMainPower> stockMainPowerListToUpdate = await _stockMainPowerRepository.GetRecordsWithNullTomorrowTechData();
-            var stockMainPowerDictToUpdate = stockMainPowerListToUpdate.ToDictionary(stock => stock.StockCode);
 
             foreach (var i in stockMainPowerListToUpdate)
             {
@@ -820,42 +819,24 @@ namespace Core.Service
                 StockTechData tomorrowTechData = stockInfoDict[i.StockCode].TechDataList.Skip(1).First();
                 i.TomorrowTechData = JsonConvert.SerializeObject(tomorrowTechData);
             }
-
+            var stockMainPowerDictToUpdate = stockMainPowerListToUpdate.ToDictionary(stock => (stock.StockCode, JsonConvert.SerializeObject(JsonConvert.DeserializeObject<MainInOutDetailResponse>(stock.MainPowerData).Data.MainInDetails)));
             List<StockCandidate> limitUpStockList = GetLimitUpStocks(allStockInfoList);
             List<StockMainPower> stockMainPowerListToInsert = new List<StockMainPower>();
             foreach (var i in limitUpStockList)
             {
                 MainInOutDetailResponse mainInOutDetailResponse = await GetMainInOutDetailsAsync(i.StockCode);
                 if (mainInOutDetailResponse == null) continue;
-
-                if (!stockMainPowerDictToUpdate.ContainsKey(i.StockCode))
+                if (stockMainPowerDictToUpdate.ContainsKey((i.StockCode, JsonConvert.SerializeObject(mainInOutDetailResponse.Data.MainInDetails)))) continue;
+                
+                StockMainPower newStockMainPower = new StockMainPower()
                 {
-                    StockMainPower newStockMainPower = new StockMainPower()
-                    {
-                        StockCode = i.StockCode,
-                        CompanyName = i.CompanyName,
-                        MainPowerData = JsonConvert.SerializeObject(mainInOutDetailResponse),
-                        SelectedDate = i.TechDataList.First().Date,
-                        TodayTechData = JsonConvert.SerializeObject(i.TechDataList.First())
-                    };
-                    stockMainPowerListToInsert.Add(newStockMainPower);
-                }
-                else
-                {
-                    DateTime updateDate = DateTime.ParseExact(mainInOutDetailResponse.Data.UpdateDate.Split(' ')[0], "yyyy/MM/dd", CultureInfo.InvariantCulture);
-                    if (updateDate.Date != i.TechDataList.First().Date.Date)
-                    {
-                        StockMainPower newStockMainPower = new StockMainPower()
-                        {
-                            StockCode = i.StockCode,
-                            CompanyName = i.CompanyName,
-                            MainPowerData = JsonConvert.SerializeObject(mainInOutDetailResponse),
-                            SelectedDate = i.TechDataList.First().Date,
-                            TodayTechData = JsonConvert.SerializeObject(i.TechDataList.First())
-                        };
-                        stockMainPowerListToInsert.Add(newStockMainPower);
-                    }
-                }
+                    StockCode = i.StockCode,
+                    CompanyName = i.CompanyName,
+                    MainPowerData = JsonConvert.SerializeObject(mainInOutDetailResponse),
+                    SelectedDate = i.TechDataList.First().Date,
+                    TodayTechData = JsonConvert.SerializeObject(i.TechDataList.First())
+                };
+                stockMainPowerListToInsert.Add(newStockMainPower);
             }
             await _stockMainPowerRepository.Update(stockMainPowerListToUpdate);
             await _stockMainPowerRepository.Insert(stockMainPowerListToInsert);
