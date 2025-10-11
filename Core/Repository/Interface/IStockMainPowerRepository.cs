@@ -11,5 +11,6 @@ namespace Core.Repository.Interface
     {
         Task Insert(List<StockMainPower> stockMainPowerList);
         Task<List<StockMainPower>> GetRecordsWithNullTomorrowTechData();
+        Task Update(List<StockMainPower> stockMainPowerList);
     }
 }

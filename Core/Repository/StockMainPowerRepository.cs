@@ -46,5 +46,16 @@ namespace Core.Repository
                 return result.ToList();
             }
         }
+
+        public async Task Update(List<StockMainPower> stockMainPowerList)
+        {
+            _logger.Information("Update StockMainPower started.");
+            string sqlCommand = @"UPDATE [dbo].[StockMainPower] SET TomorrowTechData = @TomorrowTechData WHERE Id = @Id";
+            using (SqlConnection sqlConnection = new SqlConnection(_dbConnectionString))
+            {
+                await sqlConnection.ExecuteAsync(sqlCommand, stockMainPowerList);
+            }
+            _logger.Information("Update StockMainPower completed.");
+        }
     }
 }

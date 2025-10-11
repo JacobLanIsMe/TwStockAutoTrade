@@ -808,8 +808,10 @@ namespace Core.Service
         {
             var stockInfoDict = allStockInfoList.ToDictionary(stock => stock.StockCode);
 
-            List<StockMainPower> stockMainPowerToUpdate = await _stockMainPowerRepository.GetRecordsWithNullTomorrowTechData();
-            foreach (var i in stockMainPowerToUpdate)
+            List<StockMainPower> stockMainPowerListToUpdate = await _stockMainPowerRepository.GetRecordsWithNullTomorrowTechData();
+            var stockMainPowerDictToUpdate = stockMainPowerListToUpdate.ToDictionary(stock => stock.StockCode);
+
+            foreach (var i in stockMainPowerListToUpdate)
             {
                 if (!stockInfoDict.ContainsKey(i.StockCode) || 
                     stockInfoDict[i.StockCode].TechDataList.Count == 0 || 
@@ -825,17 +827,38 @@ namespace Core.Service
             {
                 MainInOutDetailResponse mainInOutDetailResponse = await GetMainInOutDetailsAsync(i.StockCode);
                 if (mainInOutDetailResponse == null) continue;
-                StockMainPower stockMainPower = new StockMainPower()
-                {
-                    StockCode = i.StockCode,
-                    CompanyName = i.CompanyName,
-                    MainPowerData = JsonConvert.SerializeObject(mainInOutDetailResponse),
-                    SelectedDate = i.TechDataList.First().Date,
-                    TodayTechData = JsonConvert.SerializeObject(i.TechDataList.First())
-                };
-                stockMainPowerListToInsert.Add(stockMainPower);
-            }
 
+                if (!stockMainPowerDictToUpdate.ContainsKey(i.StockCode))
+                {
+                    StockMainPower newStockMainPower = new StockMainPower()
+                    {
+                        StockCode = i.StockCode,
+                        CompanyName = i.CompanyName,
+                        MainPowerData = JsonConvert.SerializeObject(mainInOutDetailResponse),
+                        SelectedDate = i.TechDataList.First().Date,
+                        TodayTechData = JsonConvert.SerializeObject(i.TechDataList.First())
+                    };
+                    stockMainPowerListToInsert.Add(newStockMainPower);
+                }
+                else
+                {
+                    DateTime updateDate = DateTime.ParseExact(mainInOutDetailResponse.Data.UpdateDate.Split(' ')[0], "yyyy/MM/dd", CultureInfo.InvariantCulture);
+                    if (updateDate.Date != i.TechDataList.First().Date.Date)
+                    {
+                        StockMainPower newStockMainPower = new StockMainPower()
+                        {
+                            StockCode = i.StockCode,
+                            CompanyName = i.CompanyName,
+                            MainPowerData = JsonConvert.SerializeObject(mainInOutDetailResponse),
+                            SelectedDate = i.TechDataList.First().Date,
+                            TodayTechData = JsonConvert.SerializeObject(i.TechDataList.First())
+                        };
+                        stockMainPowerListToInsert.Add(newStockMainPower);
+                    }
+                }
+            }
+            await _stockMainPowerRepository.Update(stockMainPowerListToUpdate);
+            await _stockMainPowerRepository.Insert(stockMainPowerListToInsert);
         }
         public List<StockCandidate> GetLimitUpStocks(List<StockCandidate> allStockInfoList)
         {
