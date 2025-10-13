@@ -36,6 +36,7 @@ namespace Core.Service
             }
             else
             {
+                _logger.Information($"Yuanta Unknown System Response: {strResult}");
                 cts.Cancel();
             }
         }

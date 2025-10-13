@@ -9,14 +9,13 @@ namespace Core.Model
 {
     public class StockMainPower
     {
+        public int SqlId { get; set; }
+        public Guid Id { get; set; }
         public string StockCode { get; set; }
         public string CompanyName { get; set; }
         public string MainPowerData { get; set; }
-        public List<MainPower> MainPowerDataList { get; set; } = new List<MainPower>();
-    }
-    public class MainPower
-    {
-        public DateTime Date { get; set; }
-        public int MainPowerVolume { get; set; }
+        public DateTime SelectedDate { get; set; }
+        public string TodayTechData { get; set; }
+        public string TomorrowTechData { get; set; }
     }
 }

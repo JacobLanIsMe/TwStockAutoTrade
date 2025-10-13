@@ -11,6 +11,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Net.Http;
+using System.Text;
 using System.Threading.Tasks;
 using YuantaOneAPI;
 
@@ -20,37 +21,92 @@ namespace Core.Service
     {
         private HttpClient _httpClient;
         private readonly ICandidateRepository _candidateRepository;
+        private readonly ICandidateForShortRepository _candidateForShortRepository;
         private readonly ILogger _logger;
         private readonly IDateTimeService _dateTimeService;
         private readonly IDiscordService _discordService;
+        private readonly IStockMainPowerRepository _stockMainPowerRepository;
         private int _maxRetryCount = 10;
-        public StockSelectorService(ICandidateRepository candidateRepository, ILogger logger, IDateTimeService dateTimeService, IDiscordService discordService)
+        public StockSelectorService(ICandidateRepository candidateRepository, ICandidateForShortRepository candidateForShortRepository, ILogger logger, IDateTimeService dateTimeService, IDiscordService discordService, IStockMainPowerRepository stockMainPowerRepository)
         {
             SimpleHttpClientFactory httpClientFactory = new SimpleHttpClientFactory();
             _httpClient = httpClientFactory.CreateClient();
             _candidateRepository = candidateRepository;
+            _candidateForShortRepository = candidateForShortRepository;
             int maxConcurrency = Environment.ProcessorCount * 40;
             _logger = logger;
             _dateTimeService = dateTimeService;
             _discordService = discordService;
+            _stockMainPowerRepository = stockMainPowerRepository;
         }
         public async Task SelectStock()
         {
+            await _candidateForShortRepository.DeleteActiveCandidate();
             List<StockCandidate> allStockInfoList = await GetStockCodeList();
+            await SetIssuedShares(allStockInfoList);
             await SetExchangeReportFromSino(allStockInfoList);
-            if (!doesNeedUpdate(allStockInfoList)) return;
-            List<StockCandidate> candidateList = SelectCandidateByTech(allStockInfoList);
-            candidateList = await SelectCandidateByMainPower(candidateList);
-            Dictionary<string, StockCandidate> allStockInfoDict = allStockInfoList.ToDictionary(x => x.StockCode);
-            await UpdateCandidate(candidateList, allStockInfoDict);
-            await UpdateExRightsExDevidendDate();
+            List<StockCandidate> candidateList = SelectCandidateForShortByTech(allStockInfoList);
+            List<StockCandidate> filteredCandidateList = await RemoveStockCanNotIntraday(candidateList);
+            filteredCandidateList = filteredCandidateList.Any() ? 
+                                    new List<StockCandidate>() { filteredCandidateList.OrderByDescending(x => x.TurnoverRate).First() } :
+                                    filteredCandidateList;
+            await SendCandidateForShortToDiscord(filteredCandidateList);
+            await _candidateForShortRepository.Insert(filteredCandidateList);
             await UpSertTechDataToDb(allStockInfoList);
+            await TrackMainPower(allStockInfoList);
+            
+            //if (!doesNeedUpdate(allStockInfoList)) return;
+            //List<StockCandidate> candidateList = SelectCandidateByTech(allStockInfoList);
+            //candidateList = await SelectCandidateByMainPower(candidateList);
+            //Dictionary<string, StockCandidate> allStockInfoDict = allStockInfoList.ToDictionary(x => x.StockCode);
+            //await UpdateCandidate(candidateList, allStockInfoDict);
+            //await UpdateExRightsExDevidendDate();
             //List<StockCandidate> dailyExchangeReport = await GetDailyExchangeReportFromTwseAndTwotc();
             //await UpdateTrade(allStockInfoDict);
             //await UpdateCrazyCandidate(crazyCandidateList, allStockInfoDict);
             //List<StockCandidate> crazyCandidateList = SelectCrazyCandidate(allStockInfoList);
         }
+        
+        private StockLimitPrice GetLimitPrice(decimal price)
+        {
+            // 1. 計算理論上的 10% 漲停價
+            decimal theoreticalLimitUp = price * 1.10m;
+            // 2.根據理論價格找到對應的升降單位，並向下取整，得到最終漲停價
+            decimal finalTickSizeForLimitUp = GetTickSize(theoreticalLimitUp);
+            decimal limitUpPrice = Math.Floor(theoreticalLimitUp / finalTickSizeForLimitUp) * finalTickSizeForLimitUp;
+            // 3. 修正後的邏輯：
+            //    找到漲停價的前一個點位，並判斷該點位所屬的升降單位，
+            //    然後再進行減法運算。
+            //    我們用一個極小的數 (0.0001m) 來確保能跨越級距界線。
+            decimal previousTickSize = GetTickSize(limitUpPrice - 0.0001m);
+            decimal priceBeforeLimitUp = limitUpPrice - previousTickSize;
+            // 1. 計算理論上的 10% 跌停價
+            decimal theoreticalLimitDown = price * 0.90m;
+            // 2. 根據理論價格找到對應的升降單位，並向上取整，得到最終跌停價
+            decimal finalTickSizeForLimitDown = GetTickSize(theoreticalLimitDown);
+            decimal limitDownPrice = Math.Ceiling(theoreticalLimitDown / finalTickSizeForLimitDown) * finalTickSizeForLimitDown;
+            return new StockLimitPrice()
+            {
+                LimitUpPrice = limitUpPrice,
+                PriceBeforeLimitUp = priceBeforeLimitUp,
+                LimitDownPrice = limitDownPrice
+            };
+        }
+        private decimal GetTickSize(decimal price)
+        {
+            if (price < 10m)
+                return 0.01m;
+            if (price < 50m)
+                return 0.05m;
+            if (price < 100m)
+                return 0.1m;
+            if (price < 500m)
+                return 0.5m;
+            if (price < 1000m)
+                return 1.0m;
 
+            return 5.0m;
+        }
         private async Task<List<StockCandidate>> GetStockCodeList()
         {
             var twseStockListTask = GetTwseStockCode();
@@ -60,7 +116,55 @@ namespace Core.Service
             List<StockCandidate> allStockInfoList = twseStockList.Concat(tpexStockList).ToList();
             return allStockInfoList;
         }
+        private async Task<List<StockCandidate>> RemoveStockCanNotIntraday(List<StockCandidate> candidateList)
+        {
+            // 抓出上市可當沖股票
+            HttpResponseMessage twseIntradayResponse = await _httpClient.GetAsync("https://openapi.twse.com.tw/v1/exchangeReport/TWTB4U");
+            string twseIntradayResponseBody = await twseIntradayResponse.Content.ReadAsStringAsync();
+            List<TwseIntradayStockInfo> twseIntradayStockList = JsonConvert.DeserializeObject<List<TwseIntradayStockInfo>>(twseIntradayResponseBody);
+            // 抓出上市暫時先賣後買的股票
+            HttpResponseMessage twseSuspendedShortSellingResponse = await _httpClient.GetAsync("https://openapi.twse.com.tw/v1/exchangeReport/TWTBAU1");
+            string twseSuspendedShortSellingResponseBody = await twseSuspendedShortSellingResponse.Content.ReadAsStringAsync();
+            List<TwseSuspendedShortSellingStockInfo> twseSuspendedShortSellingStockList = JsonConvert.DeserializeObject<List<TwseSuspendedShortSellingStockInfo>>(twseSuspendedShortSellingResponseBody);
+            // 抓出上櫃可當沖股票
+            HttpResponseMessage twotcIntradayResponse = await _httpClient.GetAsync("https://www.tpex.org.tw/www/zh-tw/intraday/list");
+            string twotcIntradayResponseBody = await twotcIntradayResponse.Content.ReadAsStringAsync();
+            TwotcIntradayStockInfo twotcIntradayStockList = JsonConvert.DeserializeObject<TwotcIntradayStockInfo>(twotcIntradayResponseBody);
 
+            // 抓出上櫃暫時先賣後買的股票
+            HttpResponseMessage twotcSuspendedShortSellingResponse = await _httpClient.GetAsync("https://www.tpex.org.tw/openapi/v1/tpex_intraday_trading_pre");
+            string twotcSuspendedShortSellingResponseBody = await twotcSuspendedShortSellingResponse.Content.ReadAsStringAsync();
+            List<TwotcSuspendedShortSellingStockInfo> twotcSuspendedShortSellingStockList = JsonConvert.DeserializeObject<List<TwotcSuspendedShortSellingStockInfo>>(twotcSuspendedShortSellingResponseBody);
+
+
+            HashSet<string> twseIntradayStockCodeHashSet = new HashSet<string>(twseIntradayStockList.Select(x => x.Code.ToUpper()));
+            HashSet<string> twotcIntradayStockCodeHashSet = new HashSet<string>();
+            if (twotcIntradayStockList.Tables.Any())
+            {
+                twotcIntradayStockCodeHashSet = new HashSet<string>(twotcIntradayStockList.Tables.First().Data.Select(x => x[0].ToUpper()));
+            }
+            HashSet<string> twseSuspendedShortSellingStockCodeHashSet = new HashSet<string>(twseSuspendedShortSellingStockList.Select(x => x.Code.ToUpper()));
+            HashSet<string> twotcSuspendedShortSellingStockCodeHashSet = new HashSet<string>(twotcSuspendedShortSellingStockList.Select(x => x.SecuritiesCompanyCode.ToUpper()));
+            List<StockCandidate> filteredCandidateList = new List<StockCandidate>();
+            foreach (var i in candidateList)
+            {
+                if (i.Market == enumMarketType.TWSE)
+                {
+                    if (twseIntradayStockCodeHashSet.Contains(i.StockCode) && !twseSuspendedShortSellingStockCodeHashSet.Contains(i.StockCode))
+                    {
+                        filteredCandidateList.Add(i);
+                    }
+                }
+                else if (i.Market == enumMarketType.TWOTC)
+                {
+                    if (twotcIntradayStockCodeHashSet.Contains(i.StockCode) && !twotcSuspendedShortSellingStockCodeHashSet.Contains(i.StockCode))
+                    {
+                        filteredCandidateList.Add(i);
+                    }
+                }
+            }
+            return filteredCandidateList;
+        }
         private async Task<List<StockCandidate>> GetTwseStockCode()
         {
             _logger.Information("Get TWSE stock code started.");
@@ -73,11 +177,7 @@ namespace Core.Service
                     HttpResponseMessage response = await _httpClient.GetAsync("https://openapi.twse.com.tw/v1/opendata/t187ap03_L");
                     string responseBody = await response.Content.ReadAsStringAsync();
                     List<TwseStockInfo> stockInfoList = JsonConvert.DeserializeObject<List<TwseStockInfo>>(responseBody);
-                    HttpResponseMessage intradayResponse = await _httpClient.GetAsync("https://openapi.twse.com.tw/v1/exchangeReport/TWTB4U");
-                    string intradayResponseBody = await intradayResponse.Content.ReadAsStringAsync();
-                    List<TwseIntradayStockInfo> intradayStockInfoList = JsonConvert.DeserializeObject<List<TwseIntradayStockInfo>>(intradayResponseBody);
-                    HashSet<string> intradayStockCodeHashSet = new HashSet<string>(intradayStockInfoList.Select(x => x.Code.ToUpper()));
-                    stockList = stockInfoList.Where(x => intradayStockCodeHashSet.Contains(x.公司代號.ToUpper())).Select(x => new StockCandidate()
+                    stockList = stockInfoList.Select(x => new StockCandidate()
                     {
                         Market = enumMarketType.TWSE,
                         StockCode = x.公司代號.ToUpper(),
@@ -85,7 +185,7 @@ namespace Core.Service
                     }).ToList();
                     break;
                 }
-                catch(Exception ex)
+                catch (Exception ex)
                 {
                     _logger.Error($"Error occurs while retrieving TWSE stock code. Error message: {ex.Message}");
                     if (retryCount >= _maxRetryCount) throw;
@@ -107,15 +207,7 @@ namespace Core.Service
                     HttpResponseMessage response = await _httpClient.GetAsync("https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O");
                     string responseBody = await response.Content.ReadAsStringAsync();
                     List<TwotcStockInfo> stockInfoList = JsonConvert.DeserializeObject<List<TwotcStockInfo>>(responseBody);
-                    HttpResponseMessage intradayResponse = await _httpClient.GetAsync("https://www.tpex.org.tw/www/zh-tw/intraday/list");
-                    string intradayResponseBody = await intradayResponse.Content.ReadAsStringAsync();
-                    TwotcIntradayStockInfo intradayStockInfoList = JsonConvert.DeserializeObject<TwotcIntradayStockInfo>(intradayResponseBody);
-                    HashSet<string> intradayStockCodeHashSet = new HashSet<string>();
-                    if (intradayStockInfoList.Tables.Any())
-                    {
-                        intradayStockCodeHashSet = new HashSet<string>(intradayStockInfoList.Tables.First().Data.Select(x => x[0].ToUpper()));
-                    }
-                    stockList = stockInfoList.Where(x => intradayStockCodeHashSet.Contains(x.SecuritiesCompanyCode.ToUpper())).Select(x => new StockCandidate()
+                    stockList = stockInfoList.Select(x => new StockCandidate()
                     {
                         Market = enumMarketType.TWOTC,
                         StockCode = x.SecuritiesCompanyCode.ToUpper(),
@@ -132,6 +224,31 @@ namespace Core.Service
             }
             _logger.Information("Get TWOTC stock code finished.");
             return stockList;
+        }
+        private List<StockCandidate> SelectCandidateForShortByTech(List<StockCandidate> allStockInfoList)
+        {
+            List<StockCandidate> candidateList = new List<StockCandidate>();
+            foreach (var i in allStockInfoList)
+            {
+                if (i.TechDataList.Count < 2) continue;
+                if (i.IssuedShare == 0) continue;
+                StockTechData today = i.TechDataList[0];
+                StockTechData yesterday = i.TechDataList[1];
+                StockLimitPrice todayLimitPrice = GetLimitPrice(yesterday.Close);
+                decimal turnoverRate = (decimal)today.Volume * 1000 / i.IssuedShare;
+                if (today.Close == todayLimitPrice.LimitUpPrice && today.Open < today.Close && turnoverRate > 0.2m)
+                {
+                    StockLimitPrice tomorrowLimitPrice = GetLimitPrice(today.Close);
+                    i.SelectedDate = today.Date;
+                    i.ClosePrice = today.Close;
+                    i.LimitUpPrice = tomorrowLimitPrice.LimitUpPrice;
+                    i.PriceBeforeLimitUp = tomorrowLimitPrice.PriceBeforeLimitUp;
+                    i.LimitDownPrice = tomorrowLimitPrice.LimitDownPrice;
+                    i.TurnoverRate = turnoverRate;
+                    candidateList.Add(i);
+                }
+            }
+            return candidateList;
         }
         private async Task<List<StockCandidate>> SelectCandidateByMainPower(List<StockCandidate> candidateList)
         {
@@ -236,6 +353,7 @@ namespace Core.Service
             {
                 StockCode = x.StockCode,
                 CompanyName = x.CompanyName,
+                IssuedShare = x.IssuedShare,
                 TechData = JsonConvert.SerializeObject(x.TechDataList)
             }).ToList();
             await _candidateRepository.UpsertStockTech(stockTechList);
@@ -378,12 +496,12 @@ namespace Core.Service
                         candidateToDeleteList.Add(i);
                         continue;
                     }
-                    if (!hasLatestStockInfo || stock.TechDataList.Count < 9) 
+                    if (!hasLatestStockInfo || stock.TechDataList.Count < 9)
                     {
                         errorCandidateList.Add(i);
                         _logger.Error($"Can not retrieve last 9 tech data of stock code {i.StockCode}.");
                         continue;
-                    } 
+                    }
                     decimal todayClose = stock.TechDataList.First().Close;
                     if (todayClose < i.GapUpLow || (todayClose > i.EntryPoint && todayClose < stock.TechDataList.Take(20).Average(x => x.Close)))
                     {
@@ -427,7 +545,17 @@ namespace Core.Service
             }
             await _discordService.SendMessage(message);
         }
-
+        private async Task SendCandidateForShortToDiscord(List<StockCandidate> candidateList)
+        {
+            StringBuilder message = new StringBuilder();
+            message.AppendLine($"做空股票:");
+            foreach (var i in candidateList)
+            {
+                message.AppendLine($"{i.StockCode} {i.CompanyName}, 今天收盤價: {i.ClosePrice}, 漲停價格: {i.LimitUpPrice}, 漲停前一檔價格: {i.PriceBeforeLimitUp}, 跌停價格: {i.LimitDownPrice}");
+            }
+            message.AppendLine($"總共 {candidateList.Count} 檔");
+            await _discordService.SendMessage(message.ToString());
+        }
         private async Task UpdateExRightsExDevidendDate()
         {
             List<ExRrightsExDividend> twseExRrightsExDividendList = await GetTwseExRightsExDevidendDate();
@@ -627,6 +755,41 @@ namespace Core.Service
         {
             return enumMarketType == enumMarketType.TWSE ? "TW" : "TWO";
         }
+        private async Task SetIssuedShares(List<StockCandidate> allStockInfoList)
+        {
+            #region 抓上市櫃公司基本資料
+            HttpResponseMessage twseResponse = await _httpClient.GetAsync("https://openapi.twse.com.tw/v1/opendata/t187ap03_L");
+            string twseResponseBody = await twseResponse.Content.ReadAsStringAsync();
+            List<TwseCompanyInfo> twseCompanyInfoList = JsonConvert.DeserializeObject<List<TwseCompanyInfo>>(twseResponseBody);
+            HttpResponseMessage twotcResponse = await _httpClient.GetAsync("https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap03_O");
+            string twotcResponseBody = await twotcResponse.Content.ReadAsStringAsync();
+            List<TwotcCompanyInfo> twotcCompanyInfoList = JsonConvert.DeserializeObject<List<TwotcCompanyInfo>>(twotcResponseBody);
+            #endregion
+            Dictionary<string, long> companyShareDict = new Dictionary<string, long>();
+            foreach (var i in twseCompanyInfoList)
+            {
+                string key = i.StockCode.ToUpper();
+                if (!companyShareDict.ContainsKey(key))
+                {
+                    companyShareDict.Add(key, i.IssuedShare);
+                }
+            }
+            foreach (var i in twotcCompanyInfoList)
+            {
+                string key = i.SecuritiesCompanyCode.ToUpper();
+                if (!companyShareDict.ContainsKey(key))
+                {
+                    companyShareDict.Add(key, i.IssuedShare);
+                }
+            }
+            foreach (var i in allStockInfoList)
+            {
+                if (companyShareDict.TryGetValue(i.StockCode, out long issuedShare))
+                {
+                    i.IssuedShare = issuedShare;
+                }
+            }
+        }
         //private async Task UpdateTrade(Dictionary<string, StockCandidate> allStockInfoDict)
         //{
         //    List<StockTrade> stockHoldingList = await _tradeRepository.GetStockHolding();
@@ -641,5 +804,80 @@ namespace Core.Service
         //    }
         //    await _tradeRepository.UpdateLast9TechData(stockHoldingList);
         //}
+        private async Task TrackMainPower(List<StockCandidate> allStockInfoList)
+        {
+            var stockInfoDict = allStockInfoList.ToDictionary(stock => stock.StockCode);
+
+            List<StockMainPower> stockMainPowerListToUpdate = await _stockMainPowerRepository.GetRecordsWithNullTomorrowTechData();
+
+            foreach (var i in stockMainPowerListToUpdate)
+            {
+                if (!stockInfoDict.ContainsKey(i.StockCode) || 
+                    stockInfoDict[i.StockCode].TechDataList.Count == 0 || 
+                    stockInfoDict[i.StockCode].TechDataList.Max(x => x.Date) <= i.SelectedDate) continue;
+
+                StockTechData tomorrowTechData = stockInfoDict[i.StockCode].TechDataList.Where(x => x.Date > i.SelectedDate).OrderBy(x => x.Date).First();
+                i.TomorrowTechData = JsonConvert.SerializeObject(tomorrowTechData);
+            }
+            var stockMainPowerDictToUpdate = stockMainPowerListToUpdate.ToDictionary(stock => (stock.StockCode, JsonConvert.SerializeObject(JsonConvert.DeserializeObject<MainInOutDetailResponse>(stock.MainPowerData).Data.MainInDetails)));
+            List<StockCandidate> limitUpStockList = GetLimitUpStocks(allStockInfoList);
+            List<StockMainPower> stockMainPowerListToInsert = new List<StockMainPower>();
+            foreach (var i in limitUpStockList)
+            {
+                MainInOutDetailResponse mainInOutDetailResponse = await GetMainInOutDetailsAsync(i.StockCode);
+                if (mainInOutDetailResponse == null) continue;
+                if (stockMainPowerDictToUpdate.ContainsKey((i.StockCode, JsonConvert.SerializeObject(mainInOutDetailResponse.Data.MainInDetails)))) continue;
+                
+                StockMainPower newStockMainPower = new StockMainPower()
+                {
+                    StockCode = i.StockCode,
+                    CompanyName = i.CompanyName,
+                    MainPowerData = JsonConvert.SerializeObject(mainInOutDetailResponse),
+                    SelectedDate = i.TechDataList.First().Date,
+                    TodayTechData = JsonConvert.SerializeObject(i.TechDataList.First())
+                };
+                stockMainPowerListToInsert.Add(newStockMainPower);
+            }
+            await _stockMainPowerRepository.Update(stockMainPowerListToUpdate);
+            await _stockMainPowerRepository.Insert(stockMainPowerListToInsert);
+        }
+        public List<StockCandidate> GetLimitUpStocks(List<StockCandidate> allStockInfoList)
+        {
+            List<StockCandidate> limitUpStocks = new List<StockCandidate>();
+
+            foreach (var stock in allStockInfoList)
+            {
+                if (stock.TechDataList.Count < 2) continue;
+
+                StockTechData today = stock.TechDataList.First();
+                StockTechData yesterday = stock.TechDataList.Skip(1).First();
+                StockLimitPrice todayLimitPrice = GetLimitPrice(yesterday.Close);
+
+                if (today.Close == todayLimitPrice.LimitUpPrice)
+                {
+                    limitUpStocks.Add(stock);
+                }
+            }
+
+            return limitUpStocks;
+        }
+        public async Task<MainInOutDetailResponse> GetMainInOutDetailsAsync(string stockCode)
+        {
+            string url = $"https://ytdf.yuanta.com.tw/prod/yesidmz/api/chipanalysis/maininoutdetail?symbol={stockCode}&dayRange=1";
+
+            try
+            {
+                HttpResponseMessage response = await _httpClient.GetAsync(url);
+                response.EnsureSuccessStatusCode();
+
+                string responseBody = await response.Content.ReadAsStringAsync();
+                return JsonConvert.DeserializeObject<MainInOutDetailResponse>(responseBody);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Error fetching main in/out details for stock code {stockCode}. Exception: {ex.Message}");
+                throw;
+            }
+        }
     }
 }

@@ -6,18 +6,21 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using System;
+using System.Collections.Generic;
 using System.IO;
-using System.Runtime.Remoting.Messaging;
+using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
-namespace Selector
+
+namespace ShortStock
 {
     class Program
     {
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
             Log.Logger = new LoggerConfiguration()
             .WriteTo.Console()
-            .WriteTo.File("C://Logs/StockSelector/log-.log", rollingInterval: RollingInterval.Day, retainedFileCountLimit: 250)
+            .WriteTo.File("C://Logs/ShortStock/log-.log", rollingInterval: RollingInterval.Day, retainedFileCountLimit: 250)
             .CreateLogger();
             var serviceProvider = new ServiceCollection()
                 .AddSingleton<IConfiguration>(new ConfigurationBuilder()
@@ -25,22 +28,25 @@ namespace Selector
                 .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
                 .Build())
                 .AddSingleton<ILogger>(Log.Logger)
-                .AddSingleton<IStockSelectorService, StockSelectorService>()
-                .AddSingleton<IDateTimeService, DateTimeService>()
-                .AddSingleton<ICandidateRepository, CandidateRepository>()
                 .AddSingleton<ICandidateForShortRepository, CandidateForShortRepository>()
-                .AddSingleton<ITradeRepository, TradeRepository>()
+                .AddSingleton<IShortStockService, ShortStockService>()
+                .AddSingleton<IYuantaService, YuantaService>()
                 .AddSingleton<IDiscordService, DiscordService>()
-                .AddSingleton<IStockMainPowerRepository, StockMainPowerRepository>()
+                .AddSingleton<IDateTimeService, DateTimeService>()
                 .BuildServiceProvider();
-            var getStockInfoService = serviceProvider.GetRequiredService<IStockSelectorService>();
+            var shortStockService = serviceProvider.GetRequiredService<IShortStockService>();
+            var discordService = serviceProvider.GetRequiredService<IDiscordService>();
             try
             {
-                Task.Run(async () => await getStockInfoService.SelectStock()).Wait();
+                Task.Run(async () => await shortStockService.Trade()).Wait();
             }
             catch (Exception ex)
             {
                 Log.Error(ex.ToString());
+            }
+            finally
+            {
+                await discordService.SendMessage("ShortStock has terminated.");
             }
         }
     }

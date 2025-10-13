@@ -11,10 +11,10 @@ namespace Core.Model
     {
         public string SecuritiesCompanyCode { get; set; }
         [JsonProperty("IssueShares")]
-        public string _IssueShares { get; set; }
-        public long IssuedShares
+        public string _IssuedShare { get; set; }
+        public long IssuedShare
         {
-            get => long.TryParse(_IssueShares, out long result) ? result : 0;
+            get => long.TryParse(_IssuedShare, out long result) ? result : 0;
         }
     }
 }
