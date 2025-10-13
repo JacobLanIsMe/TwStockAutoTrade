@@ -154,7 +154,7 @@ namespace Core.Service
             {
                 if (candidate.IsProcessing) return;
                 if (tradePrice >= candidate.ClosePrice * 1.085m || 
-                    tradePrice < candidate.ClosePrice * 0.92m ||
+                    tradePrice < candidate.ClosePrice * 0.91m ||
                     _dateTimeService.GetTaiwanTime() > _exitTime)
                 {
                     StockOrder stockOrder = SetDefaultStockOrder();
