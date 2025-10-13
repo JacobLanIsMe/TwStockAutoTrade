@@ -42,30 +42,30 @@ namespace TryNewSelector
             SimpleHttpClientFactory simpleHttpClientFactory = new SimpleHttpClientFactory();
             var httpClient = simpleHttpClientFactory.CreateClient();
             #region 抓籌碼
-            List<StockTech> candidateList = new List<StockTech>();
-            foreach (var i in stockTech)
-            {
-                var techDataList = JsonConvert.DeserializeObject<List<StockTechData>>(i.TechData);
-                var today = techDataList.First();
-                var yesterday = techDataList.Skip(1).First();
-                ApiResponse mainPower = await FetchMainInOutDetailsAsync(i.StockCode, 1, httpClient);
-                if (mainPower != null &&
-                    mainPower.Data != null &&
-                    mainPower.Data.MainInDetails != null &&
-                    mainPower.Data.MainInDetails.Any() &&
-                    mainPower.Data.MainInDetails.First().SecuritiesCompSymbol == "1650" &&
-                    today.Volume > 10000 &&
-                    today.Volume > yesterday.Volume * 2)
-                {
-                    Console.WriteLine($"StockCode: {i.StockCode}, Name: {i.CompanyName}");
-                    candidateList.Add(i);
-                }
-            }
-            foreach (var i in candidateList)
-            {
-                Console.WriteLine($"Candidate: {i.StockCode}");
-            }
-            Console.WriteLine($"Total Candidate: {candidateList.Count}");
+            //List<StockTech> candidateList = new List<StockTech>();
+            //foreach (var i in stockTech)
+            //{
+            //    var techDataList = JsonConvert.DeserializeObject<List<StockTechData>>(i.TechData);
+            //    var today = techDataList.First();
+            //    var yesterday = techDataList.Skip(1).First();
+            //    ApiResponse mainPower = await FetchMainInOutDetailsAsync(i.StockCode, 1, httpClient);
+            //    if (mainPower != null &&
+            //        mainPower.Data != null &&
+            //        mainPower.Data.MainInDetails != null &&
+            //        mainPower.Data.MainInDetails.Any() &&
+            //        mainPower.Data.MainInDetails.First().SecuritiesCompSymbol == "1650" &&
+            //        today.Volume > 10000 &&
+            //        today.Volume > yesterday.Volume * 2)
+            //    {
+            //        Console.WriteLine($"StockCode: {i.StockCode}, Name: {i.CompanyName}");
+            //        candidateList.Add(i);
+            //    }
+            //}
+            //foreach (var i in candidateList)
+            //{
+            //    Console.WriteLine($"Candidate: {i.StockCode}");
+            //}
+            //Console.WriteLine($"Total Candidate: {candidateList.Count}");
             #endregion
             #region 抓上市櫃公司基本資料
             HttpResponseMessage twseResponse = await httpClient.GetAsync("https://openapi.twse.com.tw/v1/opendata/t187ap03_L");
@@ -81,14 +81,14 @@ namespace TryNewSelector
             {
                 if (!companyShareDict.ContainsKey(i.StockCode))
                 {
-                    companyShareDict.Add(i.StockCode, i.IssuedShares);
+                    companyShareDict.Add(i.StockCode, i.IssuedShare);
                 }
             }
             foreach (var i in twotcCompanyInfoList)
             {
                 if (!companyShareDict.ContainsKey(i.SecuritiesCompanyCode))
                 {
-                    companyShareDict.Add(i.SecuritiesCompanyCode, i.IssuedShares);
+                    companyShareDict.Add(i.SecuritiesCompanyCode, i.IssuedShare);
                 }
             }
             int winCount = 0;
