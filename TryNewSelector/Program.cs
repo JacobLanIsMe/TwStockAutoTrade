@@ -42,30 +42,30 @@ namespace TryNewSelector
             SimpleHttpClientFactory simpleHttpClientFactory = new SimpleHttpClientFactory();
             var httpClient = simpleHttpClientFactory.CreateClient();
             #region 抓籌碼
-            //List<StockTech> candidateList = new List<StockTech>();
-            //foreach (var i in stockTech)
-            //{
-            //    var techDataList = JsonConvert.DeserializeObject<List<StockTechData>>(i.TechData);
-            //    var today = techDataList.First();
-            //    var yesterday = techDataList.Skip(1).First();
-            //    ApiResponse mainPower = await FetchMainInOutDetailsAsync(i.StockCode, 1, httpClient);
-            //    if (mainPower != null && 
-            //        mainPower.Data != null && 
-            //        mainPower.Data.MainInDetails != null && 
-            //        mainPower.Data.MainInDetails.Any() && 
-            //        mainPower.Data.MainInDetails.First().SecuritiesCompSymbol == "9268" &&
-            //        today.Volume > 10000 &&
-            //        today.Volume > yesterday.Volume * 2)
-            //    {
-            //        Console.WriteLine($"StockCode: {i.StockCode}, Name: {i.CompanyName}");
-            //        candidateList.Add(i);
-            //    }
-            //}
-            //foreach (var i in candidateList)
-            //{
-            //    Console.WriteLine($"Candidate: {i.StockCode}");
-            //}
-            //Console.WriteLine($"Total Candidate: {candidateList.Count}");
+            List<StockTech> candidateList = new List<StockTech>();
+            foreach (var i in stockTech)
+            {
+                var techDataList = JsonConvert.DeserializeObject<List<StockTechData>>(i.TechData);
+                var today = techDataList.First();
+                var yesterday = techDataList.Skip(1).First();
+                ApiResponse mainPower = await FetchMainInOutDetailsAsync(i.StockCode, 1, httpClient);
+                if (mainPower != null &&
+                    mainPower.Data != null &&
+                    mainPower.Data.MainInDetails != null &&
+                    mainPower.Data.MainInDetails.Any() &&
+                    mainPower.Data.MainInDetails.First().SecuritiesCompSymbol == "1650" &&
+                    today.Volume > 10000 &&
+                    today.Volume > yesterday.Volume * 2)
+                {
+                    Console.WriteLine($"StockCode: {i.StockCode}, Name: {i.CompanyName}");
+                    candidateList.Add(i);
+                }
+            }
+            foreach (var i in candidateList)
+            {
+                Console.WriteLine($"Candidate: {i.StockCode}");
+            }
+            Console.WriteLine($"Total Candidate: {candidateList.Count}");
             #endregion
             #region 抓上市櫃公司基本資料
             HttpResponseMessage twseResponse = await httpClient.GetAsync("https://openapi.twse.com.tw/v1/opendata/t187ap03_L");
@@ -425,60 +425,60 @@ namespace TryNewSelector
                     //}
                     #endregion
                     #region 紅 K 漲停後隔天做空
-                    for (int j = 0; j < i.TechDataList.Count - 2; j++)
-                    {
-                        StockTechData today = i.TechDataList[j];
-                        StockTechData yesterday = i.TechDataList[j + 1]; // 紅 K 漲停
-                        StockTechData theDayBeforeYesterday = i.TechDataList[j + 2];
+                    //for (int j = 0; j < i.TechDataList.Count - 2; j++)
+                    //{
+                    //    StockTechData today = i.TechDataList[j];
+                    //    StockTechData yesterday = i.TechDataList[j + 1]; // 紅 K 漲停
+                    //    StockTechData theDayBeforeYesterday = i.TechDataList[j + 2];
 
-                        decimal theoreticalLimitUp = theDayBeforeYesterday.Close * 1.10m;
-                        decimal finalTickSize = GetTickSize(theoreticalLimitUp);
-                        decimal limitUpPrice = Math.Floor(theoreticalLimitUp / finalTickSize) * finalTickSize;
-                        decimal turnoverRate = (decimal)yesterday.Volume * 1000 / issuedShares;
-                        if (yesterday.Close == limitUpPrice && yesterday.Open < yesterday.Close && turnoverRate > 0.2m && today.Open < yesterday.Close * 1.07m)
-                        {
-                            decimal todayTheoreticalLimitUp = yesterday.Close * 1.10m;
-                            decimal todayFinalTickSize = GetTickSize(todayTheoreticalLimitUp);
-                            decimal todayLimitUpPrice = Math.Floor(todayTheoreticalLimitUp / todayFinalTickSize) * todayFinalTickSize;
-                            decimal previousTickSize = GetTickSize(todayLimitUpPrice - 0.0001m);
-                            decimal todayPriceBeforeLimitUp = todayLimitUpPrice - previousTickSize;
-                            bool isWin = today.Open > today.Close ? true : false;
-                            decimal returnRate = isWin ? today.Open / today.Close : today.Close / today.Open;
-                            string result = $"{i.StockCode},{today.Date.ToShortDateString()},{returnRate.ToString("0.00")},{yesterday.Volume},{issuedShares},{turnoverRate.ToString("0.00")},{today.Open},{today.Close},{(yesterday.Close / yesterday.Open).ToString("0.00")}";
-                            if (today.High >= todayPriceBeforeLimitUp)
-                            {
-                                returnRate = today.High / today.Open;
-                                lock (_lockObject)
-                                {
-                                    totalReturnRate -= returnRate;
-                                    loseCount++;
-                                }
-                                result += ",LOSE";
-                                reachLimitUpCount++;
-                                Console.WriteLine($"StockCode: {i.StockCode}, Buy Date: {today.Date.ToShortDateString()}, ReachLimitUp");
-                            }
-                            else if (isWin)
-                            {
-                                lock (_lockObject)
-                                {
-                                    totalReturnRate += returnRate;
-                                    winCount++;
-                                }
-                                result += ",WIN";
-                            }
-                            else
-                            {
-                                lock (_lockObject)
-                                {
-                                    totalReturnRate -= returnRate;
-                                    loseCount++;
-                                }
-                                result += ",LOSE";
-                            }
-                            Console.WriteLine(result);
-                            results.Add(result);
-                        }
-                    }
+                    //    decimal theoreticalLimitUp = theDayBeforeYesterday.Close * 1.10m;
+                    //    decimal finalTickSize = GetTickSize(theoreticalLimitUp);
+                    //    decimal limitUpPrice = Math.Floor(theoreticalLimitUp / finalTickSize) * finalTickSize;
+                    //    decimal turnoverRate = (decimal)yesterday.Volume * 1000 / issuedShares;
+                    //    if (yesterday.Close == limitUpPrice && yesterday.Open < yesterday.Close && turnoverRate > 0.4m)
+                    //    {
+                    //        decimal todayTheoreticalLimitUp = yesterday.Close * 1.10m;
+                    //        decimal todayFinalTickSize = GetTickSize(todayTheoreticalLimitUp);
+                    //        decimal todayLimitUpPrice = Math.Floor(todayTheoreticalLimitUp / todayFinalTickSize) * todayFinalTickSize;
+                    //        decimal previousTickSize = GetTickSize(todayLimitUpPrice - 0.0001m);
+                    //        decimal todayPriceBeforeLimitUp = todayLimitUpPrice - previousTickSize;
+                    //        bool isWin = today.Open > today.Close ? true : false;
+                    //        decimal returnRate = isWin ? today.Open / today.Close : today.Close / today.Open;
+                    //        string result = $"{i.StockCode},{today.Date.ToShortDateString()},{returnRate.ToString("0.00")},{yesterday.Volume},{issuedShares},{turnoverRate.ToString("0.00")},{today.Open},{today.Close},{(yesterday.Close / yesterday.Open).ToString("0.00")}";
+                    //        if (today.High >= yesterday.Close * 1.085m)
+                    //        {
+                    //            returnRate = today.High / today.Open;
+                    //            lock (_lockObject)
+                    //            {
+                    //                totalReturnRate -= returnRate;
+                    //                loseCount++;
+                    //            }
+                    //            result += ",LOSE";
+                    //            reachLimitUpCount++;
+                    //            Console.WriteLine($"StockCode: {i.StockCode}, Buy Date: {today.Date.ToShortDateString()}, ReachLimitUp");
+                    //        }
+                    //        else if (isWin)
+                    //        {
+                    //            lock (_lockObject)
+                    //            {
+                    //                totalReturnRate += returnRate;
+                    //                winCount++;
+                    //            }
+                    //            result += ",WIN";
+                    //        }
+                    //        else
+                    //        {
+                    //            lock (_lockObject)
+                    //            {
+                    //                totalReturnRate -= returnRate;
+                    //                loseCount++;
+                    //            }
+                    //            result += ",LOSE";
+                    //        }
+                    //        Console.WriteLine(result);
+                    //        results.Add(result);
+                    //    }
+                    //}
                     #endregion
                 }));
             await Task.WhenAll(tasks);
