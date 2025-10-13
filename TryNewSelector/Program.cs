@@ -53,8 +53,8 @@ namespace TryNewSelector
                     mainPower.Data.MainInDetails != null && 
                     mainPower.Data.MainInDetails.Any() && 
                     mainPower.Data.MainInDetails.First().SecuritiesCompSymbol == "9268" &&
-                    today.Close / yesterday.Close > 1.095m &&
-                    today.Close == today.High)
+                    today.Volume > 10000 &&
+                    today.Volume > yesterday.Volume * 2)
                 {
                     Console.WriteLine($"StockCode: {i.StockCode}, Name: {i.CompanyName}");
                     candidateList.Add(i);
