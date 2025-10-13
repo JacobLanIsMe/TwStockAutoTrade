@@ -816,7 +816,7 @@ namespace Core.Service
                     stockInfoDict[i.StockCode].TechDataList.Count == 0 || 
                     stockInfoDict[i.StockCode].TechDataList.Max(x => x.Date) <= i.SelectedDate) continue;
 
-                StockTechData tomorrowTechData = stockInfoDict[i.StockCode].TechDataList.Skip(1).First();
+                StockTechData tomorrowTechData = stockInfoDict[i.StockCode].TechDataList.Where(x => x.Date > i.SelectedDate).OrderBy(x => x.Date).First();
                 i.TomorrowTechData = JsonConvert.SerializeObject(tomorrowTechData);
             }
             var stockMainPowerDictToUpdate = stockMainPowerListToUpdate.ToDictionary(stock => (stock.StockCode, JsonConvert.SerializeObject(JsonConvert.DeserializeObject<MainInOutDetailResponse>(stock.MainPowerData).Data.MainInDetails)));
