@@ -57,5 +57,16 @@ namespace Core.Repository
             }
             _logger.Information("Update StockMainPower completed.");
         }
+        public async Task<List<StockMainPower>> GetStockMainPower()
+        {
+            _logger.Information("Fetching records with null TomorrowTechData started.");
+            string sqlCommand = @"SELECT * FROM [dbo].[StockMainPower]";
+            using (SqlConnection sqlConnection = new SqlConnection(_dbConnectionString))
+            {
+                var result = await sqlConnection.QueryAsync<StockMainPower>(sqlCommand);
+                _logger.Information("Fetching records with null TomorrowTechData completed.");
+                return result.ToList();
+            }
+        }
     }
 }
