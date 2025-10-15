@@ -9,6 +9,7 @@ using Serilog;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Net.Http;
@@ -29,9 +30,15 @@ namespace Core.Service
         private int _low = 0;
         private decimal _volume = 0;
         private decimal _prevVolume = 0;
-        private FutureTrade _trade = new FutureTrade();
+        //private FutureTrade _trade = new FutureTrade();
+        private Dictionary<EFutureStrategy, FutureTrade> _tradeDict = new Dictionary<EFutureStrategy, FutureTrade>()
+        {
+            { EFutureStrategy.ORB, new FutureTrade() },
+            { EFutureStrategy.NextTradingDayAfterOrbWin, new FutureTrade() }
+        };
         private bool _hasFutureOrder = false;
-        private bool _isTradingStarted = false;
+        private EOrbStrategyStatus _orbStrategyStatus = EOrbStrategyStatus.Undetermined;
+        private bool _isOrbSuccessful = false;
         private readonly TimeSpan _beforeMarketClose2Minute;
         private readonly TimeSpan _lastEntryTime;
         private readonly ILogger _logger;
@@ -211,39 +218,43 @@ namespace Core.Service
             }
             else
             {
-                if (_isTradingStarted) return;
+                if (_orbStrategyStatus != EOrbStrategyStatus.Undetermined) return;
                 if (_volume == 0) return;
                 if (_volume > _prevVolume * 0.3m && _high != 0 && _low != 0 && _high - _low > 100 && _low <= (_settlementPrice + (_settlementPrice * 0.09)))
                 {
                     _stopLossPoint = (int)((double)_low + _settlementPrice * 0.004);
                     _logger.Information($"開盤後成交量達({_volume})前一個交易日成交量({_prevVolume})的30%，高低點差大於100點(High: {_high}, Low: {_low})，達進場條件");
                     _logger.Information($"停損點設在: {_stopLossPoint}");
-                    _isTradingStarted = true;
+                    _orbStrategyStatus = EOrbStrategyStatus.Match;
                 }
                 else
                 {
                     _logger.Information($"開盤後成交量({_volume})小於前一個交易日成交量的30%或是高低點差小於100點，未達進場條件");
-                    _cts.Cancel();
+                    _orbStrategyStatus = EOrbStrategyStatus.NoMatch;
                 }
             }
         }
         private void FutureOrder(TimeSpan tickTime, int tickPrice)
         {
-            if (!_isTradingStarted || tickTime == TimeSpan.Zero || tickPrice == 0 || _hasFutureOrder) return;
-            if (_trade.OpenOffsetKind == EOpenOffsetKind.新倉)
+            if (tickTime == TimeSpan.Zero || tickPrice == 0 || _hasFutureOrder) return;
+            if (_orbStrategyStatus == EOrbStrategyStatus.Match)
             {
-                if (tickPrice > _stopLossPoint || tickTime > _beforeMarketClose2Minute)
+                if (_tradeDict[EFutureStrategy.ORB].OpenOffsetKind == EOpenOffsetKind.新倉)
                 {
-                    ProcessFutureOrder(SetFutureOrder(EBuySellType.B));
+                    if (tickPrice > _stopLossPoint || tickTime > _beforeMarketClose2Minute)
+                    {
+                        ProcessFutureOrder(SetFutureOrder(EBuySellType.B));
+                    }
+                }
+                else
+                {
+                    if (tickPrice < _low && tickTime < _lastEntryTime)
+                    {
+                        ProcessFutureOrder(SetFutureOrder(EBuySellType.S, EOpenOffsetKind.新倉));
+                    }
                 }
             }
-            else
-            {
-                if (tickPrice < _low && tickTime < _lastEntryTime)
-                {
-                    ProcessFutureOrder(SetFutureOrder(EBuySellType.S));
-                }
-            }
+            
         }
         private void ProcessFutureOrder(FutureOrder futureOrder)
         {
@@ -258,7 +269,7 @@ namespace Core.Service
                 _logger.Error($"SendFutureOrder error. Buy or Sell: {futureOrder.BuySell1}");
             }
         }
-        private FutureOrder SetFutureOrder(EBuySellType eBuySellType)
+        private FutureOrder SetFutureOrder(EBuySellType eBuySellType, EOpenOffsetKind eOpenOffsetKind)
         {
             FutureOrder futureOrder = new FutureOrder();
             futureOrder.Identify = 001;                                                      //識別碼
@@ -270,9 +281,9 @@ namespace Core.Service
             futureOrder.StrikePrice1 = 0;                                                    //屐約價1
             futureOrder.Price = 0;                                                          //委託價格
             futureOrder.OrderQty1 = Convert.ToInt16(_maxOrderQuantity);                      //委託口數1
-            futureOrder.OrderType = ((int)EFutureOrderType.市價).ToString();     //委託方式, 1:市價 2:限價 3:範圍市價
+            futureOrder.OrderType = ((int)EFutureOrderType.市價).ToString();                 //委託方式, 1:市價 2:限價 3:範圍市價
             futureOrder.OrderCond = "1";                                                      //委託條件, "":ROD 1:FOK 2:IOC
-            futureOrder.OpenOffsetKind = "2";                                                //新平倉碼, 0:新倉 1:平倉 2:自動       
+            futureOrder.OpenOffsetKind = ((int)eOpenOffsetKind).ToString();                   //新平倉碼, 0:新倉 1:平倉 2:自動       
             futureOrder.BuySell1 = eBuySellType.ToString();                                   //買賣別1, "B":買 "S":賣
             futureOrder.DayTradeID = "";                                                    //當沖註記, Y:當沖  "":非當沖
             futureOrder.SellerNo = 0;                                                        //營業員代碼                                            
