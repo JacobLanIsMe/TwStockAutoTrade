@@ -372,7 +372,7 @@ namespace Core.Service
             List<StockTick> lstStocktick = new List<StockTick>();
             StockTick stocktick = new StockTick();
             stocktick.MarketNo = Convert.ToByte(enumMarketType.TAIFEX);      //填入查詢市場代碼
-            stocktick.StockCode = _targetFutureConfig.FutureCode;
+            stocktick.StockCode = _targetFutureConfig.YuantaFutureCode;
             lstStocktick.Add(stocktick);
             objYuantaOneAPI.SubscribeStockTick(lstStocktick);
         }
@@ -395,7 +395,7 @@ namespace Core.Service
                 { "12", "L" }
             };
             if (!monthMap.TryGetValue(_settlementMonth.Substring(4), out string code)) throw new Exception("Can not find future code");
-            futureConfig.FutureCode = $"{futureConfig.FutureCode}{code}5";
+            futureConfig.YuantaFutureCode = $"{futureConfig.YuantaFutureCode}{code}5";
             return futureConfig;
         }
         private string GetSettlementMonth(DateTime dateTime)
@@ -483,7 +483,7 @@ namespace Core.Service
             HttpResponseMessage response = await httpClient.GetAsync("https://openapi.taifex.com.tw/v1/DailyMarketReportFut");
             string responseBody = await response.Content.ReadAsStringAsync();
             List<TaifexDailyMarketReport> futureReportList = JsonConvert.DeserializeObject<List<TaifexDailyMarketReport>>(responseBody);
-            futureReportList = futureReportList.Where(x => x.Contract == _targetFutureConfig.FutureCode.Substring(0, 3) && x.TradingSession == "一般").ToList();
+            futureReportList = futureReportList.Where(x => x.Contract == _targetFutureConfig.TaifexFutureCode && x.TradingSession == "一般").ToList();
             if (!futureReportList.Any())
             {
                 _logger.Error("取得前一個交易日的交易資訊出現錯誤");
@@ -529,7 +529,8 @@ namespace Core.Service
             _logger.Information($"收盤時間: {_targetFutureConfig.MarketCloseTime}");
             _logger.Information($"收盤前兩分鐘時間: {_beforeMarketClose2Minute}");
             _logger.Information($"最後進場時間: {_lastEntryTime}");
-            _logger.Information($"商品代碼: {_targetFutureConfig.FutureCode}");
+            _logger.Information($"期交所代碼: {_targetFutureConfig.TaifexFutureCode}");
+            _logger.Information($"商品代碼: {_targetFutureConfig.YuantaFutureCode}");
             _logger.Information($"商品名稱: {_targetFutureConfig.CommodityId}");
             _logger.Information($"商品年月: {_settlementMonth}");
             _logger.Information($"前一個交易日的結算價格: {_settlementPrice}");
@@ -538,7 +539,8 @@ namespace Core.Service
             message += $"收盤時間: {_targetFutureConfig.MarketCloseTime}\n";
             message += $"收盤前兩分鐘時間: {_beforeMarketClose2Minute}\n";
             message += $"最後進場時間: {_lastEntryTime}\n";
-            message += $"商品代碼: {_targetFutureConfig.FutureCode}\n";
+            message += $"期交所代碼: {_targetFutureConfig.TaifexFutureCode}\n";
+            message += $"商品代碼: {_targetFutureConfig.YuantaFutureCode}\n";
             message += $"商品名稱: {_targetFutureConfig.CommodityId}\n";
             message += $"商品年月: {_settlementMonth}\n";
             message += $"前一個交易日的結算價格: {_settlementPrice}\n";

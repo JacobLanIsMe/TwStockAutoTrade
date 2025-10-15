@@ -9,7 +9,8 @@ namespace Core.Model
 {
     public class FutureConfig
     {
-        public string FutureCode { get; set; }
+        public string TaifexFutureCode { get; set; }
+        public string YuantaFutureCode { get; set; }
         public string CommodityId { get; set; }
         public TimeSpan TimeThreshold { get; set; }
         public TimeSpan MarketOpenTime { get; set; }
