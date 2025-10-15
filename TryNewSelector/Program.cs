@@ -116,7 +116,20 @@ namespace TryNewSelector
                     }
                     i.TechDataList = i.TechDataList.OrderByDescending(x => x.Date).ToList();
                     #region
-
+                    StockTechData today = i.TechDataList[0];
+                    decimal mv5 = (decimal)i.TechDataList.Take(5).Average(x => x.Volume);
+                    if (today.Close > i.TechDataList.Skip(1).Take(40).Max(x => x.High) &&
+                        i.TechDataList[1].Close <= i.TechDataList.Skip(2).Take(40).Max(x => x.High) &&
+                        i.TechDataList[2].Close <= i.TechDataList.Skip(3).Take(40).Max(x => x.High) &&
+                        i.TechDataList[3].Close <= i.TechDataList.Skip(4).Take(40).Max(x => x.High) &&
+                        i.TechDataList[4].Close <= i.TechDataList.Skip(5).Take(40).Max(x => x.High) &&
+                        i.TechDataList[5].Close <= i.TechDataList.Skip(6).Take(40).Max(x => x.High) &&
+                        i.TechDataList[1].Close / i.TechDataList[2].Close < 1.03m &&
+                        today.Volume > mv5 * 2 &&
+                        today.Volume > 2000)
+                    {
+                        Console.WriteLine($"StockCode: {i.StockCode}, Date: {today.Date.ToShortDateString()}");
+                    }
                     #endregion
                     #region 綠 K 周轉率 > 40%，隔天做空
                     //for (int j = 3; j < techDataListCount; j++)
@@ -425,17 +438,17 @@ namespace TryNewSelector
                     //}
                     #endregion
                     #region 紅 K 漲停後隔天做空
-                    //for (int j = 0; j < i.TechDataList.Count - 2; j++)
+                    //for (int j = 0; j < i.TechDataList.Count - 22; j++)
                     //{
                     //    StockTechData today = i.TechDataList[j];
                     //    StockTechData yesterday = i.TechDataList[j + 1]; // 紅 K 漲停
                     //    StockTechData theDayBeforeYesterday = i.TechDataList[j + 2];
-
+                    //    decimal prevHigh = i.TechDataList.Skip(j + 2).Take(20).Max(x => x.High);
                     //    decimal theoreticalLimitUp = theDayBeforeYesterday.Close * 1.10m;
                     //    decimal finalTickSize = GetTickSize(theoreticalLimitUp);
                     //    decimal limitUpPrice = Math.Floor(theoreticalLimitUp / finalTickSize) * finalTickSize;
                     //    decimal turnoverRate = (decimal)yesterday.Volume * 1000 / issuedShares;
-                    //    if (yesterday.Close == limitUpPrice && yesterday.Open < yesterday.Close && turnoverRate > 0.4m)
+                    //    if (yesterday.Close == limitUpPrice && yesterday.Open < yesterday.Close && turnoverRate > 0.1m && yesterday.Close < prevHigh)
                     //    {
                     //        decimal todayTheoreticalLimitUp = yesterday.Close * 1.10m;
                     //        decimal todayFinalTickSize = GetTickSize(todayTheoreticalLimitUp);
