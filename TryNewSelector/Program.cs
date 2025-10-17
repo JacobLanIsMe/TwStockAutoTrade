@@ -41,6 +41,10 @@ namespace TryNewSelector
             List<StockTech> stockTech = await candidateRepository.GetStockTech();
             SimpleHttpClientFactory simpleHttpClientFactory = new SimpleHttpClientFactory();
             var httpClient = simpleHttpClientFactory.CreateClient();
+            #region 抓融資券
+            List<dynamic> twseMarginList = await FetchTwseMarginDataAsync(httpClient);
+            List<dynamic> tpexMarginList = await FetchTpexMarginDataAsync(httpClient);
+            #endregion
             #region 抓籌碼
             //List<StockTech> candidateList = new List<StockTech>();
             //foreach (var i in stockTech)
@@ -115,7 +119,9 @@ namespace TryNewSelector
                         return;
                     }
                     i.TechDataList = i.TechDataList.OrderByDescending(x => x.Date).ToList();
-                    #region
+                    #region 突破前高
+                    decimal marginIncreaseRate = CalculateMarginIncreaseWithTpexFallback(twseMarginList, tpexMarginList, i.StockCode);
+                    if (i.TechDataList == null || i.TechDataList.Count < 50) return;
                     StockTechData today = i.TechDataList[0];
                     decimal mv5 = (decimal)i.TechDataList.Take(5).Average(x => x.Volume);
                     if (today.Close > i.TechDataList.Skip(1).Take(40).Max(x => x.High) &&
@@ -124,11 +130,12 @@ namespace TryNewSelector
                         i.TechDataList[3].Close <= i.TechDataList.Skip(4).Take(40).Max(x => x.High) &&
                         i.TechDataList[4].Close <= i.TechDataList.Skip(5).Take(40).Max(x => x.High) &&
                         i.TechDataList[5].Close <= i.TechDataList.Skip(6).Take(40).Max(x => x.High) &&
-                        i.TechDataList[1].Close / i.TechDataList[2].Close < 1.03m &&
+                        //i.TechDataList[1].Close / i.TechDataList[2].Close < 1.03m &&
                         today.Volume > mv5 * 2 &&
-                        today.Volume > 2000)
+                        today.Volume > 2000 &&
+                        marginIncreaseRate > 0.01m)
                     {
-                        Console.WriteLine($"StockCode: {i.StockCode}, Date: {today.Date.ToShortDateString()}");
+                        Console.WriteLine($"StockCode: {i.StockCode}, 融資增加百分比: {(marginIncreaseRate * 100).ToString("0.00")}%, Date: {today.Date.ToShortDateString()}");
                     }
                     #endregion
                     #region 綠 K 周轉率 > 40%，隔天做空
@@ -517,9 +524,9 @@ namespace TryNewSelector
             //            {
             //                turnoverRateList.Add((j.StockCode, turnoverRate));
             //            }
-                            
+
             //        }
-                    
+
             //        //decimal theoreticalLimitUp = theDayBeforeYesterday.Close * 1.10m;
             //        //decimal finalTickSize = GetTickSize(theoreticalLimitUp);
             //        //decimal limitUpPrice = Math.Floor(theoreticalLimitUp / finalTickSize) * finalTickSize;
@@ -528,7 +535,7 @@ namespace TryNewSelector
             //        //    limitUpList.Add((j.StockCode, yesterday.Volume));
             //        //}
             //    }
-                
+
             //    //foreach (var j in limitUpList)
             //    //{
             //    //    if (companyShareDict.TryGetValue(j.Item1, out long issuedShares))
@@ -573,7 +580,7 @@ namespace TryNewSelector
             //                winCount++;
             //                isWin = true;
             //            }
-                            
+
             //        }
             //        else
             //        {
@@ -660,6 +667,136 @@ namespace TryNewSelector
                 Console.WriteLine($"Error fetching data for {symbol}: {ex.Message}");
                 return null;
             }
+        }
+        
+        private static async Task<List<dynamic>> FetchTwseMarginDataAsync(HttpClient client)
+        {
+            const string apiUrl = "https://openapi.twse.com.tw/v1/exchangeReport/MI_MARGN"; // 假設這是 API 的 URL
+
+            try
+            {
+                // 呼叫 API
+                HttpResponseMessage response = await client.GetAsync(apiUrl);
+                response.EnsureSuccessStatusCode();
+
+                // 解析回應內容
+                string responseBody = await response.Content.ReadAsStringAsync();
+                var stockDataList = JsonConvert.DeserializeObject<List<dynamic>>(responseBody);
+
+                return stockDataList;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error fetching margin data: {ex.Message}");
+                return new List<dynamic>();
+            }
+        }
+
+        private static async Task<List<dynamic>> FetchTpexMarginDataAsync(HttpClient client)
+        {
+            const string apiUrl = "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_margin_balance";
+
+            try
+            {
+                // 呼叫 API
+                HttpResponseMessage response = await client.GetAsync(apiUrl);
+                response.EnsureSuccessStatusCode();
+
+                // 解析回應內容
+                string responseBody = await response.Content.ReadAsStringAsync();
+                var tpexDataList = JsonConvert.DeserializeObject<List<dynamic>>(responseBody);
+
+                return tpexDataList;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error fetching TPEx margin data: {ex.Message}");
+                return new List<dynamic>();
+            }
+        }
+
+        private static decimal CalculateMarginIncreaseWithTpexFallback(List<dynamic> stockDataList, List<dynamic> tpexDataList, string stockCode)
+        {
+            try
+            {
+                // 嘗試從 stockDataList 中尋找
+                var stock = stockDataList.FirstOrDefault(s => (string)s["股票代號"] == stockCode);
+                if (stock != null)
+                {
+                    if (decimal.TryParse((string)stock["融資今日餘額"], out decimal todayBalance) &&
+                        decimal.TryParse((string)stock["融資前日餘額"], out decimal yesterdayBalance) &&
+                        decimal.TryParse((string)stock["融資限額"], out decimal limit) &&
+                        limit > 0)
+                    {
+                        return (todayBalance / limit) - (yesterdayBalance / limit);
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                }
+
+                // 如果在 stockDataList 找不到，嘗試從 tpexDataList 中尋找
+                var tpexStock = tpexDataList.FirstOrDefault(s => (string)s["SecuritiesCompanyCode"] == stockCode);
+                if (tpexStock != null)
+                {
+                    if (decimal.TryParse((string)tpexStock["MarginPurchaseBalance"], out decimal todayBalance) &&
+                        decimal.TryParse((string)tpexStock["MarginPurchaseBalancePreviousDay"], out decimal yesterdayBalance) &&
+                        decimal.TryParse((string)tpexStock["MarginPurchaseQuota"], out decimal limit) &&
+                        limit > 0)
+                    {
+                        return (todayBalance / limit) - (yesterdayBalance / limit);
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                }
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                return 0;
+            }
+        }
+
+        private static List<string> GetStocksWithMarginIncreaseAboveThreshold(List<dynamic> twseMarginList, List<dynamic> tpexMarginList, decimal threshold = 0.01m)
+        {
+            var result = new List<string>();
+
+            // 檢查 TWSE 資料
+            foreach (var stock in twseMarginList)
+            {
+                if (decimal.TryParse((string)stock["融資今日餘額"], out decimal todayBalance) &&
+                    decimal.TryParse((string)stock["融資前日餘額"], out decimal yesterdayBalance) &&
+                    decimal.TryParse((string)stock["融資限額"], out decimal limit) &&
+                    limit > 0)
+                {
+                    decimal increase = (todayBalance / limit) - (yesterdayBalance / limit);
+                    if (increase > threshold)
+                    {
+                        result.Add((string)stock["股票代號"]);
+                    }
+                }
+            }
+
+            // 檢查 TPEx 資料
+            foreach (var stock in tpexMarginList)
+            {
+                if (decimal.TryParse((string)stock["MarginPurchaseBalance"], out decimal todayBalance) &&
+                    decimal.TryParse((string)stock["MarginPurchaseBalancePreviousDay"], out decimal yesterdayBalance) &&
+                    decimal.TryParse((string)stock["MarginPurchaseQuota"], out decimal limit) &&
+                    limit > 0)
+                {
+                    decimal increase = (todayBalance / limit) - (yesterdayBalance / limit);
+                    if (increase > threshold)
+                    {
+                        result.Add((string)stock["SecuritiesCompanyCode"]);
+                    }
+                }
+            }
+
+            return result;
         }
     }
 }
