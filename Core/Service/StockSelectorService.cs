@@ -54,7 +54,7 @@ namespace Core.Service
             await _candidateForShortRepository.Insert(filteredCandidateList);
             await UpSertTechDataToDb(allStockInfoList);
             await TrackMainPower(allStockInfoList);
-            
+            await SelectBreakoutStock(allStockInfoList);
             //if (!doesNeedUpdate(allStockInfoList)) return;
             //List<StockCandidate> candidateList = SelectCandidateByTech(allStockInfoList);
             //candidateList = await SelectCandidateByMainPower(candidateList);
@@ -880,10 +880,15 @@ namespace Core.Service
                 throw;
             }
         }
-        private async Task SelectBreakoutStock()
+        private async Task SelectBreakoutStock(List<StockCandidate> allStockInfoList)
         {
             List<dynamic> twseMarginList = await FetchTwseMarginDataAsync(_httpClient);
             List<dynamic> tpexMarginList = await FetchTpexMarginDataAsync(_httpClient);
+            foreach (var i in allStockInfoList)
+            {
+                decimal marginIncrease = CalculateMarginIncreaseWithTpexFallback(twseMarginList, tpexMarginList, i.StockCode);
+                
+            }
         }
         private async Task<List<dynamic>> FetchTwseMarginDataAsync(HttpClient client)
         {
