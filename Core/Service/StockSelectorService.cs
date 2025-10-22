@@ -47,7 +47,7 @@ namespace Core.Service
             await SetExchangeReportFromSino(allStockInfoList);
             List<StockCandidate> candidateList = SelectCandidateForShortByTech(allStockInfoList);
             List<StockCandidate> filteredCandidateList = await RemoveStockCanNotIntraday(candidateList);
-            filteredCandidateList = filteredCandidateList.Any() ? 
+            filteredCandidateList = filteredCandidateList.Any() ?
                                     new List<StockCandidate>() { filteredCandidateList.OrderByDescending(x => x.TurnoverRate).First() } :
                                     filteredCandidateList;
             await SendCandidateForShortToDiscord(filteredCandidateList);
@@ -66,7 +66,7 @@ namespace Core.Service
             //await UpdateCrazyCandidate(crazyCandidateList, allStockInfoDict);
             //List<StockCandidate> crazyCandidateList = SelectCrazyCandidate(allStockInfoList);
         }
-        
+
         private StockLimitPrice GetLimitPrice(decimal price)
         {
             // 1. 計算理論上的 10% 漲停價
@@ -812,8 +812,8 @@ namespace Core.Service
 
             foreach (var i in stockMainPowerListToUpdate)
             {
-                if (!stockInfoDict.ContainsKey(i.StockCode) || 
-                    stockInfoDict[i.StockCode].TechDataList.Count == 0 || 
+                if (!stockInfoDict.ContainsKey(i.StockCode) ||
+                    stockInfoDict[i.StockCode].TechDataList.Count == 0 ||
                     stockInfoDict[i.StockCode].TechDataList.Max(x => x.Date) <= i.SelectedDate) continue;
 
                 StockTechData tomorrowTechData = stockInfoDict[i.StockCode].TechDataList.Where(x => x.Date > i.SelectedDate).OrderBy(x => x.Date).First();
@@ -827,7 +827,7 @@ namespace Core.Service
                 MainInOutDetailResponse mainInOutDetailResponse = await GetMainInOutDetailsAsync(i.StockCode);
                 if (mainInOutDetailResponse == null) continue;
                 if (stockMainPowerDictToUpdate.ContainsKey((i.StockCode, JsonConvert.SerializeObject(mainInOutDetailResponse.Data.MainInDetails)))) continue;
-                
+
                 StockMainPower newStockMainPower = new StockMainPower()
                 {
                     StockCode = i.StockCode,
@@ -882,13 +882,37 @@ namespace Core.Service
         }
         private async Task SelectBreakoutStock(List<StockCandidate> allStockInfoList)
         {
+            List<StockCandidate> breakoutCandidateList = new List<StockCandidate>();
             List<dynamic> twseMarginList = await FetchTwseMarginDataAsync(_httpClient);
             List<dynamic> tpexMarginList = await FetchTpexMarginDataAsync(_httpClient);
             foreach (var i in allStockInfoList)
             {
-                decimal marginIncrease = CalculateMarginIncreaseWithTpexFallback(twseMarginList, tpexMarginList, i.StockCode);
-                
+                decimal marginIncreaseRate = CalculateMarginIncreaseWithTpexFallback(twseMarginList, tpexMarginList, i.StockCode);
+                if (i.TechDataList == null || i.TechDataList.Count < 60) continue;
+                StockTechData today = i.TechDataList.First();
+                decimal mv5 = (decimal)i.TechDataList.Take(5).Average(x => x.Volume);
+                decimal ma60 = i.TechDataList.Take(60).Average(x => x.Close);
+                bool isFirstDayBreakout = true;
+                for (int j = 1; j <= 5; j++)
+                {
+                    if (i.TechDataList[j].Close > i.TechDataList.Skip(j + 1).Take(40).Max(x => x.High))
+                    {
+                        isFirstDayBreakout = false;
+                        break;
+                    }
+                }
+                if (today.Close > i.TechDataList.Skip(1).Take(40).Max(x => x.High) &&
+                    isFirstDayBreakout &&
+                    today.Close > ma60 &&
+                    today.Close < ma60 * 1.3m &&
+                    today.Volume > mv5 * 2 &&
+                    today.Volume > 2000 &&
+                    marginIncreaseRate > 0.01m)
+                {
+                    breakoutCandidateList.Add(i);
+                }
             }
+            await SendBreakoutStockToDiscord(breakoutCandidateList);
         }
         private async Task<List<dynamic>> FetchTwseMarginDataAsync(HttpClient client)
         {
@@ -979,6 +1003,17 @@ namespace Core.Service
             {
                 return 0;
             }
+        }
+        private async Task SendBreakoutStockToDiscord(List<StockCandidate> candidateList)
+        {
+            StringBuilder message = new StringBuilder();
+            message.AppendLine($"突破股票:");
+            foreach (var i in candidateList)
+            {
+                message.AppendLine($"{i.StockCode} {i.CompanyName}");
+            }
+            message.AppendLine($"總共 {candidateList.Count} 檔");
+            await _discordService.SendMessage(message.ToString());
         }
     }
 }
