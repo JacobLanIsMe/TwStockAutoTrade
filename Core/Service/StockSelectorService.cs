@@ -861,6 +861,7 @@ namespace Core.Service
 
             return limitUpStocks;
         }
+
         public async Task<MainInOutDetailResponse> GetMainInOutDetailsAsync(string stockCode)
         {
             string url = $"https://ytdf.yuanta.com.tw/prod/yesidmz/api/chipanalysis/maininoutdetail?symbol={stockCode}&dayRange=1";
@@ -877,6 +878,100 @@ namespace Core.Service
             {
                 _logger.Error($"Error fetching main in/out details for stock code {stockCode}. Exception: {ex.Message}");
                 throw;
+            }
+        }
+        private async Task SelectBreakoutStock()
+        {
+            
+        }
+        private async Task<List<dynamic>> FetchTwseMarginDataAsync(HttpClient client)
+        {
+            const string apiUrl = "https://openapi.twse.com.tw/v1/exchangeReport/MI_MARGN"; // 假設這是 API 的 URL
+
+            try
+            {
+                // 呼叫 API
+                HttpResponseMessage response = await client.GetAsync(apiUrl);
+                response.EnsureSuccessStatusCode();
+
+                // 解析回應內容
+                string responseBody = await response.Content.ReadAsStringAsync();
+                var stockDataList = JsonConvert.DeserializeObject<List<dynamic>>(responseBody);
+
+                return stockDataList;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error fetching margin data: {ex.Message}");
+                return new List<dynamic>();
+            }
+        }
+
+        private async Task<List<dynamic>> FetchTpexMarginDataAsync(HttpClient client)
+        {
+            const string apiUrl = "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_margin_balance";
+
+            try
+            {
+                // 呼叫 API
+                HttpResponseMessage response = await client.GetAsync(apiUrl);
+                response.EnsureSuccessStatusCode();
+
+                // 解析回應內容
+                string responseBody = await response.Content.ReadAsStringAsync();
+                var tpexDataList = JsonConvert.DeserializeObject<List<dynamic>>(responseBody);
+
+                return tpexDataList;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error fetching TPEx margin data: {ex.Message}");
+                return new List<dynamic>();
+            }
+        }
+
+        private decimal CalculateMarginIncreaseWithTpexFallback(List<dynamic> stockDataList, List<dynamic> tpexDataList, string stockCode)
+        {
+            try
+            {
+                // 嘗試從 stockDataList 中尋找
+                var stock = stockDataList.FirstOrDefault(s => (string)s["股票代號"] == stockCode);
+                if (stock != null)
+                {
+                    if (decimal.TryParse((string)stock["融資今日餘額"], out decimal todayBalance) &&
+                        decimal.TryParse((string)stock["融資前日餘額"], out decimal yesterdayBalance) &&
+                        decimal.TryParse((string)stock["融資限額"], out decimal limit) &&
+                        limit > 0)
+                    {
+                        return (todayBalance / limit) - (yesterdayBalance / limit);
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                }
+
+                // 如果在 stockDataList 找不到，嘗試從 tpexDataList 中尋找
+                var tpexStock = tpexDataList.FirstOrDefault(s => (string)s["SecuritiesCompanyCode"] == stockCode);
+                if (tpexStock != null)
+                {
+                    if (decimal.TryParse((string)tpexStock["MarginPurchaseBalance"], out decimal todayBalance) &&
+                        decimal.TryParse((string)tpexStock["MarginPurchaseBalancePreviousDay"], out decimal yesterdayBalance) &&
+                        decimal.TryParse((string)tpexStock["MarginPurchaseQuota"], out decimal limit) &&
+                        limit > 0)
+                    {
+                        return (todayBalance / limit) - (yesterdayBalance / limit);
+                    }
+                    else
+                    {
+                        return 0;
+                    }
+                }
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                return 0;
             }
         }
     }
