@@ -121,9 +121,10 @@ namespace TryNewSelector
                     i.TechDataList = i.TechDataList.OrderByDescending(x => x.Date).ToList();
                     #region 突破前高
                     decimal marginIncreaseRate = CalculateMarginIncreaseWithTpexFallback(twseMarginList, tpexMarginList, i.StockCode);
-                    if (i.TechDataList == null || i.TechDataList.Count < 50) return;
+                    if (i.TechDataList == null || i.TechDataList.Count < 60) return;
                     StockTechData today = i.TechDataList[0];
                     decimal mv5 = (decimal)i.TechDataList.Take(5).Average(x => x.Volume);
+                    decimal ma60 = i.TechDataList.Take(60).Average(x => x.Close);
                     if (today.Close > i.TechDataList.Skip(1).Take(40).Max(x => x.High) &&
                         i.TechDataList[1].Close <= i.TechDataList.Skip(2).Take(40).Max(x => x.High) &&
                         i.TechDataList[2].Close <= i.TechDataList.Skip(3).Take(40).Max(x => x.High) &&
@@ -131,6 +132,8 @@ namespace TryNewSelector
                         i.TechDataList[4].Close <= i.TechDataList.Skip(5).Take(40).Max(x => x.High) &&
                         i.TechDataList[5].Close <= i.TechDataList.Skip(6).Take(40).Max(x => x.High) &&
                         //i.TechDataList[1].Close / i.TechDataList[2].Close < 1.03m &&
+                        today.Close > ma60 &&
+                        today.Close / ma60 < 1.3m &&
                         today.Volume > mv5 * 2 &&
                         today.Volume > 2000 &&
                         marginIncreaseRate > 0.01m)
