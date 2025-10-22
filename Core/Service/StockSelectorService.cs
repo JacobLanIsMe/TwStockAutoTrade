@@ -882,7 +882,8 @@ namespace Core.Service
         }
         private async Task SelectBreakoutStock()
         {
-            
+            List<dynamic> twseMarginList = await FetchTwseMarginDataAsync(_httpClient);
+            List<dynamic> tpexMarginList = await FetchTpexMarginDataAsync(_httpClient);
         }
         private async Task<List<dynamic>> FetchTwseMarginDataAsync(HttpClient client)
         {
