@@ -883,13 +883,15 @@ namespace Core.Service
         private async Task SelectBreakoutStock(List<StockCandidate> allStockInfoList)
         {
             List<StockCandidate> breakoutCandidateList = new List<StockCandidate>();
-            List<dynamic> twseMarginList = await FetchTwseMarginDataAsync(_httpClient);
-            List<dynamic> tpexMarginList = await FetchTpexMarginDataAsync(_httpClient);
+            //List<dynamic> twseMarginList = await FetchTwseMarginDataAsync(_httpClient);
+            //List<dynamic> tpexMarginList = await FetchTpexMarginDataAsync(_httpClient);
             foreach (var i in allStockInfoList)
             {
-                decimal marginIncreaseRate = CalculateMarginIncreaseWithTpexFallback(twseMarginList, tpexMarginList, i.StockCode);
+                //decimal marginIncreaseRate = CalculateMarginIncreaseWithTpexFallback(twseMarginList, tpexMarginList, i.StockCode);
                 if (i.TechDataList == null || i.TechDataList.Count < 60) continue;
                 StockTechData today = i.TechDataList.First();
+                StockTechData yesterday = i.TechDataList.Skip(1).First();
+                StockTechData theDayBeforeYesterday = i.TechDataList.Skip(2).First();
                 decimal mv5 = (decimal)i.TechDataList.Take(5).Average(x => x.Volume);
                 decimal ma60 = i.TechDataList.Take(60).Average(x => x.Close);
                 bool isFirstDayBreakout = true;
@@ -907,7 +909,7 @@ namespace Core.Service
                     today.Close < ma60 * 1.3m &&
                     today.Volume > mv5 * 2 &&
                     today.Volume > 2000 &&
-                    marginIncreaseRate > 0.01m)
+                    yesterday.Close <= theDayBeforeYesterday.Close * 1.03m)
                 {
                     breakoutCandidateList.Add(i);
                 }
