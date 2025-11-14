@@ -131,12 +131,13 @@ namespace TryNewSelector
                         i.TechDataList[3].Close <= i.TechDataList.Skip(4).Take(40).Max(x => x.High) &&
                         i.TechDataList[4].Close <= i.TechDataList.Skip(5).Take(40).Max(x => x.High) &&
                         i.TechDataList[5].Close <= i.TechDataList.Skip(6).Take(40).Max(x => x.High) &&
-                        //i.TechDataList[1].Close / i.TechDataList[2].Close < 1.03m &&
+                        i.TechDataList[1].Close / i.TechDataList[2].Close < 1.03m &&
                         today.Close > ma60 &&
                         today.Close / ma60 < 1.3m &&
                         today.Volume > mv5 * 2 &&
-                        today.Volume > 2000 &&
-                        marginIncreaseRate > 0.01m)
+                        today.Volume > 2000 
+                         //marginIncreaseRate > 0.01m
+                        )
                     {
                         Console.WriteLine($"StockCode: {i.StockCode}, 融資增加百分比: {(marginIncreaseRate * 100).ToString("0.00")}%, Date: {today.Date.ToShortDateString()}");
                     }
