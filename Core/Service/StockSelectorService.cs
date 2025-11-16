@@ -45,16 +45,16 @@ namespace Core.Service
             List<StockCandidate> allStockInfoList = await GetStockCodeList();
             await SetIssuedShares(allStockInfoList);
             await SetExchangeReportFromSino(allStockInfoList);
-            List<StockCandidate> candidateList = SelectCandidateForShortByTech(allStockInfoList);
-            List<StockCandidate> filteredCandidateList = await RemoveStockCanNotIntraday(candidateList);
-            filteredCandidateList = filteredCandidateList.Any() ?
-                                    new List<StockCandidate>() { filteredCandidateList.OrderByDescending(x => x.TurnoverRate).First() } :
-                                    filteredCandidateList;
-            await SendCandidateForShortToDiscord(filteredCandidateList);
-            await _candidateForShortRepository.Insert(filteredCandidateList);
-            await UpSertTechDataToDb(allStockInfoList);
-            await TrackMainPower(allStockInfoList);
             await SelectBreakoutStock(allStockInfoList);
+            await UpSertTechDataToDb(allStockInfoList);
+            //List<StockCandidate> candidateList = SelectCandidateForShortByTech(allStockInfoList);
+            //List<StockCandidate> filteredCandidateList = await RemoveStockCanNotIntraday(candidateList);
+            //filteredCandidateList = filteredCandidateList.Any() ?
+            //                        new List<StockCandidate>() { filteredCandidateList.OrderByDescending(x => x.TurnoverRate).First() } :
+            //                        filteredCandidateList;
+            //await SendCandidateForShortToDiscord(filteredCandidateList);
+            //await _candidateForShortRepository.Insert(filteredCandidateList);
+            //await TrackMainPower(allStockInfoList);
             //if (!doesNeedUpdate(allStockInfoList)) return;
             //List<StockCandidate> candidateList = SelectCandidateByTech(allStockInfoList);
             //candidateList = await SelectCandidateByMainPower(candidateList);
@@ -890,16 +890,23 @@ namespace Core.Service
                 //decimal marginIncreaseRate = CalculateMarginIncreaseWithTpexFallback(twseMarginList, tpexMarginList, i.StockCode);
                 if (i.TechDataList == null || i.TechDataList.Count < 60) continue;
                 StockTechData today = i.TechDataList.First();
-                StockTechData yesterday = i.TechDataList.Skip(1).First();
-                StockTechData theDayBeforeYesterday = i.TechDataList.Skip(2).First();
                 decimal mv5 = (decimal)i.TechDataList.Take(5).Average(x => x.Volume);
                 decimal ma60 = i.TechDataList.Take(60).Average(x => x.Close);
                 bool isFirstDayBreakout = true;
+                decimal preMa5CrossPrice = 0;
                 for (int j = 1; j <= 5; j++)
                 {
                     if (i.TechDataList[j].Close > i.TechDataList.Skip(j + 1).Take(40).Max(x => x.High))
                     {
                         isFirstDayBreakout = false;
+                        break;
+                    }
+                }
+                for (int j = 0; j < i.TechDataList.Count; j++)
+                {
+                    if (i.TechDataList[j].Close < i.TechDataList.Skip(j).Take(5).Average(x => x.Close))
+                    {
+                        preMa5CrossPrice = i.TechDataList[j].Close;
                         break;
                     }
                 }
@@ -909,7 +916,7 @@ namespace Core.Service
                     today.Close < ma60 * 1.3m &&
                     today.Volume > mv5 * 2 &&
                     today.Volume > 2000 &&
-                    yesterday.Close <= theDayBeforeYesterday.Close * 1.03m)
+                    preMa5CrossPrice * 1.15m >= today.Close)
                 {
                     breakoutCandidateList.Add(i);
                 }
