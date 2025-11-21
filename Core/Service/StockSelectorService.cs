@@ -915,7 +915,7 @@ namespace Core.Service
                     today.Close > ma60 &&
                     today.Close < ma60 * 1.3m &&
                     today.Volume > mv5 * 2 &&
-                    today.Volume > 2000 &&
+                    today.Volume > 1500 &&
                     preMa5CrossPrice * 1.15m >= today.Close)
                 {
                     breakoutCandidateList.Add(i);
