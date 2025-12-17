@@ -395,7 +395,7 @@ namespace Core.Service
                 { "12", "L" }
             };
             if (!monthMap.TryGetValue(_settlementMonth.Substring(4), out string code)) throw new Exception("Can not find future code");
-            futureConfig.YuantaFutureCode = $"{futureConfig.YuantaFutureCode}{code}5";
+            futureConfig.YuantaFutureCode = $"{futureConfig.YuantaFutureCode}{code}6";
             return futureConfig;
         }
         private string GetSettlementMonth(DateTime dateTime)
