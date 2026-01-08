@@ -41,6 +41,24 @@ namespace TryNewSelector
 
             var candidateRepository = serviceProvider.GetRequiredService<ICandidateRepository>();
             List<StockTech> stockTech = await candidateRepository.GetStockTech();
+            foreach (var i in stockTech)
+            {
+                for (int j = 0; j < i.TechDataList.Count; j++)
+                {
+                    if (i.TechDataList.Skip(j).Take(60).Count() != 60) break;
+                    i.TechDataList[j].Ma5 = i.TechDataList.Skip(j).Take(5).Average(x => x.Close);
+                    i.TechDataList[j].Ma10 = i.TechDataList.Skip(j).Take(10).Average(x => x.Close);
+                    i.TechDataList[j].Ma20 = i.TechDataList.Skip(j).Take(20).Average(x => x.Close);
+                    i.TechDataList[j].Ma60 = i.TechDataList.Skip(j).Take(60).Average(x => x.Close);
+                    i.TechDataList[j].Mv5 = (decimal)i.TechDataList.Skip(j).Take(5).Average(x => x.Volume);
+                }
+            }
+
+            
+
+
+
+
             SimpleHttpClientFactory simpleHttpClientFactory = new SimpleHttpClientFactory();
             var httpClient = simpleHttpClientFactory.CreateClient();
 
