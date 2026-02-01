@@ -1,5 +1,8 @@
 ﻿using Core2.Model;
 using Microsoft.Extensions.Logging;
+using Dapper;
+using Microsoft.Data.SqlClient;
+using System.Threading.Tasks;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -11,9 +14,11 @@ namespace Core2.Repository
     public class CandidateRepository
     {
         private readonly ILogger<CandidateRepository> _logger;
+        private readonly string _dbConnectionString;
         public CandidateRepository(ILogger<CandidateRepository> logger, string dbConnectionString)
         {
             _logger = logger;
+            _dbConnectionString = dbConnectionString;
         }
         public async Task UpsertStockTech(List<StockTech> stockList)
         {
@@ -31,10 +36,10 @@ namespace Core2.Repository
             using (var sqlConnection = new SqlConnection(_dbConnectionString))
             {
                 var parameters = new DynamicParameters();
-                parameters.Add("@StockList", table.AsTableValuedParameter("dbo.StockTechType"));
+                parameters.Add("@StockList", table);
                 await sqlConnection.ExecuteAsync("dbo.UpsertStockTech", parameters, commandType: CommandType.StoredProcedure, commandTimeout: 600);
             }
-            _logger.Information("Upsert stock tech data finished.");
+            _logger.LogInformation("Upsert stock tech data finished.");
         }
     }
 }

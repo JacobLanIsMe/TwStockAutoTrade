@@ -31,7 +31,7 @@ namespace Core2.Service
             await SetIssuedShares(allStockInfoList);
             await SetExchangeReportFromSino(allStockInfoList);
             await SelectBreakoutStock(allStockInfoList);
-            //await UpSertTechDataToDb(allStockInfoList);
+            await UpSertTechDataToDb(allStockInfoList);
         }
         private async Task<List<StockCandidate>> GetStockCodeList()
         {
@@ -243,16 +243,18 @@ namespace Core2.Service
             message.AppendLine($"總共 {candidateList.Count} 檔");
             await _discordService.SendMessage(message.ToString());
         }
-        //private async Task UpSertTechDataToDb(List<StockCandidate> stockList)
-        //{
-        //    List<StockTech> stockTechList = stockList.Select(x => new StockTech
-        //    {
-        //        StockCode = x.StockCode,
-        //        CompanyName = x.CompanyName,
-        //        IssuedShare = x.IssuedShare,
-        //        TechData = JsonSerializer.Serialize(x.TechDataList)
-        //    }).ToList();
-        //    await _candidateRepository.UpsertStockTech(stockTechList);
-        //}
+        private async Task UpSertTechDataToDb(List<StockCandidate> stockList)
+        {
+            List<StockTech> stockTechList = stockList.Select(x => new StockTech
+            {
+                StockCode = x.StockCode,
+                CompanyName = x.CompanyName,
+                IssuedShare = x.IssuedShare,
+                TechData = JsonSerializer.Serialize(x.TechDataList)
+            }).ToList();
+            // Upsert into MongoDB for better performance with large batches
+            var mongoService = new MongoDbService();
+            await mongoService.UpsertStockTech(stockTechList);
+        }
     }
 }

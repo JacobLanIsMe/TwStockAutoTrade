@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Text.Json;
 
 namespace Core2.Model
 {
@@ -12,7 +13,7 @@ namespace Core2.Model
         public string TechData { get; set; }
         public List<StockTechData> TechDataList
         {
-            get => JsonConvert.DeserializeObject<List<StockTechData>>(TechData);
+            get => string.IsNullOrEmpty(TechData) ? new List<StockTechData>() : JsonSerializer.Deserialize<List<StockTechData>>(TechData);
         }
     }
 }
