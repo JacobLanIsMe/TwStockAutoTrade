@@ -16,14 +16,16 @@ namespace Core2.Service
     {
         private HttpClient _httpClient;
         private readonly DiscordService _discordService;
+        private readonly MongoDbService _mongoService;
         private int _maxRetryCount = 10;
         private readonly ILogger<StockSelectorService> _logger;
-        public StockSelectorService(DiscordService discordService, ILogger<StockSelectorService> logger)
+        public StockSelectorService(DiscordService discordService, ILogger<StockSelectorService> logger, MongoDbService mongoService)
         {
             SimpleHttpClientFactory httpClientFactory = new SimpleHttpClientFactory();
             _httpClient = httpClientFactory.CreateClient();
             _logger = logger;
             _discordService = discordService;
+            _mongoService = mongoService;
         }
         public async Task SelectStock()
         {
@@ -225,12 +227,13 @@ namespace Core2.Service
                     today.Close < ma60 * 1.3m &&
                     today.Volume > mv5 * 2 &&
                     today.Volume > 1500 &&
-                    preMa5CrossPrice * 1.15m >= today.Close)
+                    preMa5CrossPrice * 1.2m >= today.Close)
                 {
                     breakoutCandidateList.Add(i);
                 }
             }
             await SendBreakoutStockToDiscord(breakoutCandidateList);
+            await _mongoService.SyncCandidates(breakoutCandidateList);
         }
         private async Task SendBreakoutStockToDiscord(List<StockCandidate> candidateList)
         {
@@ -252,9 +255,8 @@ namespace Core2.Service
                 IssuedShare = x.IssuedShare,
                 TechData = JsonSerializer.Serialize(x.TechDataList)
             }).ToList();
-            // Upsert into MongoDB for better performance with large batches
-            var mongoService = new MongoDbService();
-            await mongoService.UpsertStockTech(stockTechList);
+            // Upsert into MongoDB for better performance with large batches (use injected service)
+            await _mongoService.UpsertStockTech(stockTechList);
         }
     }
 }

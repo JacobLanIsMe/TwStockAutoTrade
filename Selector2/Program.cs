@@ -22,6 +22,7 @@ namespace Selector2
                     .SetMinimumLevel(LogLevel.Information))
                 .AddSingleton<DiscordService>()                 // required by StockSelectorService
                 .AddSingleton<StockSelectorService>()           // register the concrete service
+                .AddSingleton<MongoDbService>()
                 .BuildServiceProvider();
 
             var stockSelector = serviceProvider.GetRequiredService<StockSelectorService>();
