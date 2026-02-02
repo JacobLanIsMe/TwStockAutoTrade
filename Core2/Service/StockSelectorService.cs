@@ -233,7 +233,9 @@ namespace Core2.Service
                 }
             }
             await SendBreakoutStockToDiscord(breakoutCandidateList);
+            _logger.LogInformation($"Sync candidates to Db started.");
             await _mongoService.SyncCandidates(breakoutCandidateList);
+            _logger.LogInformation($"Sync candidates to Db finished.");
         }
         private async Task SendBreakoutStockToDiscord(List<StockCandidate> candidateList)
         {
@@ -256,7 +258,9 @@ namespace Core2.Service
                 TechData = JsonSerializer.Serialize(x.TechDataList)
             }).ToList();
             // Upsert into MongoDB for better performance with large batches (use injected service)
+            _logger.LogInformation("Upsert tech data to MongoDB started.");
             await _mongoService.UpsertStockTech(stockTechList);
+            _logger.LogInformation("Upsert tech data to MongoDB finished.");
         }
     }
 }
