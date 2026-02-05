@@ -17,9 +17,8 @@ namespace Selector2
                     .SetBasePath(Path.GetDirectoryName(System.Reflection.Assembly.GetEntryAssembly().Location))
                     .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
                     .Build())
-                .AddLogging(builder => builder
-                    .AddConsole()
-                    .SetMinimumLevel(LogLevel.Information))
+                // configure Serilog to write daily rolling files to the specified folder
+                .AddSerilogLogging("C:\\Users\\Administrator\\Documents\\Log\\Selector2")
                 .AddSingleton<DiscordService>()                 // required by StockSelectorService
                 .AddSingleton<StockSelectorService>()           // register the concrete service
                 .AddSingleton<MongoDbService>()
