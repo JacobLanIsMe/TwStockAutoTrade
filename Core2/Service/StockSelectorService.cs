@@ -274,5 +274,6 @@ namespace Core2.Service
             {
                 _logger.LogError($"Error occurs while upserting tech data to MongoDB. Error message: {ex}");
             }
+        }
     }
 }
