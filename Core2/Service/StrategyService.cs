@@ -16,7 +16,9 @@ namespace Core2.Service
         }
         public async Task ExecuteStrategy()
         {
+            Console.WriteLine("Retrieving stock technical data from MongoDB started.");
             List<StockTech> stockTechList = await _mongoDbService.GetAllStockTechAsync();
+            Console.WriteLine("Retrieving stock technical data from MongoDB finished.");
             List<StockTech> candidate = new List<StockTech>();
             foreach (var i in stockTechList)
             {
@@ -34,11 +36,13 @@ namespace Core2.Service
                 if (jumpTechData == null) continue;
                 // jumpTechData is checked for null above, use null-forgiving operator to access its members
                 decimal periodMaxHigh = i.TechDataList.Skip(1).Where(x => x.Date >= jumpTechData!.Date).Max(x => x.High);
-                
-                if (todayTechData.Close > periodMaxHigh)
+                double mv5 = i.TechDataList.Take(5).Average(x => x.Volume);
+                if (todayTechData.Close > periodMaxHigh && 
+                    todayTechData.Volume > 1500 && 
+                    todayTechData.Volume > mv5 * 1.5)
                 {
                     candidate.Add(i);
-                    Console.WriteLine("Stock {StockCode} ({CompanyName}) is a candidate. Today's Close: {Close}, Jump's Date: {Jump's Date}, Period Max High: {MaxHigh}", i.StockCode, i.CompanyName, todayTechData.Close, jumpTechData.Date, periodMaxHigh);
+                    Console.WriteLine($"Stock {i.StockCode} ({i.CompanyName}) is a candidate. Today's Close: {todayTechData.Close}, Jump's Date: {jumpTechData.Date.ToString("yyyyMMdd")}, Period Max High: {periodMaxHigh}");
                 }
             }
         }
