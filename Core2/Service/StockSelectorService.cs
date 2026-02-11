@@ -199,12 +199,13 @@ namespace Core2.Service
             foreach (var i in allStockInfoList)
             {
                 //decimal marginIncreaseRate = CalculateMarginIncreaseWithTpexFallback(twseMarginList, tpexMarginList, i.StockCode);
-                if (i.TechDataList == null || i.TechDataList.Count < 60) continue;
+                if (i.TechDataList == null || i.TechDataList.Count < 120) continue;
                 StockTechData today = i.TechDataList.First();
                 decimal mv5 = (decimal)i.TechDataList.Take(5).Average(x => x.Volume);
                 decimal ma60 = i.TechDataList.Take(60).Average(x => x.Close);
                 bool isFirstDayBreakout = true;
                 decimal preMa5CrossPrice = 0;
+                bool isFirstDayBreakMa60 = true;
                 for (int j = 1; j <= 5; j++)
                 {
                     if (i.TechDataList[j].Close > i.TechDataList.Skip(j + 1).Take(40).Max(x => x.High))
@@ -221,13 +222,22 @@ namespace Core2.Service
                         break;
                     }
                 }
+                for (int j = 1; j <= 40; j++)
+                {
+                    if (i.TechDataList[j].Close > i.TechDataList.Skip(j).Take(60).Average(x => x.Close))
+                    {
+                        isFirstDayBreakMa60 = false;
+                        break;
+                    }
+                }
                 if (today.Close > i.TechDataList.Skip(1).Take(40).Max(x => x.High) &&
                     isFirstDayBreakout &&
                     today.Close > ma60 &&
                     today.Close < ma60 * 1.3m &&
-                    today.Volume > mv5 * 2 &&
+                    today.Volume > mv5 * 1.5m &&
                     today.Volume > 1500 &&
-                    preMa5CrossPrice * 1.2m >= today.Close)
+                    preMa5CrossPrice * 1.2m >= today.Close &&
+                    !isFirstDayBreakMa60)
                 {
                     breakoutCandidateList.Add(i);
                 }
