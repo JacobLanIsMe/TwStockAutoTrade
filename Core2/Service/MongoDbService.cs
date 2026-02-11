@@ -64,6 +64,48 @@ namespace Core2.Service
             }
         }
 
+        // Retrieve all StockTech documents from the 'StockExchangeReport' collection
+        // Only read the fields that exist on the StockTech class to avoid deserialization errors
+        public async Task<List<StockTech>> GetAllStockTechAsync()
+        {
+            var bsonCol = _database.GetCollection<BsonDocument>("StockExchangeReport");
+            var projection = Builders<BsonDocument>.Projection
+                .Include("StockCode")
+                .Include("CompanyName")
+                .Include("IssuedShare")
+                .Include("TechData")
+                .Exclude("_id");
+
+            var docs = await bsonCol.Find(Builders<BsonDocument>.Filter.Empty)
+                                     .Project(projection)
+                                     .ToListAsync().ConfigureAwait(false);
+
+            var list = new List<StockTech>(docs.Count);
+            foreach (var d in docs)
+            {
+                long issuedShare = 0;
+                if (d.Contains("IssuedShare"))
+                {
+                    var v = d["IssuedShare"];
+                    if (v.IsInt64) issuedShare = v.AsInt64;
+                    else if (v.IsInt32) issuedShare = v.AsInt32;
+                    else if (v.IsDouble) issuedShare = (long)v.AsDouble;
+                    else long.TryParse(v.ToString(), out issuedShare);
+                }
+
+                var st = new StockTech
+                {
+                    StockCode = d.Contains("StockCode") ? d["StockCode"].AsString : null,
+                    CompanyName = d.Contains("CompanyName") ? d["CompanyName"].AsString : null,
+                    IssuedShare = issuedShare,
+                    TechData = d.Contains("TechData") ? d["TechData"].AsString : null
+                };
+                list.Add(st);
+            }
+
+            return list;
+        }
+
         // Sync candidate list to 'Candidate' collection according to rules:
         // - Insert new candidate docs for items in candidateList (TechDataList first 5, IsCandidate=true, SelectedDate = first TechData Date)
         // - Do not insert if same StockCode+SelectedDate and IsCandidate==true already exists

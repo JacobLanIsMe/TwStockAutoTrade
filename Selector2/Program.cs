@@ -22,12 +22,14 @@ namespace Selector2
                 .AddSingleton<DiscordService>()                 // required by StockSelectorService
                 .AddSingleton<StockSelectorService>()           // register the concrete service
                 .AddSingleton<MongoDbService>()
+                .AddSingleton<StrategyService>()
                 .BuildServiceProvider();
 
             var stockSelector = serviceProvider.GetRequiredService<StockSelectorService>();
-
+            var strategyService = serviceProvider.GetRequiredService<StrategyService>();
             try
             {
+                Task.Run(async () => await strategyService.ExecuteStrategy()).Wait();
                 Task.Run(async () => await stockSelector.SelectStock()).Wait();
             }
             catch (Exception ex)
